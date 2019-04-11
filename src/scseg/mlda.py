@@ -83,7 +83,7 @@ def _update_doc_distribution(X, exp_topic_word_distr, doc_topic_prior,
     exp_doc_topic = np.exp(_dirichlet_expectation_2d(doc_topic_distr))
 
     # diff on `component_` (only calculate it when `cal_diff` is True)
-    suff_stats = np.zeros(exp_topic_word_distr.shape) if cal_sstats else None
+    suff_stats = np.zeros_like(exp_topic_word_distr) if cal_sstats else None
 
     if is_sparse_x:
         X_data = X.data
@@ -98,6 +98,8 @@ def _update_doc_distribution(X, exp_topic_word_distr, doc_topic_prior,
             ids = np.nonzero(X[idx_d, :])[0]
             cnts = X[idx_d, ids]
 
+        # idx_d is the document index
+        # ids are the word indices for a given document idx_d
         doc_topic_d = doc_topic_distr[idx_d, :]
         # The next one is a copy, since the inner loop overwrites it.
         exp_doc_topic_d = exp_doc_topic[idx_d, :].copy()
@@ -111,6 +113,7 @@ def _update_doc_distribution(X, exp_topic_word_distr, doc_topic_prior,
             # exp(E[log(theta_{dk})]) * exp(E[log(beta_{dw})]).
             norm_phi = np.dot(exp_doc_topic_d, exp_topic_word_d) + EPS
 
+            #here is where we need to put the forward backward probabilities
             doc_topic_d = (exp_doc_topic_d *
                            np.dot(cnts / norm_phi, exp_topic_word_d.T))
             # Note: adds doc_topic_prior to doc_topic_d, in-place.
@@ -378,7 +381,7 @@ class Scseg(BaseEstimator, TransformerMixin):
         if cal_sstats:
             # This step finishes computing the sufficient statistics for the
             # M-step.
-            suff_stats = np.zeros(self.components_.shape)
+            suff_stats = np.zeros_like(self.components_)
             for sstats in sstats_list:
                 suff_stats += sstats
             suff_stats *= self.exp_dirichlet_component_

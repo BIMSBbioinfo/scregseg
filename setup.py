@@ -18,13 +18,6 @@ from setuptools import find_packages
 from setuptools import setup
 from setuptools.command.build_ext import build_ext
 
-try:
-    # Allow installing package without any Cython available. This
-    # assumes you are going to include the .c files in your sdist.
-    import Cython
-except ImportError:
-    Cython = None
-
 
 def read(*names, **kwargs):
     with io.open(
@@ -41,28 +34,30 @@ if 'TOXENV' in os.environ and 'SETUPPY_CFLAGS' in os.environ:
     os.environ['CFLAGS'] = os.environ['SETUPPY_CFLAGS']
 
 
-class optional_build_ext(build_ext):
-    """Allow the building of C extensions to fail."""
-    def run(self):
+class optional_build_ext(build_ext, object):
+
+    def finalize_options(self):
+        # The key point: here, Cython and numpy will have been installed by
+        # pip.
+        from Cython.Build import cythonize
+        import numpy as np
+        import numpy.distutils
+
+        self.distribution.ext_modules[:] = cythonize("**/*.pyx")
+        # Sadly, this part needs to be done manually.
+        for ext in self.distribution.ext_modules:
+            for k, v in np.distutils.misc_util.get_info("npymath").items():
+                setattr(ext, k, v)
+            ext.include_dirs = [np.get_include()]
+
+        build_ext.finalize_options(self)
+
+    def build_extensions(self):
         try:
-            build_ext.run(self)
-        except Exception as e:
-            self._unavailable(e)
-            self.extensions = []  # avoid copying missing files (it would fail).
-
-    def _unavailable(self, e):
-        print('*' * 80)
-        print('''WARNING:
-
-    An optional code optimization (C extension) could not be compiled.
-
-    Optimizations for this package will not be available!
-        ''')
-
-        print('CAUSE:')
-        print('')
-        print('    ' + repr(e))
-        print('*' * 80)
+            self.compiler.compiler_so.remove("-Wstrict-prototypes")
+        except (AttributeError, ValueError):
+            pass
+        build_ext.build_extensions(self)
 
 
 setup(
@@ -116,6 +111,11 @@ setup(
     python_requires='>=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*',
     install_requires=[
         # eg: 'aspectlib==1.1.1', 'six>=1.7',
+                'cython',
+                'sklearn',
+                'scipy',
+                'numpy',
+                'pandas'
     ],
     extras_require={
         # eg:
@@ -124,7 +124,11 @@ setup(
     },
     setup_requires=[
         'cython',
-    ] if Cython else [],
+        'sklearn',
+        'scipy',
+        'numpy',
+        'pandas'
+    ],
     entry_points={
         'console_scripts': [
             'scseg = scseg.cli:main',
@@ -138,6 +142,6 @@ setup(
             include_dirs=[dirname(path)]
         )
         for root, _, _ in os.walk('src')
-        for path in glob(join(root, '*.pyx' if Cython else '*.c'))
+        for path in glob(join(root, '*.pyx'))
     ],
 )
