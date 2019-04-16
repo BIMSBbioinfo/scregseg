@@ -225,6 +225,16 @@ class Scseg(BaseEstimator, TransformerMixin):
         Number of iterations of the EM step.
     n_iter_ : int
         Number of passes over the dataset.
+
+    References
+    ----------
+    [1] "Online Learning for Latent Dirichlet Allocation", Matthew D. Hoffman,
+        David M. Blei, Francis Bach, 2010
+    [2] "Stochastic Variational Inference", Matthew D. Hoffman, David M. Blei,
+        Chong Wang, John Paisley, 2013
+    [3] Matthew D. Hoffman's onlineldavb code. Link:
+        https://github.com/blei-lab/onlineldavb
+
     Examples
     --------
     >>> from sklearn.decomposition import LatentDirichletAllocation
@@ -240,14 +250,6 @@ class Scseg(BaseEstimator, TransformerMixin):
     >>> lda.transform(X[-2:])
     array([[0.00360392, 0.25499205, 0.0036211 , 0.64236448, 0.09541846],
            [0.15297572, 0.00362644, 0.44412786, 0.39568399, 0.003586  ]])
-    References
-    ----------
-    [1] "Online Learning for Latent Dirichlet Allocation", Matthew D. Hoffman,
-        David M. Blei, Francis Bach, 2010
-    [2] "Stochastic Variational Inference", Matthew D. Hoffman, David M. Blei,
-        Chong Wang, John Paisley, 2013
-    [3] Matthew D. Hoffman's onlineldavb code. Link:
-        https://github.com/blei-lab/onlineldavb
     """
 
     def __init__(self, n_components=10, doc_topic_prior=None,
