@@ -13,10 +13,13 @@ from os.path import join
 from os.path import relpath
 from os.path import splitext
 
-from setuptools import Extension
 from setuptools import find_packages
-from setuptools import setup
+from distutils.extension import Extension
+from distutils.core import setup
+from Cython.Build import cythonize
 from setuptools.command.build_ext import build_ext
+
+import numpy
 
 
 def read(*names, **kwargs):
@@ -26,39 +29,15 @@ def read(*names, **kwargs):
     ) as fh:
         return fh.read()
 
+#extensions = [
+#  Extension("*", ["*.pyx"], include_dirs=[numpy.get_include()])
+#]
 
 # Enable code coverage for C code: we can't use CFLAGS=-coverage in tox.ini, since that may mess with compiling
 # dependencies (e.g. numpy). Therefore we set SETUPPY_CFLAGS=-coverage in tox.ini and copy it to CFLAGS here (after
 # deps have been safely installed).
 if 'TOXENV' in os.environ and 'SETUPPY_CFLAGS' in os.environ:
     os.environ['CFLAGS'] = os.environ['SETUPPY_CFLAGS']
-
-
-class optional_build_ext(build_ext, object):
-
-    def finalize_options(self):
-        # The key point: here, Cython and numpy will have been installed by
-        # pip.
-        from Cython.Build import cythonize
-        import numpy as np
-        import numpy.distutils
-
-        self.distribution.ext_modules[:] = cythonize("**/*.pyx")
-        # Sadly, this part needs to be done manually.
-        for ext in self.distribution.ext_modules:
-            for k, v in np.distutils.misc_util.get_info("npymath").items():
-                setattr(ext, k, v)
-            ext.include_dirs = [np.get_include()]
-
-        build_ext.finalize_options(self)
-
-    def build_extensions(self):
-        try:
-            self.compiler.compiler_so.remove("-Wstrict-prototypes")
-        except (AttributeError, ValueError):
-            pass
-        build_ext.build_extensions(self)
-
 
 setup(
     name='scseg',
@@ -134,14 +113,16 @@ setup(
             'scseg = scseg.cli:main',
         ]
     },
-    cmdclass={'build_ext': optional_build_ext},
-    ext_modules=[
+    #cmdclass={'build_ext': optional_build_ext},
+    ext_modules=cythonize([
         Extension(
             splitext(relpath(path, 'src').replace(os.sep, '.'))[0],
             sources=[path],
-            include_dirs=[dirname(path)]
+            include_dirs=[dirname(path), numpy.get_include()],
+            libraries=['npymath'],
+            library_dirs=[os.path.join(numpy.get_include(), '..', 'lib')]
         )
         for root, _, _ in os.walk('src')
         for path in glob(join(root, '*.pyx'))
-    ],
+    ]),
 )
