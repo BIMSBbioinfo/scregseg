@@ -42,7 +42,7 @@ if 'TOXENV' in os.environ and 'SETUPPY_CFLAGS' in os.environ:
 setup(
     name='scseg',
     version='0.0.0',
-    license='MIT license',
+    license='GPL-3.0',
     description='Single cell chromatin segmentation',
     long_description='%s\n%s' % (
         re.compile('^.. start-badges.*^.. end-badges', re.M | re.S).sub('', read('README.rst')),
