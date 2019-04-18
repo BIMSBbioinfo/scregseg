@@ -146,7 +146,7 @@ class CountMatrix:
         for i in range(self.n_cells):
             R[i, :L[i]] = self.get_distances(i)
 
-        return R, L
+        return R
 
 def split_train_test(data):
     idxs = np.random.permutation(data.n_cells)

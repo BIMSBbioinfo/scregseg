@@ -82,6 +82,7 @@ def _forward(int n_samples, int n_components,
     cdef dtype_t[:, ::view.contiguous] log_same = \
         np.full((n_components, n_components), -INFINITY)
     cdef dtype_t merged_fw
+    cdef dtype_t lsig, nlsig
 
     with nogil:
         # initalize lattice
@@ -91,6 +92,8 @@ def _forward(int n_samples, int n_components,
             log_same[i,i] = 0.0
 
         for t in range(1, n_samples):
+            lsig = _logsigmoid(sigmoid_arg[t - 1])
+            nlsig = _logsigmoid(-sigmoid_arg[t - 1])
             for j in range(n_components):
                 for i in range(n_components):
                     # sum over indep or same topic
@@ -102,8 +105,8 @@ def _forward(int n_samples, int n_components,
                     # if the same topic is extended:
                     wb1[i] = merged_fw + log_same[i, j]
 
-                fwdlattice[t, j, 0] = _logsumexp(wb0) + log_beta[j, t] + log_theta[j] + _logsigmoid(sigmoid_arg[t - 1])
-                fwdlattice[t, j, 1] = _logsumexp(wb1) + log_beta[j, t] + _logsigmoid(-sigmoid_arg[t - 1])
+                fwdlattice[t, j, 0] = _logsumexp(wb0) + log_beta[j, t] + log_theta[j] + lsig
+                fwdlattice[t, j, 1] = _logsumexp(wb1) + log_beta[j, t] + nlsig
 
 
 def _backward(int n_samples, int n_components,
@@ -118,6 +121,8 @@ def _backward(int n_samples, int n_components,
     cdef dtype_t[:,::view.contiguous] log_same = \
         np.full((n_components, n_components), -INFINITY)
     cdef dtype_t merged_fw
+    cdef dtype_t nlsig
+    cdef dtype_t lsig
 
     with nogil:
         for i in range(n_components):
@@ -125,17 +130,29 @@ def _backward(int n_samples, int n_components,
             log_same[i,i] = 0.0
 
         for t in range(n_samples - 2, -1, -1):
+            lsig = _logsigmoid(sigmoid_arg[t])
+            nlsig = _logsigmoid(-sigmoid_arg[t])
+      #      if nlsig < -7.:
+      #          for i in range(n_components):
+      #              bwdlattice[t, i] = 0.0
+      #          # this is necessary due to the leakage in the backward
+      #          # pass. even is nlsig is extremely small, the nlsig part
+      #          # is evenly added to all components while the log_beta part
+      #          # is passed on backwards which causes problems because
+      #          # it will heavily influence the previous marginals with that influence
+      #          # nevertheless.
+      #          continue
             for i in range(n_components):
                 for j in range(n_components):
-                    wb1[j] = log_same[i, j] + _logsigmoid(-sigmoid_arg[t]) + log_beta[j, t + 1] + bwdlattice[t + 1, j]
+                    wb1[j] = _logaddexp(log_same[i, j] + nlsig,  log_theta[j] + lsig) + log_beta[j, t + 1] + bwdlattice[t + 1, j]
                 bwdlattice[t, i] = _logsumexp(wb1)
 
-def _suffstats_hmm(int n_samples, int n_components,
+
+def _compute_theta_sstats(int n_samples, int n_components,
                    dtype_t[:] num_words,
                    dtype_t[:,:,:] fwdlattice,
                    dtype_t[:,:] bwdlattice,
-                   dtype_t[:] log_theta_stats,
-                   dtype_t[:] reg_target_stats):
+                   dtype_t[:] log_theta_stats):
 
     cdef int t, i, j
     cdef dtype_t[:,::view.contiguous] wb = np.zeros((n_components, 2))
@@ -146,16 +163,114 @@ def _suffstats_hmm(int n_samples, int n_components,
       for i in range(n_components):
         log_theta_stats[i] = 0.0
 
-      for t in range(n_samples - 1):
-        reg_target_stats[t] = 0.0
-
       for t in range(n_samples):
         for i in range(n_components):
           wb[i, 0] = fwdlattice[t, i, 0] + bwdlattice[t, i]
           wb[i, 1] = fwdlattice[t, i, 1] + bwdlattice[t, i]
         partition = _logsumexp2d(wb)
+
         for i in range(n_components):
-          val = expl(wb[i, 0] - partition)
-          log_theta_stats[i] += val * num_words[t]
-          if t > 0:
-            reg_target_stats[t-1] += val
+          log_theta_stats[i] += expl(wb[i, 0] - partition) * num_words[t]
+
+
+def _compute_beta_sstats(int n_samples, int n_components,
+                   dtype_t[:] num_words,
+                   dtype_t[:,:,:] fwdlattice,
+                   dtype_t[:,:] bwdlattice,
+                   dtype_t[:,:] log_beta_stats):
+
+    cdef int t, i, j
+    cdef dtype_t[::view.contiguous] wb = np.zeros(n_components)
+    cdef dtype_t partition
+    cdef dtype_t val
+
+    with nogil:
+
+#        log_beta_stats[t] = 0.0
+
+      for t in range(n_samples):
+        for i in range(n_components):
+          log_beta_stats[i,t] = 0.0
+          wb[i] = _logsumexp(fwdlattice[t, i]) + bwdlattice[t, i]
+
+        partition = _logsumexp(wb)
+
+        for i in range(n_components):
+          val = expl(wb[i] - partition)
+          log_beta_stats[i, t] += val * num_words[t]
+
+
+def _compute_log_reg_targets(int n_samples, int n_components,
+                   dtype_t[:] num_words,
+                   dtype_t[:,:,:] fwdlattice,
+                   dtype_t[:,:] bwdlattice,
+                   dtype_t[:] reg_target_stats):
+
+    cdef int t, i, j
+    cdef dtype_t[:,::view.contiguous] wb = np.zeros((n_components, 2))
+    cdef dtype_t partition
+    cdef dtype_t val
+
+    with nogil:
+
+      for t in range(n_samples - 1):
+        reg_target_stats[t] = 0.0
+
+      for t in range(1, n_samples):
+        for i in range(n_components):
+          wb[i, 0] = fwdlattice[t, i, 0] + bwdlattice[t, i]
+          wb[i, 1] = fwdlattice[t, i, 1] + bwdlattice[t, i]
+        partition = _logsumexp2d(wb)
+
+        for i in range(n_components):
+          reg_target_stats[t-1] += expl(wb[i, 0] - partition)
+
+
+cdef inline dtype_t _sigmoid(dtype_t x) nogil:
+    return 1./(1. + expl(-x))
+
+
+#    def _compute_irls_update_stats(int n_samples, dtype_t[:] dists, dtype_t[:] true_targets, dtype_t[:] pred_targets, dtype_t[:] weights):
+#
+#        cdef dtype_t[:,::view.contiguous] hessian = np.zeros((weights.shape[0], weights.shape[0]))
+#        cdef dtype_t[::view.contiguous] gradient = np.zeros(weights.shape[0])
+#
+#        with nogil:
+#          for s in range(n_samples):
+#              # compute hessian
+#              h = _sigmoid(weights[0] + weights[1]*dists[s])
+#              r = h*(1-h)
+#              hessian[0,0] += r
+#              hessian[0,1] += r*dists[s]
+#              hessian[1,1] += r*dists[s]*dists[s]
+#
+#              # compute gradient
+#              gradient[0] += (pred_targets[s] - true_targets[s])
+#              gradient[1] += (pred_targets[s] - true_targets[s]) * dists[s]
+#          hessian[1,0] = hessian[0,1]
+#
+#          #update the weights in place
+#          weights = weights - np.dot(np.linalg.inv(hessian), gradient)
+def _compute_irls_update_stats(int n_samples, dtype_t[:] weights, dtype_t[:] dists, dtype_t[:] true_targets, dtype_t[:,:] hessian, dtype_t[:] gradient):
+
+    cdef dtype_t h, r
+    cdef int s
+#    cdef dtype_t[:,::view.contiguous] hessian = np.zeros((weights.shape[0], weights.shape[0]))
+#    cdef dtype_t[::view.contiguous] gradient = np.zeros(weights.shape[0])
+
+    with nogil:
+      for s in range(n_samples):
+          # compute hessian
+          h = _sigmoid(weights[0] + weights[1]*dists[s])
+          r = h*(1-h)
+          hessian[0,0] += r
+          hessian[0,1] += r*dists[s]
+          hessian[1,1] += r*dists[s]*dists[s]
+
+          # compute gradient
+          gradient[0] += (h - true_targets[s])
+          gradient[1] += (h - true_targets[s]) * dists[s]
+      hessian[1,0] = hessian[0,1]
+
+      #update the weights in place
+#      weights = weights - np.dot(np.linalg.inv(hessian), gradient)
