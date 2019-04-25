@@ -12,6 +12,7 @@ from sklearn.utils import check_random_state
 from sklearn.decomposition._online_lda import _dirichlet_expectation_2d
 from sklearn.decomposition._online_lda import mean_change
 from sklearn.decomposition.online_lda import _update_doc_distribution
+from sklearn.decomposition import LatentDirichletAllocation
 from scseg.mlda import _update_doc_distribution_markovlda
 from scseg.mlda import _update_doc_distribution_lda
 
@@ -28,13 +29,14 @@ def test_forward():
     n_samples = 3
 
     sigarg = np.array([-.3, -.5])
+    counts = np.ones(3)
     log_beta = np.array([[-.1, -.1, -.2], [-.2, -1, -.3]])
     log_theta = np.array([-2, -2.3])
     results = np.zeros((n_samples, n_topics, 2))
 
     log_same = np.log(np.eye(n_topics))
 
-    _forward(n_samples, n_topics, log_theta, log_beta, sigarg, results)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, results)
 
     # init step
     np.testing.assert_equal(results[0], np.array([[-2.1, -np.Inf], [-2.5, -np.Inf]]))
@@ -71,13 +73,14 @@ def test_forward_almost_lda():
     n_samples = 3
 
     sigarg = np.array([20., 20])
+    counts = np.ones(3)
     log_beta = np.array([[-.1, -.1, -.2], [-.2, -1, -.3]])
     log_theta = np.array([-2, -2.3])
     results = np.zeros((n_samples, n_topics, 2))
 
     log_same = np.log(np.eye(n_topics))
 
-    _forward(n_samples, n_topics, log_theta, log_beta, sigarg, results)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, results)
 
     # init step
     np.testing.assert_equal(results[0], np.array([[-2.1, -np.Inf], [-2.5, -np.Inf]]))
@@ -196,7 +199,7 @@ def test_forward_backward_logreg_stats():
 
 
     _backward(n_samples, n_topics, log_theta, log_beta, sigarg, bresults)
-    _forward(n_samples, n_topics, log_theta, log_beta, sigarg, fresults)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults)
 
 
     _compute_log_reg_targets(n_samples, n_topics, counts, fresults, bresults, dist_targets)
@@ -219,7 +222,7 @@ def test_forward_backward_theta_stats():
 
 
     _backward(n_samples, n_topics, log_theta, log_beta, sigarg, bresults)
-    _forward(n_samples, n_topics, log_theta, log_beta, sigarg, fresults)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults)
 
     _compute_theta_sstats(n_samples, n_topics, counts, fresults, bresults, log_theta_stats)
 
@@ -241,7 +244,7 @@ def test_forward_backward_beta_stats():
     log_beta_stats = np.zeros((2,3))
 
     _backward(n_samples, n_topics, log_theta, log_beta, sigarg, bresults)
-    _forward(n_samples, n_topics, log_theta, log_beta, sigarg, fresults)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults)
 
     _compute_beta_sstats(n_samples, n_topics, counts, fresults, bresults, log_beta_stats)
     np.testing.assert_allclose(log_beta_stats.sum(), 3)
@@ -263,7 +266,7 @@ def test_forward_backward_logreg_stats_lda():
 
 
     _backward(n_samples, n_topics, log_theta, log_beta, sigarg, bresults)
-    _forward(n_samples, n_topics, log_theta, log_beta, sigarg, fresults)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults)
 
 
     _compute_log_reg_targets(n_samples, n_topics, counts, fresults, bresults, dist_targets)
@@ -292,7 +295,7 @@ def test_forward_backward_theta_stats_lda():
     log_theta_stats = np.zeros(2)
 
     _backward(n_samples, n_topics, log_theta, log_beta, sigarg, bresults)
-    _forward(n_samples, n_topics, log_theta, log_beta, sigarg, fresults)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults)
 
     _compute_theta_sstats(n_samples, n_topics, counts, fresults, bresults, log_theta_stats)
 
@@ -318,7 +321,7 @@ def test_forward_backward_beta_stats_lda():
     log_beta_stats = np.zeros((2,3))
 
     _backward(n_samples, n_topics, log_theta, log_beta, sigarg, bresults)
-    _forward(n_samples, n_topics, log_theta, log_beta, sigarg, fresults)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults)
 
     _compute_beta_sstats(n_samples, n_topics, counts, fresults, bresults, log_beta_stats)
 
@@ -330,32 +333,6 @@ def test_forward_backward_beta_stats_lda():
 
     np.testing.assert_allclose(log_beta_stats.sum(), counts.sum())
 
-
-#def test_counmatrix_setup():
-#
-#    countmatrixfile = '/local/wkopp/source/markovlda/genomebins_binsize2000.minmapq10.mincount0.tab.gz'
-#    bedfile =  '/local/wkopp/source/markovlda/genomebins_binsize2000.minmapq10.mincount0.bed.gz'
-#    minreadsincells = 1000
-#    minreadsinpeaks = 20
-#    maxreadsincells = 30000
-#
-#    def trans(x):
-#        return np.log10(x/2000.)
-#
-#    cm = CountMatrix.create_from_countmatrix(countmatrixfile, bedfile,
-#                               transform=trans)
-##    dists = cm.get_distance_matrix()
-##    np.testing.assert_equal(cm.cmat.T.shape, (8961, 670227))
-##    np.testing.assert_equal(dists.shape, (8961, 96483))
-#
-#    cm.filter_count_matrix(minreadsincells, maxreadsincells,
-#                           minreadsinpeaks, binarize=False)
-#
-#    data = cm.cmat.T
-#    dists = cm.get_distance_matrix()
-#
-#    np.testing.assert_equal(data.shape, (1139, 219633))
-#    np.testing.assert_equal(dists.shape, (1139, 16410))
 
 def test_fit_lda_legacy():
 
@@ -459,7 +436,7 @@ def test_e_step():
                                        reg_weights, max_iters,
                                        mean_change_tol, cal_sstats, None)
 
-    tdd2, sstat_2 = _update_doc_distribution_lda(data, exp_exp_dirichlet_component_, doc_topic_prior,
+    tdd2, sstat_2, _ = _update_doc_distribution_lda(data, exp_exp_dirichlet_component_, doc_topic_prior,
                                        max_iters,
                                        mean_change_tol, cal_sstats, None)
 
@@ -480,3 +457,165 @@ def test_e_step():
     np.testing.assert_allclose(sstat_1[:,[93,    259,    314]], sstat_2[:,[93,    259,    314]])
     np.testing.assert_allclose(sstat_1[sstat_1.nonzero()], sstat_3[sstat_3.nonzero()])
     np.testing.assert_allclose(sstat_1[sstat_1.nonzero()], sstat_2[sstat_2.nonzero()])
+
+
+def test_score():
+    countmatrixfile = '/local/wkopp/source/markovlda/genomebins_binsize2000.minmapq10.mincount0.tab.gz'
+    bedfile =  '/local/wkopp/source/markovlda/genomebins_binsize2000.minmapq10.mincount0.bed.gz'
+    minreadsincells = 1000
+    minreadsinpeaks = 20
+    maxreadsincells = 30000
+
+    def trans(x):
+        return np.log10(x/2000.)
+
+    for binarize in [False, True]:
+        print('using binarize={}'.format(binarize))
+
+        cm = CountMatrix.create_from_countmatrix(countmatrixfile, bedfile,
+                                   transform=trans)
+
+        cm.filter_count_matrix(minreadsincells, maxreadsincells,
+                               minreadsinpeaks, binarize=True)
+
+        data = cm.cmat.T
+        dists = cm.get_distance_matrix()
+
+        data = data[:10]
+        dists = dists[:10]
+
+        n_components = 5
+        sseg = Scseg(n_components, random_state=0)
+        sseg_markov = Scseg(n_components, random_state=0, no_regression=True)
+        lda = LatentDirichletAllocation(n_components, random_state=0)
+
+        # get score of original lda
+        lda.fit(data)
+        oscore = lda.score(data)
+
+        # get score of lda version of the new code
+        sseg.fit(data)
+        new_lda_score = sseg.score(data)
+
+        sseg_markov.fit(data, dists)
+        mlda_score = sseg_markov.score(data, dists)
+
+        np.testing.assert_allclose(oscore, new_lda_score)
+
+        np.testing.assert_allclose(oscore, mlda_score)
+
+        np.testing.assert_allclose(lda.components_, sseg.components_)
+        np.testing.assert_allclose(sseg_markov.components_, sseg.components_)
+
+
+def test_score_toyexample():
+    from scseg import Scseg
+    from sklearn.datasets import make_multilabel_classification
+
+
+    for binarize in [True, False]:
+        # This produces a feature matrix of token counts, similar to what
+        # CountVectorizer would produce on text.
+        data, _ = make_multilabel_classification(random_state=0)
+        dists = np.zeros_like(data)
+        print('using binarize={}'.format(binarize))
+
+        if binarize:
+            data[data>0] = 1
+
+        n_components = 5
+        sseg = Scseg(n_components, random_state=0)
+        sseg_markov = Scseg(n_components, random_state=0, no_regression=True)
+        lda = LatentDirichletAllocation(n_components, random_state=0)
+
+        # get score of original lda
+        lda.fit(data)
+        oscore = lda.score(data)
+
+        # get score of lda version of the new code
+        sseg.fit(data)
+        new_lda_score = sseg.score(data)
+
+        sseg_markov.fit(data, dists)
+        mlda_score = sseg_markov.score(data, dists)
+        doc_topic_distr1 = sseg._unnormalized_transform(data, None)
+        doc_topic_distr2 = sseg_markov._unnormalized_transform(data, dists)
+        np.testing.assert_allclose(doc_topic_distr1, doc_topic_distr2)
+
+        np.testing.assert_allclose(lda.components_, sseg.components_)
+        np.testing.assert_allclose(sseg_markov.components_, sseg.components_)
+
+        np.testing.assert_allclose(oscore, new_lda_score)
+        np.testing.assert_allclose(oscore, mlda_score)
+
+        lll1 = sseg.compute_likelihood(data, None, doc_topic_distr1)
+        lll2 = sseg_markov.compute_likelihood(data, dists, doc_topic_distr2)
+
+        np.testing.assert_allclose(lll1, lll2)
+
+
+def test_likelihood():
+    # test if the likelihoods are identical between the forward
+    # algorithm and the lda
+    n_topics = 2
+    n_samples = 3
+
+    sigarg = np.array([100., 100.])
+    counts = np.ones(3)
+    log_beta = np.array([[-.1, -.1, -.2], [-.2, -1, -.3]])
+    log_theta = np.array([-2, -2.3])
+
+    fwdlattice = np.zeros((n_samples, n_topics, 2))
+
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fwdlattice)
+
+    temp = (log_theta[:, np.newaxis]
+            + log_beta[:])
+    score = logsumexp(temp, axis=0).sum()
+    np.testing.assert_allclose(score, logsumexp(fwdlattice[-1]))
+
+
+def test_transform():
+    countmatrixfile = '/local/wkopp/source/markovlda/genomebins_binsize2000.minmapq10.mincount0.tab.gz'
+    bedfile =  '/local/wkopp/source/markovlda/genomebins_binsize2000.minmapq10.mincount0.bed.gz'
+    minreadsincells = 1000
+    minreadsinpeaks = 20
+    maxreadsincells = 30000
+
+    def trans(x):
+        return np.log10(x/2000.)
+
+    cm = CountMatrix.create_from_countmatrix(countmatrixfile, bedfile,
+                               transform=trans)
+
+    cm.filter_count_matrix(minreadsincells, maxreadsincells,
+                           minreadsinpeaks, binarize=False)
+
+    data = cm.cmat.T
+    dists = cm.get_distance_matrix()
+
+    np.testing.assert_equal(data.shape, (1139, 219633))
+    np.testing.assert_equal(dists.shape, (1139, 16410))
+
+    data = data[:1]
+    dists = dists[:1]
+
+    n_components = 2
+    sseg = Scseg(n_components, random_state=0)
+    sseg_markov = Scseg(n_components, random_state=0, no_regression=True)
+    lda = LatentDirichletAllocation(n_components, random_state=0)
+
+    # get score of original lda
+    lda.fit(data)
+    otrans = lda.transform(data)
+
+    # get score of lda version of the new code
+    sseg.fit(data)
+    new_lda_trans = sseg.transform(data)
+
+    sseg_markov.fit(data, dists)
+    mlda_trans = sseg_markov.transform(data, dists)
+
+    np.testing.assert_allclose(otrans, new_lda_trans)
+
+    np.testing.assert_allclose(otrans, mlda_trans)

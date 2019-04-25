@@ -102,7 +102,7 @@ def _update_doc_distribution(X, y, exp_topic_word_distr, doc_topic_prior,
         return _update_doc_distribution_lda(X,
                                             exp_topic_word_distr, doc_topic_prior,
                                             max_iters,
-                                            mean_change_tol, cal_sstats, random_state) + (None,)
+                                            mean_change_tol, cal_sstats, random_state)
     else:
         return _update_doc_distribution_markovlda(X, y,
                                             exp_topic_word_distr, doc_topic_prior,
@@ -169,6 +169,8 @@ def _update_doc_distribution_markovlda(X, y, exp_topic_word_distr, doc_topic_pri
         X_indices = X.indices
         X_indptr = X.indptr
 
+    loglikeli = 0.0
+
     for idx_d in xrange(n_samples):
         if is_sparse_x:
             ids = X_indices[X_indptr[idx_d]:X_indptr[idx_d + 1]]
@@ -199,7 +201,7 @@ def _update_doc_distribution_markovlda(X, y, exp_topic_word_distr, doc_topic_pri
 
             # perform forward backward algorithm
             _backward(len(ids), n_topics, expected_log_doc_topic_d, expected_log_topic_word_d, log_sig_arg, bwdlattice)
-            _forward(len(ids), n_topics, expected_log_doc_topic_d, expected_log_topic_word_d, log_sig_arg, fwdlattice)
+            _forward(len(ids), n_topics, cnts, expected_log_doc_topic_d, expected_log_topic_word_d, log_sig_arg, fwdlattice)
 
             doc_topic_d = np.zeros(n_topics)
             # collect sufficient statistcs to update doc_topic_d
@@ -219,8 +221,8 @@ def _update_doc_distribution_markovlda(X, y, exp_topic_word_distr, doc_topic_pri
         # Contribution of document d to the expected sufficient
         # statistics for the M step.
         if cal_sstats:
+            _forward(len(ids), n_topics, cnts, expected_log_doc_topic_d, expected_log_topic_word_d, log_sig_arg, fwdlattice)
             _backward(len(ids), n_topics, expected_log_doc_topic_d, expected_log_topic_word_d, log_sig_arg, bwdlattice)
-            _forward(len(ids), n_topics, expected_log_doc_topic_d, expected_log_topic_word_d, log_sig_arg, fwdlattice)
 
             log_beta_stats = np.zeros_like(suff_stats[:, ids])
             _compute_beta_sstats(len(ids), n_topics, cnts, fwdlattice, bwdlattice,
@@ -330,7 +332,7 @@ def _update_doc_distribution_lda(X, exp_topic_word_distr, doc_topic_prior,
             norm_phi = np.dot(exp_doc_topic_d, exp_topic_word_d) + EPS
             suff_stats[:, ids] += np.outer(exp_doc_topic_d, cnts / norm_phi) * exp_topic_word_d
 
-    return (doc_topic_distr, suff_stats)
+    return (doc_topic_distr, suff_stats, None)
 
 
 class Scseg(BaseEstimator, TransformerMixin):
@@ -449,6 +451,8 @@ class Scseg(BaseEstimator, TransformerMixin):
     >>> lda.transform(X[-2:])
     array([[0.00360392, 0.25499205, 0.0036211 , 0.64236448, 0.09541846],
            [0.15297572, 0.00362644, 0.44412786, 0.39568399, 0.003586  ]])
+    >>> round(lda.score(X), 3)
+    -14899.469
     """
 
     def __init__(self, n_components=10, doc_topic_prior=None,
@@ -457,7 +461,7 @@ class Scseg(BaseEstimator, TransformerMixin):
                  batch_size=128, evaluate_every=-1, total_samples=1e6,
                  perp_tol=1e-1, mean_change_tol=1e-3, max_doc_update_iter=100,
                  n_jobs=None, verbose=0, random_state=None, n_topics=None,
-                 n_seeds=None, reg_weights=None):
+                 n_seeds=None, reg_weights=None, no_regression=False):
         self.n_components = n_components
         self.doc_topic_prior = doc_topic_prior
         self.topic_word_prior = topic_word_prior
@@ -477,6 +481,7 @@ class Scseg(BaseEstimator, TransformerMixin):
         self.n_topics = n_topics
         self.n_seeds = n_seeds
         self.reg_weights = reg_weights
+        self.no_regression = no_regression
 
     def _check_params(self):
         """Check model parameters."""
@@ -535,6 +540,9 @@ class Scseg(BaseEstimator, TransformerMixin):
         """Initialize latent variables for regression model."""
 
         # define priors for regresssion model
+        if self.no_regression:
+            self.reg_weights_ = np.asarray([100., 0])
+            return
 
         if self.reg_weights is None:
             self.reg_weights_ = np.asarray([-1., 1.])
@@ -644,11 +652,14 @@ class Scseg(BaseEstimator, TransformerMixin):
             self.components_ += (weight * (self.topic_word_prior_
                                            + doc_ratio * suff_stats))
 
-        if hasattr(self, "reg_weights_") and y is not None:
+        if hasattr(self, "reg_weights_") and y is not None and not self.no_regression:
             hessian = np.zeros((2,2))
             gradient = np.zeros(2)
             for i in range(X.shape[0]):
                 _compute_irls_update_stats(l[i], self.reg_weights_, y[i], reg_targets[i], hessian, gradient)
+
+            print(hessian)
+            print(gradient)
 
             self.reg_weights_ -= np.dot(np.linalg.inv(hessian), gradient)
 
@@ -738,7 +749,7 @@ class Scseg(BaseEstimator, TransformerMixin):
                                                        cal_sstats=False,
                                                        random_init=False,
                                                        parallel=parallel)
-                    bound = self._perplexity_precomp_distr(X, doc_topics_distr,
+                    bound = self._perplexity_precomp_distr(X, y, doc_topics_distr,
                                                            sub_sampling=False)
                     if self.verbose:
                         print('iteration: %d of max_iter: %d, perplexity: %.4f'
@@ -807,6 +818,47 @@ class Scseg(BaseEstimator, TransformerMixin):
         doc_topic_distr /= doc_topic_distr.sum(axis=1)[:, np.newaxis]
         return doc_topic_distr
 
+    def compute_likelihood(self, X, y, doc_topic_distr):
+
+        is_sparse_x = sp.issparse(X)
+        n_samples, n_components = doc_topic_distr.shape
+        n_features = self.components_.shape[1]
+        score = 0
+
+        dirichlet_doc_topic = _dirichlet_expectation_2d(doc_topic_distr)
+        dirichlet_component_ = _dirichlet_expectation_2d(self.components_)
+
+        if is_sparse_x:
+            X_data = X.data
+            X_indices = X.indices
+            X_indptr = X.indptr
+
+        # E[log p(docs | theta, beta)]
+        for idx_d in xrange(0, n_samples):
+            if is_sparse_x:
+                ids = X_indices[X_indptr[idx_d]:X_indptr[idx_d + 1]]
+                cnts = X_data[X_indptr[idx_d]:X_indptr[idx_d + 1]]
+            else:
+                ids = np.nonzero(X[idx_d, :])[0]
+                cnts = X[idx_d, ids]
+            expected_log_doc_topic_d = dirichlet_doc_topic[idx_d]
+            expected_log_topic_word_d = dirichlet_component_[:, ids]
+            if y is None:
+
+                # Likeihood for LDA
+                temp = (expected_log_doc_topic_d[:, np.newaxis] + expected_log_topic_word_d)
+                norm_phi = logsumexp(temp, axis=0)
+                score += np.dot(cnts, norm_phi)
+            else:
+                # likelihood for the markov lda
+
+                log_sig_arg = y[idx_d, :(len(ids)-1)]*self.reg_weights_[1] + self.reg_weights_[0]
+                fwdlattice = np.zeros((len(ids), self._n_components, 2))
+                score += _forward(len(ids), self._n_components, cnts, expected_log_doc_topic_d,
+                         expected_log_topic_word_d, log_sig_arg, fwdlattice)
+        return score
+
+
     def _approx_bound(self, X, y, doc_topic_distr, sub_sampling):
         """Estimate the variational bound.
         Estimate the variational bound over "all documents" using only the
@@ -826,6 +878,12 @@ class Scseg(BaseEstimator, TransformerMixin):
         -------
         score : float
         """
+        n_samples, n_components = doc_topic_distr.shape
+        n_features = self.components_.shape[1]
+        dirichlet_doc_topic = _dirichlet_expectation_2d(doc_topic_distr)
+        dirichlet_component_ = _dirichlet_expectation_2d(self.components_)
+        doc_topic_prior = self.doc_topic_prior_
+        topic_word_prior = self.topic_word_prior_
 
         def _loglikelihood(prior, distr, dirichlet_distr, size):
             # calculate log-likelihood
@@ -834,47 +892,23 @@ class Scseg(BaseEstimator, TransformerMixin):
             score += np.sum(gammaln(prior * size) - gammaln(np.sum(distr, 1)))
             return score
 
-        is_sparse_x = sp.issparse(X)
-        n_samples, n_components = doc_topic_distr.shape
-        n_features = self.components_.shape[1]
-        score = 0
-
-        dirichlet_doc_topic = _dirichlet_expectation_2d(doc_topic_distr)
-        dirichlet_component_ = _dirichlet_expectation_2d(self.components_)
-        doc_topic_prior = self.doc_topic_prior_
-        topic_word_prior = self.topic_word_prior_
-
-        if is_sparse_x:
-            X_data = X.data
-            X_indices = X.indices
-            X_indptr = X.indptr
-
-        # E[log p(docs | theta, beta)]
-        for idx_d in xrange(0, n_samples):
-            if is_sparse_x:
-                ids = X_indices[X_indptr[idx_d]:X_indptr[idx_d + 1]]
-                cnts = X_data[X_indptr[idx_d]:X_indptr[idx_d + 1]]
-            else:
-                ids = np.nonzero(X[idx_d, :])[0]
-                cnts = X[idx_d, ids]
-            temp = (dirichlet_doc_topic[idx_d, :, np.newaxis]
-                    + dirichlet_component_[:, ids])
-            norm_phi = logsumexp(temp, axis=0)
-            score += np.dot(cnts, norm_phi)
+        score = self.compute_likelihood(X, y, doc_topic_distr)
 
         # compute E[log p(theta | alpha) - log q(theta | gamma)]
-        score += _loglikelihood(doc_topic_prior, doc_topic_distr,
+        score_theta = _loglikelihood(doc_topic_prior, doc_topic_distr,
                                 dirichlet_doc_topic, self._n_components)
 
+        score += score_theta
         # Compensate for the subsampling of the population of documents
         if sub_sampling:
             doc_ratio = float(self.total_samples) / n_samples
             score *= doc_ratio
 
         # E[log p(beta | eta) - log q (beta | lambda)]
-        score += _loglikelihood(topic_word_prior, self.components_,
+        score_beta = _loglikelihood(topic_word_prior, self.components_,
                                 dirichlet_component_, n_features)
 
+        score += score_beta
         return score
 
     def score(self, X, y=None):
@@ -892,7 +926,7 @@ class Scseg(BaseEstimator, TransformerMixin):
         X = self._check_non_neg_array(X, "LatentDirichletAllocation.score")
 
         doc_topic_distr = self._unnormalized_transform(X, y)
-        score = self._approx_bound(X, doc_topic_distr, sub_sampling=False)
+        score = self._approx_bound(X, y, doc_topic_distr, sub_sampling=False)
         return score
 
     def _perplexity_precomp_distr(self, X, y, doc_topic_distr=None,
