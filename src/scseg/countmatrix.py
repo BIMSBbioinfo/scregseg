@@ -13,7 +13,7 @@ def get_count_matrix_(filename, header=True, offset=0):
     if offset > 0:
         spdf.region -= offset
         spdf.cell -= offset
-    smat = csc_matrix((spdf['count'], (spdf.region, spdf.cell)))
+    smat = csc_matrix((spdf['count'], (spdf.region, spdf.cell)), dtype='float')
     return smat
 
 def get_cell_annotation_first_row_(filename):
