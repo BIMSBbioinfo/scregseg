@@ -114,6 +114,34 @@ def test_forward_almost_lda():
     # test if total log likelihood is the same as of the original LDA model
     np.testing.assert_allclose(logsumexp(results[-1]), np.log(np.dot(np.exp(log_theta), np.exp(log_beta))).sum())
 
+def test_forward_almost_hmm():
+    n_topics = 2
+    n_samples = 3
+
+    sigarg = np.array([-20., -20])
+    counts = np.ones(3)
+    log_beta = np.array([[-.1, -.1, -.2], [-.2, -1, -.3]])
+    log_theta = np.array([-2, -2.3])
+    results = np.zeros((n_samples, n_topics, 2))
+
+    log_same = np.log(np.eye(n_topics))
+
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, results)
+
+    # init step
+    np.testing.assert_equal(results[0], np.array([[-2.1, -np.Inf], [-2.5, -np.Inf]]))
+
+    for p in range(2):
+        r = np.zeros((n_topics, n_topics, 2))
+        for i in range(r.shape[0]):
+            for j in range(r.shape[0]):
+                r[i, j, 0] = logsumexp(results[p], axis=1)[i] + logsigmoid(sigarg[p]) + log_theta[j] + log_beta[j, p+1]
+                r[i, j, 1] = logsumexp(results[p], axis=1)[i] + logsigmoid(-sigarg[p]) + log_same[i, j] + log_beta[j, p+1]
+        np.testing.assert_allclose(logsumexp(r, axis=0), results[p+1])
+
+    # test if total log likelihood is the same as of the original LDA model
+    #np.testing.assert_allclose(logsumexp(results[-1]), np.log(np.dot(np.exp(log_theta), np.exp(log_beta))).sum())
+
 
 
 def test_backward():
@@ -308,6 +336,41 @@ def test_forward_backward_theta_stats_lda():
     np.testing.assert_allclose(log_theta_stats.sum(), counts.sum())
 
 
+def test_forward_backward_theta_stats_hmm():
+    n_topics = 2
+    n_samples = 3
+
+    sigarg = np.array([-20., -20.])
+    counts = np.ones(3)
+    log_beta = np.array([[-.1, -.1, -.2], [-.2, -1, -.3]])
+    log_theta = np.array([-2, -2.3])
+    bresults = np.zeros((n_samples, n_topics))
+    fresults = np.zeros((n_samples, n_topics, 2))
+
+    log_theta_stats = np.zeros(2)
+
+    _backward(n_samples, n_topics, log_theta, log_beta, sigarg, bresults)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults)
+
+    np.testing.assert_allclose(logsumexp(fresults, -1) + bresults, np.dot(np.ones((3,1)), np.array([[-2.4, -3.8]])))
+
+    _compute_theta_sstats(n_samples, n_topics, counts, fresults, bresults, log_theta_stats)
+
+    # should be only 1, because top down evidence is induced only once in the
+    # beginning. Subsequently, the hmm is locked into its states and it can't
+    # switch to another state.
+    np.testing.assert_allclose(log_theta_stats.sum(), 1)
+    np.testing.assert_allclose(log_theta_stats, np.array([0.80218389, 0.19781611]))
+
+    # with more counts
+    counts[1] = 3
+    _compute_theta_sstats(n_samples, n_topics, counts, fresults, bresults, log_theta_stats)
+
+    #the same is true here. bottom down evidence is observed only once.
+    np.testing.assert_allclose(log_theta_stats.sum(), 1)
+    np.testing.assert_allclose(log_theta_stats, np.array([0.80218389, 0.19781611]))
+
+
 def test_forward_backward_beta_stats_lda():
     n_topics = 2
     n_samples = 3
@@ -421,6 +484,7 @@ def test_e_step():
     reg_weights = np.array([100., 0.])
     max_iters = sseg.max_doc_update_iter
     max_iters = 10
+    max_dist = 100
     mean_change_tol = sseg.mean_change_tol
     cal_sstats = True
 
@@ -433,7 +497,7 @@ def test_e_step():
     exp_exp_dirichlet_component_ = np.exp(exp_dirichlet_component_)
 
     tdd1, sstat_1, _ = _update_doc_distribution_markovlda(data, dists, exp_dirichlet_component_, doc_topic_prior,
-                                       reg_weights, max_iters,
+                                       reg_weights, max_dist, max_iters,
                                        mean_change_tol, cal_sstats, None)
 
     tdd2, sstat_2, _ = _update_doc_distribution_lda(data, exp_exp_dirichlet_component_, doc_topic_prior,
@@ -473,7 +537,7 @@ def test_score():
         print('using binarize={}'.format(binarize))
 
         cm = CountMatrix.create_from_countmatrix(countmatrixfile, bedfile,
-                                   transform=trans)
+                                                 transform=trans)
 
         cm.filter_count_matrix(minreadsincells, maxreadsincells,
                                minreadsinpeaks, binarize=True)
@@ -486,7 +550,8 @@ def test_score():
 
         n_components = 5
         sseg = Scseg(n_components, random_state=0)
-        sseg_markov = Scseg(n_components, random_state=0, no_regression=True)
+        sseg_markov = Scseg(n_components, random_state=0, no_regression=True,
+                            reg_weights=np.array([100., 0.]))
         lda = LatentDirichletAllocation(n_components, random_state=0)
 
         # get score of original lda
@@ -525,7 +590,7 @@ def test_score_toyexample():
 
         n_components = 5
         sseg = Scseg(n_components, random_state=0)
-        sseg_markov = Scseg(n_components, random_state=0, no_regression=True)
+        sseg_markov = Scseg(n_components, random_state=0, no_regression=True, reg_weights=np.array([100., 0.]))
         lda = LatentDirichletAllocation(n_components, random_state=0)
 
         # get score of original lda
@@ -602,7 +667,7 @@ def test_transform():
 
     n_components = 2
     sseg = Scseg(n_components, random_state=0)
-    sseg_markov = Scseg(n_components, random_state=0, no_regression=True)
+    sseg_markov = Scseg(n_components, random_state=0, no_regression=True, reg_weights=np.array([100., 0.]))
     lda = LatentDirichletAllocation(n_components, random_state=0)
 
     # get score of original lda

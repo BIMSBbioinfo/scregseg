@@ -64,7 +64,7 @@ def get_document_length(X):
 
 
 def _update_doc_distribution(X, y, exp_topic_word_distr, doc_topic_prior,
-                             reg_weights,
+                             reg_weights, max_dist,
                              max_iters,
                              mean_change_tol, cal_sstats, random_state):
     """E-step: update document-topic distribution.
@@ -106,12 +106,12 @@ def _update_doc_distribution(X, y, exp_topic_word_distr, doc_topic_prior,
     else:
         return _update_doc_distribution_markovlda(X, y,
                                             exp_topic_word_distr, doc_topic_prior,
-                                            reg_weights,
+                                            reg_weights, max_dist,
                                             max_iters,
                                             mean_change_tol, cal_sstats, random_state)
 
 def _update_doc_distribution_markovlda(X, y, exp_topic_word_distr, doc_topic_prior,
-                                      reg_weights,
+                                      reg_weights, max_dist,
                                       max_iters,
                                       mean_change_tol, cal_sstats, random_state):
     """E-step: update document-topic distribution.
@@ -192,6 +192,7 @@ def _update_doc_distribution_markovlda(X, y, exp_topic_word_distr, doc_topic_pri
         bwdlattice = np.zeros((len(ids), n_topics))
 
         log_sig_arg = y[idx_d, :(len(ids)-1)]*reg_weights[1] + reg_weights[0]
+        log_sig_arg[y[idx_d, :(len(ids)-1)] > max_dist] = 100.
 
         # Iterate between `doc_topic_d` and `norm_phi` until convergence
         for _ in xrange(0, max_iters):
@@ -461,7 +462,7 @@ class Scseg(BaseEstimator, TransformerMixin):
                  batch_size=128, evaluate_every=-1, total_samples=1e6,
                  perp_tol=1e-1, mean_change_tol=1e-3, max_doc_update_iter=100,
                  n_jobs=None, verbose=0, random_state=None, n_topics=None,
-                 n_seeds=None, reg_weights=None, no_regression=False):
+                 n_seeds=None, reg_weights=None, no_regression=False, max_dist=100.):
         self.n_components = n_components
         self.doc_topic_prior = doc_topic_prior
         self.topic_word_prior = topic_word_prior
@@ -482,6 +483,7 @@ class Scseg(BaseEstimator, TransformerMixin):
         self.n_seeds = n_seeds
         self.reg_weights = reg_weights
         self.no_regression = no_regression
+        self.max_dist_ = max_dist
 
     def _check_params(self):
         """Check model parameters."""
@@ -540,14 +542,14 @@ class Scseg(BaseEstimator, TransformerMixin):
         """Initialize latent variables for regression model."""
 
         # define priors for regresssion model
-        if self.no_regression:
-            self.reg_weights_ = np.asarray([100., 0])
-            return
-
+        #if self.no_regression:
         if self.reg_weights is None:
+            # this behaves exactly as the LDA
             self.reg_weights_ = np.asarray([-1., 1.])
         else:
             self.reg_weights_ = self.reg_weights
+
+
 
     def _e_step(self, X, y, cal_sstats, random_init, parallel=None):
         """E-step in EM update.
@@ -588,6 +590,7 @@ class Scseg(BaseEstimator, TransformerMixin):
                                               self.exp_dirichlet_component_,
                                               self.doc_topic_prior_,
                                               self.reg_weights_ if hasattr(self, "reg_weights_") else None,
+                                              self.max_dist_,
                                               self.max_doc_update_iter,
                                               self.mean_change_tol, cal_sstats,
                                               random_state)
@@ -658,10 +661,13 @@ class Scseg(BaseEstimator, TransformerMixin):
             for i in range(X.shape[0]):
                 _compute_irls_update_stats(l[i], self.reg_weights_, y[i], reg_targets[i], hessian, gradient)
 
-            print(hessian)
-            print(gradient)
+            old = self.reg_weights_.copy()
+
+            #print(hessian)
+            #print(gradient)
 
             self.reg_weights_ -= np.dot(np.linalg.inv(hessian), gradient)
+            print('w_update: {} -> {}'.format(old, self.reg_weights_))
 
         self.exp_dirichlet_component_ = _dirichlet_expectation_2d(self.components_)
         if y is None:
