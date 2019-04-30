@@ -36,7 +36,7 @@ def test_forward():
 
     log_same = np.log(np.eye(n_topics))
 
-    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, results)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, results, 0)
 
     # init step
     np.testing.assert_equal(results[0], np.array([[-2.1, -np.Inf], [-2.5, -np.Inf]]))
@@ -80,7 +80,7 @@ def test_forward_almost_lda():
 
     log_same = np.log(np.eye(n_topics))
 
-    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, results)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, results, 0)
 
     # init step
     np.testing.assert_equal(results[0], np.array([[-2.1, -np.Inf], [-2.5, -np.Inf]]))
@@ -126,7 +126,7 @@ def test_forward_almost_hmm():
 
     log_same = np.log(np.eye(n_topics))
 
-    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, results)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, results, 0)
 
     # init step
     np.testing.assert_equal(results[0], np.array([[-2.1, -np.Inf], [-2.5, -np.Inf]]))
@@ -227,7 +227,7 @@ def test_forward_backward_logreg_stats():
 
 
     _backward(n_samples, n_topics, log_theta, log_beta, sigarg, bresults)
-    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults, 0)
 
 
     _compute_log_reg_targets(n_samples, n_topics, counts, fresults, bresults, dist_targets)
@@ -250,7 +250,7 @@ def test_forward_backward_theta_stats():
 
 
     _backward(n_samples, n_topics, log_theta, log_beta, sigarg, bresults)
-    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults, 0)
 
     _compute_theta_sstats(n_samples, n_topics, counts, fresults, bresults, log_theta_stats)
 
@@ -272,7 +272,7 @@ def test_forward_backward_beta_stats():
     log_beta_stats = np.zeros((2,3))
 
     _backward(n_samples, n_topics, log_theta, log_beta, sigarg, bresults)
-    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults, 0)
 
     _compute_beta_sstats(n_samples, n_topics, counts, fresults, bresults, log_beta_stats)
     np.testing.assert_allclose(log_beta_stats.sum(), 3)
@@ -294,7 +294,7 @@ def test_forward_backward_logreg_stats_lda():
 
 
     _backward(n_samples, n_topics, log_theta, log_beta, sigarg, bresults)
-    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults, 0)
 
 
     _compute_log_reg_targets(n_samples, n_topics, counts, fresults, bresults, dist_targets)
@@ -323,7 +323,7 @@ def test_forward_backward_theta_stats_lda():
     log_theta_stats = np.zeros(2)
 
     _backward(n_samples, n_topics, log_theta, log_beta, sigarg, bresults)
-    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults, 0)
 
     _compute_theta_sstats(n_samples, n_topics, counts, fresults, bresults, log_theta_stats)
 
@@ -350,7 +350,7 @@ def test_forward_backward_theta_stats_hmm():
     log_theta_stats = np.zeros(2)
 
     _backward(n_samples, n_topics, log_theta, log_beta, sigarg, bresults)
-    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults, 0)
 
     np.testing.assert_allclose(logsumexp(fresults, -1) + bresults, np.dot(np.ones((3,1)), np.array([[-2.4, -3.8]])))
 
@@ -384,7 +384,7 @@ def test_forward_backward_beta_stats_lda():
     log_beta_stats = np.zeros((2,3))
 
     _backward(n_samples, n_topics, log_theta, log_beta, sigarg, bresults)
-    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fresults, 0)
 
     _compute_beta_sstats(n_samples, n_topics, counts, fresults, bresults, log_beta_stats)
 
@@ -632,7 +632,7 @@ def test_likelihood():
 
     fwdlattice = np.zeros((n_samples, n_topics, 2))
 
-    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fwdlattice)
+    _forward(n_samples, n_topics, counts, log_theta, log_beta, sigarg, fwdlattice, 0)
 
     temp = (log_theta[:, np.newaxis]
             + log_beta[:])
