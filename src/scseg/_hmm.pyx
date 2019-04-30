@@ -1,5 +1,6 @@
 # cython: language_level=3, boundscheck=False, wraparound=False
 
+cimport cython
 from cython cimport view
 from numpy.math cimport expl, logl, tanhl, log1pl, isinf, fabsl, INFINITY, PI
 
@@ -7,6 +8,8 @@ import numpy as np
 
 ctypedef double dtype_t
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cdef inline dtype_t _max2d(dtype_t[:,:] X) nogil:
     cdef dtype_t X_max = -INFINITY
     cdef int i, j
@@ -17,7 +20,8 @@ cdef inline dtype_t _max2d(dtype_t[:,:] X) nogil:
 
     return X_max
 
-
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cdef inline int _argmax(dtype_t[:] X) nogil:
     cdef dtype_t X_max = -INFINITY
     cdef int pos = 0
@@ -28,7 +32,8 @@ cdef inline int _argmax(dtype_t[:] X) nogil:
             pos = i
     return pos
 
-
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cdef inline dtype_t _max(dtype_t[:] X) nogil:
     return X[_argmax(X)]
 
@@ -46,6 +51,8 @@ cdef inline dtype_t _logsigmoid(dtype_t x) nogil:
     return -logl( 1. + expl(-x))
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cdef inline dtype_t _logsumexp2d(dtype_t[:,:] X) nogil:
     cdef dtype_t X_max = _max2d(X)
     if isinf(X_max):
@@ -59,6 +66,8 @@ cdef inline dtype_t _logsumexp2d(dtype_t[:,:] X) nogil:
     return logl(acc) + X_max
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cdef inline dtype_t _logsumexp(dtype_t[:] X) nogil:
     cdef dtype_t X_max = _max(X)
     if isinf(X_max):
@@ -70,6 +79,9 @@ cdef inline dtype_t _logsumexp(dtype_t[:] X) nogil:
 
     return logl(acc) + X_max
 
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def _forward(int n_samples, int n_components,
              dtype_t[:] cnts,
              dtype_t[:] log_theta,
@@ -100,19 +112,18 @@ def _forward(int n_samples, int n_components,
         for t in range(1, n_samples):
             lsig = _logsigmoid(sigmoid_arg[t - 1])
             nlsig = _logsigmoid(-sigmoid_arg[t - 1])
+            for i in range(n_components):
+              # sum over indep or same topic
+              merged_fw = _logaddexp(fwdlattice[t - 1, i, 0], fwdlattice[t - 1, i, 1])
+              #if an independent topic emerges:
+              wb0[i] = merged_fw
+
             for j in range(n_components):
-                for i in range(n_components):
-                    # sum over indep or same topic
-                    merged_fw = _logsumexp(fwdlattice[t - 1, i])
-
-                    #if an independent topic emerges:
-                    wb0[i] = merged_fw
-
                     # if the same topic is extended:
-                    wb1[i] = merged_fw + log_same[i, j]
+#                    wb1[i] = merged_fw + log_same[i, j]
 
                 fwdlattice[t, j, 0] = _logsumexp(wb0) + log_beta[j, t] + log_theta[j] + lsig
-                fwdlattice[t, j, 1] = _logsumexp(wb1) + log_beta[j, t] + nlsig
+                fwdlattice[t, j, 1] = wb0[j] + log_beta[j, t] + nlsig
 
         if complikeli>0:
             # finally compute the log-likelihood
@@ -122,7 +133,8 @@ def _forward(int n_samples, int n_components,
 
     return loglikeli
 
-
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def _backward(int n_samples, int n_components,
               dtype_t[:] log_theta,
               dtype_t[:, :] log_beta,
@@ -155,7 +167,8 @@ def _backward(int n_samples, int n_components,
                     wb1[j] = _logaddexp(log_same[i, j] + nlsig,  log_theta[j] + lsig) + log_beta[j, t + 1] + bwdlattice[t + 1, j]
                 bwdlattice[t, i] = _logsumexp(wb1)
 
-
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def _compute_theta_sstats(int n_samples, int n_components,
                    dtype_t[:] num_words,
                    dtype_t[:,:,:] fwdlattice,
@@ -184,6 +197,8 @@ def _compute_theta_sstats(int n_samples, int n_components,
           log_theta_stats[i] += expl(wb[i, 0] - partition) * num_words[t]
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def _compute_beta_sstats(int n_samples, int n_components,
                    dtype_t[:] num_words,
                    dtype_t[:,:,:] fwdlattice,
@@ -210,7 +225,8 @@ def _compute_beta_sstats(int n_samples, int n_components,
           val = expl(wb[i] - partition)
           log_beta_stats[i, t] += val * num_words[t]
 
-
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def _compute_log_reg_targets(int n_samples, int n_components,
                    dtype_t[:] num_words,
                    dtype_t[:,:,:] fwdlattice,
@@ -244,6 +260,8 @@ cdef inline dtype_t _sigmoid(dtype_t x) nogil:
     return 1./(1. + expl(-x))
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def _compute_regloss_sigmoid(int[:] n_samples, dtype_t[:] weights, dtype_t[:,:] dists, dtype_t[:,:] true_targets, dtype_t max_dist):
     cdef dtype_t res=0.0
     cdef int s, icell
