@@ -231,7 +231,7 @@ def _update_doc_distribution_markovlda(X, y, exp_topic_word_distr, doc_topic_pri
             suff_stats[:, ids] += log_beta_stats
 
             dist_targets_d = dist_targets[idx_d, :]
-            _compute_theta_sstats(len(ids), n_topics, cnts, fwdlattice, bwdlattice,
+            _compute_log_reg_targets(len(ids), n_topics, cnts, fwdlattice, bwdlattice,
                                  dist_targets_d)
 
             dist_targets[idx_d, :] = dist_targets_d
