@@ -12,6 +12,7 @@ Link: https://github.com/blei-lab/onlineldavb
 import numpy as np
 import scipy.sparse as sp
 from scipy.special import gammaln
+from scipy.optimize import minimize
 import warnings
 
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -31,7 +32,7 @@ from ._hmm import _backward
 from ._hmm import _compute_theta_sstats
 from ._hmm import _compute_beta_sstats
 from ._hmm import _compute_log_reg_targets
-from ._hmm import _compute_irls_update_stats
+from ._hmm import _compute_regloss_sigmoid
 
 EPS = np.finfo(np.float).eps
 
@@ -172,6 +173,7 @@ def _update_doc_distribution_markovlda(X, y, exp_topic_word_distr, doc_topic_pri
     loglikeli = 0.0
 
     for idx_d in xrange(n_samples):
+
         if is_sparse_x:
             ids = X_indices[X_indptr[idx_d]:X_indptr[idx_d + 1]]
             cnts = X_data[X_indptr[idx_d]:X_indptr[idx_d + 1]]
@@ -462,7 +464,7 @@ class Scseg(BaseEstimator, TransformerMixin):
                  batch_size=128, evaluate_every=-1, total_samples=1e6,
                  perp_tol=1e-1, mean_change_tol=1e-3, max_doc_update_iter=100,
                  n_jobs=None, verbose=0, random_state=None, n_topics=None,
-                 n_seeds=None, reg_weights=None, no_regression=False, max_dist=100.):
+                 n_seeds=None, reg_weights=None, no_regression=False, max_dist=1e7):
         self.n_components = n_components
         self.doc_topic_prior = doc_topic_prior
         self.topic_word_prior = topic_word_prior
@@ -483,7 +485,7 @@ class Scseg(BaseEstimator, TransformerMixin):
         self.n_seeds = n_seeds
         self.reg_weights = reg_weights
         self.no_regression = no_regression
-        self.max_dist_ = max_dist
+        self.max_dist = max_dist
 
     def _check_params(self):
         """Check model parameters."""
@@ -510,6 +512,7 @@ class Scseg(BaseEstimator, TransformerMixin):
         if self.learning_method not in ("batch", "online"):
             raise ValueError("Invalid 'learning_method' parameter: %r"
                              % self.learning_method)
+        self.max_dist_ = self.max_dist
 
     def _init_latent_vars(self, n_features, X=None):
         """Initialize latent variables."""
@@ -656,18 +659,15 @@ class Scseg(BaseEstimator, TransformerMixin):
                                            + doc_ratio * suff_stats))
 
         if hasattr(self, "reg_weights_") and y is not None and not self.no_regression:
-            hessian = np.zeros((2,2))
-            gradient = np.zeros(2)
-            for i in range(X.shape[0]):
-                _compute_irls_update_stats(l[i], self.reg_weights_, y[i], reg_targets[i], hessian, gradient)
 
-            old = self.reg_weights_.copy()
+            dists = y
 
-            #print(hessian)
-            #print(gradient)
+            def objective(weights, lens_, dists_, reg_targets_, max_dist_):
+                return _compute_regloss_sigmoid(lens_.astype('int32'), weights, dists_, reg_targets_, max_dist_)
 
-            self.reg_weights_ -= np.dot(np.linalg.inv(hessian), gradient)
-            print('w_update: {} -> {}'.format(old, self.reg_weights_))
+            ores = minimize(objective, self.reg_weights_, args=(l, dists, reg_targets, self.max_dist_))
+            self.reg_weights_ = ores.x
+
 
         self.exp_dirichlet_component_ = _dirichlet_expectation_2d(self.components_)
         if y is None:

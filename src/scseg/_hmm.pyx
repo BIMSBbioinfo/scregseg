@@ -245,23 +245,14 @@ cdef inline dtype_t _sigmoid(dtype_t x) nogil:
     return 1./(1. + expl(-x))
 
 
-def _compute_irls_update_stats(int n_samples, dtype_t[:] weights, dtype_t[:] dists, dtype_t[:] true_targets, dtype_t[:,:] hessian, dtype_t[:] gradient):
+def _compute_regloss_sigmoid(int[:] n_samples, dtype_t[:] weights, dtype_t[:,:] dists, dtype_t[:,:] true_targets, dtype_t max_dist):
+    cdef dtype_t res=0.0
+    cdef int s, icell
 
-    cdef dtype_t h, r
-    cdef int s
-
-    if n_samples <= 0:
-      return
     with nogil:
-      for s in range(n_samples):
-          # compute hessian
-          h = _sigmoid(weights[0] + weights[1]*dists[s])
-          r = h*(1-h)
-          hessian[0,0] += r
-          hessian[0,1] += r*dists[s]
-          hessian[1,1] += r*dists[s]*dists[s]
+        for icell in range(n_samples.shape[0]):
+            for s in range(n_samples[icell] - 1):
+                if dists[icell, s] <= max_dist:
+                    res += (true_targets[icell, s] - _sigmoid(weights[0] + weights[1]*dists[icell, s]))**2
 
-          # compute gradient
-          gradient[0] += (h - true_targets[s])
-          gradient[1] += (h - true_targets[s]) * dists[s]
-      hessian[1,0] = hessian[0,1]
+    return res

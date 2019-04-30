@@ -1502,6 +1502,9 @@ static CYTHON_INLINE __Pyx_memviewslice __Pyx_PyObject_to_MemoryviewSlice_dsds_n
 /* ObjectToMemviewSlice.proto */
 static CYTHON_INLINE __Pyx_memviewslice __Pyx_PyObject_to_MemoryviewSlice_dsdsds_nn___pyx_t_5scseg_4_hmm_dtype_t(PyObject *);
 
+/* ObjectToMemviewSlice.proto */
+static CYTHON_INLINE __Pyx_memviewslice __Pyx_PyObject_to_MemoryviewSlice_ds_int(PyObject *);
+
 /* CIntToPy.proto */
 static CYTHON_INLINE PyObject* __Pyx_PyInt_From_int(int value);
 
@@ -1619,6 +1622,7 @@ static void __pyx_memoryview_slice_assign_scalar(__Pyx_memviewslice *, int, size
 static void __pyx_memoryview__slice_assign_scalar(char *, Py_ssize_t *, Py_ssize_t *, int, size_t, void *); /*proto*/
 static PyObject *__pyx_unpickle_Enum__set_state(struct __pyx_MemviewEnum_obj *, PyObject *); /*proto*/
 static __Pyx_TypeInfo __Pyx_TypeInfo_nn___pyx_t_5scseg_4_hmm_dtype_t = { "dtype_t", NULL, sizeof(__pyx_t_5scseg_4_hmm_dtype_t), { 0 }, 0, 'R', 0, 0 };
+static __Pyx_TypeInfo __Pyx_TypeInfo_int = { "int", NULL, sizeof(int), { 0 }, 0, IS_UNSIGNED(int) ? 'U' : 'I', IS_UNSIGNED(int), 0 };
 #define __Pyx_MODULE_NAME "scseg._hmm"
 extern int __pyx_module_is_main_scseg___hmm;
 int __pyx_module_is_main_scseg___hmm = 0;
@@ -1634,10 +1638,8 @@ static PyObject *__pyx_builtin_id;
 static PyObject *__pyx_builtin_IndexError;
 static const char __pyx_k_O[] = "O";
 static const char __pyx_k_c[] = "c";
-static const char __pyx_k_h[] = "h";
 static const char __pyx_k_i[] = "i";
 static const char __pyx_k_j[] = "j";
-static const char __pyx_k_r[] = "r";
 static const char __pyx_k_s[] = "s";
 static const char __pyx_k_t[] = "t";
 static const char __pyx_k_id[] = "id";
@@ -1645,6 +1647,7 @@ static const char __pyx_k_np[] = "np";
 static const char __pyx_k_wb[] = "wb";
 static const char __pyx_k_new[] = "__new__";
 static const char __pyx_k_obj[] = "obj";
+static const char __pyx_k_res[] = "res";
 static const char __pyx_k_val[] = "val";
 static const char __pyx_k_wb0[] = "wb0";
 static const char __pyx_k_wb1[] = "wb1";
@@ -1667,6 +1670,7 @@ static const char __pyx_k_class[] = "__class__";
 static const char __pyx_k_dists[] = "dists";
 static const char __pyx_k_error[] = "error";
 static const char __pyx_k_flags[] = "flags";
+static const char __pyx_k_icell[] = "icell";
 static const char __pyx_k_nlsig[] = "nlsig";
 static const char __pyx_k_numpy[] = "numpy";
 static const char __pyx_k_range[] = "range";
@@ -1684,16 +1688,15 @@ static const char __pyx_k_unpack[] = "unpack";
 static const char __pyx_k_update[] = "update";
 static const char __pyx_k_fortran[] = "fortran";
 static const char __pyx_k_forward[] = "_forward";
-static const char __pyx_k_hessian[] = "hessian";
 static const char __pyx_k_memview[] = "memview";
 static const char __pyx_k_weights[] = "weights";
 static const char __pyx_k_Ellipsis[] = "Ellipsis";
 static const char __pyx_k_backward[] = "_backward";
 static const char __pyx_k_getstate[] = "__getstate__";
-static const char __pyx_k_gradient[] = "gradient";
 static const char __pyx_k_itemsize[] = "itemsize";
 static const char __pyx_k_log_beta[] = "log_beta";
 static const char __pyx_k_log_same[] = "log_same";
+static const char __pyx_k_max_dist[] = "max_dist";
 static const char __pyx_k_pyx_type[] = "__pyx_type";
 static const char __pyx_k_setstate[] = "__setstate__";
 static const char __pyx_k_TypeError[] = "TypeError";
@@ -1741,10 +1744,10 @@ static const char __pyx_k_contiguous_and_direct[] = "<contiguous and direct>";
 static const char __pyx_k_MemoryView_of_r_object[] = "<MemoryView of %r object>";
 static const char __pyx_k_MemoryView_of_r_at_0x_x[] = "<MemoryView of %r at 0x%x>";
 static const char __pyx_k_compute_log_reg_targets[] = "_compute_log_reg_targets";
+static const char __pyx_k_compute_regloss_sigmoid[] = "_compute_regloss_sigmoid";
 static const char __pyx_k_contiguous_and_indirect[] = "<contiguous and indirect>";
 static const char __pyx_k_Cannot_index_with_type_s[] = "Cannot index with type '%s'";
 static const char __pyx_k_Invalid_shape_in_axis_d_d[] = "Invalid shape in axis %d: %d.";
-static const char __pyx_k_compute_irls_update_stats[] = "_compute_irls_update_stats";
 static const char __pyx_k_itemsize_0_for_cython_array[] = "itemsize <= 0 for cython.array";
 static const char __pyx_k_unable_to_allocate_array_data[] = "unable to allocate array data.";
 static const char __pyx_k_strided_and_direct_or_indirect[] = "<strided and direct or indirect>";
@@ -1790,8 +1793,8 @@ static PyObject *__pyx_n_s_class;
 static PyObject *__pyx_n_s_cline_in_traceback;
 static PyObject *__pyx_n_s_cnts;
 static PyObject *__pyx_n_s_compute_beta_sstats;
-static PyObject *__pyx_n_s_compute_irls_update_stats;
 static PyObject *__pyx_n_s_compute_log_reg_targets;
+static PyObject *__pyx_n_s_compute_regloss_sigmoid;
 static PyObject *__pyx_n_s_compute_theta_sstats;
 static PyObject *__pyx_kp_s_contiguous_and_direct;
 static PyObject *__pyx_kp_s_contiguous_and_indirect;
@@ -1810,10 +1813,8 @@ static PyObject *__pyx_n_s_full;
 static PyObject *__pyx_n_s_fwdlattice;
 static PyObject *__pyx_n_s_getstate;
 static PyObject *__pyx_kp_s_got_differing_extents_in_dimensi;
-static PyObject *__pyx_n_s_gradient;
-static PyObject *__pyx_n_s_h;
-static PyObject *__pyx_n_s_hessian;
 static PyObject *__pyx_n_s_i;
+static PyObject *__pyx_n_s_icell;
 static PyObject *__pyx_n_s_id;
 static PyObject *__pyx_n_s_import;
 static PyObject *__pyx_n_s_itemsize;
@@ -1827,6 +1828,7 @@ static PyObject *__pyx_n_s_log_theta_stats;
 static PyObject *__pyx_n_s_loglikeli;
 static PyObject *__pyx_n_s_lsig;
 static PyObject *__pyx_n_s_main;
+static PyObject *__pyx_n_s_max_dist;
 static PyObject *__pyx_n_s_memview;
 static PyObject *__pyx_n_s_merged_fw;
 static PyObject *__pyx_n_s_mode;
@@ -1853,12 +1855,12 @@ static PyObject *__pyx_n_s_pyx_state;
 static PyObject *__pyx_n_s_pyx_type;
 static PyObject *__pyx_n_s_pyx_unpickle_Enum;
 static PyObject *__pyx_n_s_pyx_vtable;
-static PyObject *__pyx_n_s_r;
 static PyObject *__pyx_n_s_range;
 static PyObject *__pyx_n_s_reduce;
 static PyObject *__pyx_n_s_reduce_cython;
 static PyObject *__pyx_n_s_reduce_ex;
 static PyObject *__pyx_n_s_reg_target_stats;
+static PyObject *__pyx_n_s_res;
 static PyObject *__pyx_n_s_s;
 static PyObject *__pyx_n_s_scseg__hmm;
 static PyObject *__pyx_n_s_setstate;
@@ -1893,7 +1895,7 @@ static PyObject *__pyx_pf_5scseg_4_hmm_2_backward(CYTHON_UNUSED PyObject *__pyx_
 static PyObject *__pyx_pf_5scseg_4_hmm_4_compute_theta_sstats(CYTHON_UNUSED PyObject *__pyx_self, int __pyx_v_n_samples, int __pyx_v_n_components, __Pyx_memviewslice __pyx_v_num_words, __Pyx_memviewslice __pyx_v_fwdlattice, __Pyx_memviewslice __pyx_v_bwdlattice, __Pyx_memviewslice __pyx_v_log_theta_stats); /* proto */
 static PyObject *__pyx_pf_5scseg_4_hmm_6_compute_beta_sstats(CYTHON_UNUSED PyObject *__pyx_self, int __pyx_v_n_samples, int __pyx_v_n_components, __Pyx_memviewslice __pyx_v_num_words, __Pyx_memviewslice __pyx_v_fwdlattice, __Pyx_memviewslice __pyx_v_bwdlattice, __Pyx_memviewslice __pyx_v_log_beta_stats); /* proto */
 static PyObject *__pyx_pf_5scseg_4_hmm_8_compute_log_reg_targets(CYTHON_UNUSED PyObject *__pyx_self, int __pyx_v_n_samples, int __pyx_v_n_components, CYTHON_UNUSED __Pyx_memviewslice __pyx_v_num_words, __Pyx_memviewslice __pyx_v_fwdlattice, __Pyx_memviewslice __pyx_v_bwdlattice, __Pyx_memviewslice __pyx_v_reg_target_stats); /* proto */
-static PyObject *__pyx_pf_5scseg_4_hmm_10_compute_irls_update_stats(CYTHON_UNUSED PyObject *__pyx_self, int __pyx_v_n_samples, __Pyx_memviewslice __pyx_v_weights, __Pyx_memviewslice __pyx_v_dists, __Pyx_memviewslice __pyx_v_true_targets, __Pyx_memviewslice __pyx_v_hessian, __Pyx_memviewslice __pyx_v_gradient); /* proto */
+static PyObject *__pyx_pf_5scseg_4_hmm_10_compute_regloss_sigmoid(CYTHON_UNUSED PyObject *__pyx_self, __Pyx_memviewslice __pyx_v_n_samples, __Pyx_memviewslice __pyx_v_weights, __Pyx_memviewslice __pyx_v_dists, __Pyx_memviewslice __pyx_v_true_targets, __pyx_t_5scseg_4_hmm_dtype_t __pyx_v_max_dist); /* proto */
 static int __pyx_array___pyx_pf_15View_dot_MemoryView_5array___cinit__(struct __pyx_array_obj *__pyx_v_self, PyObject *__pyx_v_shape, Py_ssize_t __pyx_v_itemsize, PyObject *__pyx_v_format, PyObject *__pyx_v_mode, int __pyx_v_allocate_buffer); /* proto */
 static int __pyx_array___pyx_pf_15View_dot_MemoryView_5array_2__getbuffer__(struct __pyx_array_obj *__pyx_v_self, Py_buffer *__pyx_v_info, int __pyx_v_flags); /* proto */
 static void __pyx_array___pyx_pf_15View_dot_MemoryView_5array_4__dealloc__(struct __pyx_array_obj *__pyx_v_self); /* proto */
@@ -5471,36 +5473,33 @@ static CYTHON_INLINE __pyx_t_5scseg_4_hmm_dtype_t __pyx_f_5scseg_4_hmm__sigmoid(
   return __pyx_r;
 }
 
-/* "scseg/_hmm.pyx":248
+/* "scseg/_hmm.pyx":270
  * 
- * 
- * def _compute_irls_update_stats(int n_samples, dtype_t[:] weights, dtype_t[:] dists, dtype_t[:] true_targets, dtype_t[:,:] hessian, dtype_t[:] gradient):             # <<<<<<<<<<<<<<
- * 
- *     cdef dtype_t h, r
+ * #def _compute_logreg_loss()
+ * def _compute_regloss_sigmoid(int[:] n_samples, dtype_t[:] weights, dtype_t[:,:] dists, dtype_t[:,:] true_targets, dtype_t max_dist):             # <<<<<<<<<<<<<<
+ *     cdef dtype_t res=0.0
+ *     cdef int s, icell
  */
 
 /* Python wrapper */
-static PyObject *__pyx_pw_5scseg_4_hmm_11_compute_irls_update_stats(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds); /*proto*/
-static PyMethodDef __pyx_mdef_5scseg_4_hmm_11_compute_irls_update_stats = {"_compute_irls_update_stats", (PyCFunction)__pyx_pw_5scseg_4_hmm_11_compute_irls_update_stats, METH_VARARGS|METH_KEYWORDS, 0};
-static PyObject *__pyx_pw_5scseg_4_hmm_11_compute_irls_update_stats(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds) {
-  int __pyx_v_n_samples;
+static PyObject *__pyx_pw_5scseg_4_hmm_11_compute_regloss_sigmoid(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds); /*proto*/
+static PyMethodDef __pyx_mdef_5scseg_4_hmm_11_compute_regloss_sigmoid = {"_compute_regloss_sigmoid", (PyCFunction)__pyx_pw_5scseg_4_hmm_11_compute_regloss_sigmoid, METH_VARARGS|METH_KEYWORDS, 0};
+static PyObject *__pyx_pw_5scseg_4_hmm_11_compute_regloss_sigmoid(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds) {
+  __Pyx_memviewslice __pyx_v_n_samples = { 0, 0, { 0 }, { 0 }, { 0 } };
   __Pyx_memviewslice __pyx_v_weights = { 0, 0, { 0 }, { 0 }, { 0 } };
   __Pyx_memviewslice __pyx_v_dists = { 0, 0, { 0 }, { 0 }, { 0 } };
   __Pyx_memviewslice __pyx_v_true_targets = { 0, 0, { 0 }, { 0 }, { 0 } };
-  __Pyx_memviewslice __pyx_v_hessian = { 0, 0, { 0 }, { 0 }, { 0 } };
-  __Pyx_memviewslice __pyx_v_gradient = { 0, 0, { 0 }, { 0 }, { 0 } };
+  __pyx_t_5scseg_4_hmm_dtype_t __pyx_v_max_dist;
   PyObject *__pyx_r = 0;
   __Pyx_RefNannyDeclarations
-  __Pyx_RefNannySetupContext("_compute_irls_update_stats (wrapper)", 0);
+  __Pyx_RefNannySetupContext("_compute_regloss_sigmoid (wrapper)", 0);
   {
-    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_n_samples,&__pyx_n_s_weights,&__pyx_n_s_dists,&__pyx_n_s_true_targets,&__pyx_n_s_hessian,&__pyx_n_s_gradient,0};
-    PyObject* values[6] = {0,0,0,0,0,0};
+    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_n_samples,&__pyx_n_s_weights,&__pyx_n_s_dists,&__pyx_n_s_true_targets,&__pyx_n_s_max_dist,0};
+    PyObject* values[5] = {0,0,0,0,0};
     if (unlikely(__pyx_kwds)) {
       Py_ssize_t kw_args;
       const Py_ssize_t pos_args = PyTuple_GET_SIZE(__pyx_args);
       switch (pos_args) {
-        case  6: values[5] = PyTuple_GET_ITEM(__pyx_args, 5);
-        CYTHON_FALLTHROUGH;
         case  5: values[4] = PyTuple_GET_ITEM(__pyx_args, 4);
         CYTHON_FALLTHROUGH;
         case  4: values[3] = PyTuple_GET_ITEM(__pyx_args, 3);
@@ -5523,37 +5522,31 @@ static PyObject *__pyx_pw_5scseg_4_hmm_11_compute_irls_update_stats(PyObject *__
         case  1:
         if (likely((values[1] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_weights)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("_compute_irls_update_stats", 1, 6, 6, 1); __PYX_ERR(0, 248, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("_compute_regloss_sigmoid", 1, 5, 5, 1); __PYX_ERR(0, 270, __pyx_L3_error)
         }
         CYTHON_FALLTHROUGH;
         case  2:
         if (likely((values[2] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_dists)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("_compute_irls_update_stats", 1, 6, 6, 2); __PYX_ERR(0, 248, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("_compute_regloss_sigmoid", 1, 5, 5, 2); __PYX_ERR(0, 270, __pyx_L3_error)
         }
         CYTHON_FALLTHROUGH;
         case  3:
         if (likely((values[3] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_true_targets)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("_compute_irls_update_stats", 1, 6, 6, 3); __PYX_ERR(0, 248, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("_compute_regloss_sigmoid", 1, 5, 5, 3); __PYX_ERR(0, 270, __pyx_L3_error)
         }
         CYTHON_FALLTHROUGH;
         case  4:
-        if (likely((values[4] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_hessian)) != 0)) kw_args--;
+        if (likely((values[4] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_max_dist)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("_compute_irls_update_stats", 1, 6, 6, 4); __PYX_ERR(0, 248, __pyx_L3_error)
-        }
-        CYTHON_FALLTHROUGH;
-        case  5:
-        if (likely((values[5] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_gradient)) != 0)) kw_args--;
-        else {
-          __Pyx_RaiseArgtupleInvalid("_compute_irls_update_stats", 1, 6, 6, 5); __PYX_ERR(0, 248, __pyx_L3_error)
+          __Pyx_RaiseArgtupleInvalid("_compute_regloss_sigmoid", 1, 5, 5, 4); __PYX_ERR(0, 270, __pyx_L3_error)
         }
       }
       if (unlikely(kw_args > 0)) {
-        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "_compute_irls_update_stats") < 0)) __PYX_ERR(0, 248, __pyx_L3_error)
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "_compute_regloss_sigmoid") < 0)) __PYX_ERR(0, 270, __pyx_L3_error)
       }
-    } else if (PyTuple_GET_SIZE(__pyx_args) != 6) {
+    } else if (PyTuple_GET_SIZE(__pyx_args) != 5) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = PyTuple_GET_ITEM(__pyx_args, 0);
@@ -5561,98 +5554,66 @@ static PyObject *__pyx_pw_5scseg_4_hmm_11_compute_irls_update_stats(PyObject *__
       values[2] = PyTuple_GET_ITEM(__pyx_args, 2);
       values[3] = PyTuple_GET_ITEM(__pyx_args, 3);
       values[4] = PyTuple_GET_ITEM(__pyx_args, 4);
-      values[5] = PyTuple_GET_ITEM(__pyx_args, 5);
     }
-    __pyx_v_n_samples = __Pyx_PyInt_As_int(values[0]); if (unlikely((__pyx_v_n_samples == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 248, __pyx_L3_error)
-    __pyx_v_weights = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_5scseg_4_hmm_dtype_t(values[1]); if (unlikely(!__pyx_v_weights.memview)) __PYX_ERR(0, 248, __pyx_L3_error)
-    __pyx_v_dists = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_5scseg_4_hmm_dtype_t(values[2]); if (unlikely(!__pyx_v_dists.memview)) __PYX_ERR(0, 248, __pyx_L3_error)
-    __pyx_v_true_targets = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_5scseg_4_hmm_dtype_t(values[3]); if (unlikely(!__pyx_v_true_targets.memview)) __PYX_ERR(0, 248, __pyx_L3_error)
-    __pyx_v_hessian = __Pyx_PyObject_to_MemoryviewSlice_dsds_nn___pyx_t_5scseg_4_hmm_dtype_t(values[4]); if (unlikely(!__pyx_v_hessian.memview)) __PYX_ERR(0, 248, __pyx_L3_error)
-    __pyx_v_gradient = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_5scseg_4_hmm_dtype_t(values[5]); if (unlikely(!__pyx_v_gradient.memview)) __PYX_ERR(0, 248, __pyx_L3_error)
+    __pyx_v_n_samples = __Pyx_PyObject_to_MemoryviewSlice_ds_int(values[0]); if (unlikely(!__pyx_v_n_samples.memview)) __PYX_ERR(0, 270, __pyx_L3_error)
+    __pyx_v_weights = __Pyx_PyObject_to_MemoryviewSlice_ds_nn___pyx_t_5scseg_4_hmm_dtype_t(values[1]); if (unlikely(!__pyx_v_weights.memview)) __PYX_ERR(0, 270, __pyx_L3_error)
+    __pyx_v_dists = __Pyx_PyObject_to_MemoryviewSlice_dsds_nn___pyx_t_5scseg_4_hmm_dtype_t(values[2]); if (unlikely(!__pyx_v_dists.memview)) __PYX_ERR(0, 270, __pyx_L3_error)
+    __pyx_v_true_targets = __Pyx_PyObject_to_MemoryviewSlice_dsds_nn___pyx_t_5scseg_4_hmm_dtype_t(values[3]); if (unlikely(!__pyx_v_true_targets.memview)) __PYX_ERR(0, 270, __pyx_L3_error)
+    __pyx_v_max_dist = __pyx_PyFloat_AsDouble(values[4]); if (unlikely((__pyx_v_max_dist == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 270, __pyx_L3_error)
   }
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("_compute_irls_update_stats", 1, 6, 6, PyTuple_GET_SIZE(__pyx_args)); __PYX_ERR(0, 248, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("_compute_regloss_sigmoid", 1, 5, 5, PyTuple_GET_SIZE(__pyx_args)); __PYX_ERR(0, 270, __pyx_L3_error)
   __pyx_L3_error:;
-  __Pyx_AddTraceback("scseg._hmm._compute_irls_update_stats", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __Pyx_AddTraceback("scseg._hmm._compute_regloss_sigmoid", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_5scseg_4_hmm_10_compute_irls_update_stats(__pyx_self, __pyx_v_n_samples, __pyx_v_weights, __pyx_v_dists, __pyx_v_true_targets, __pyx_v_hessian, __pyx_v_gradient);
+  __pyx_r = __pyx_pf_5scseg_4_hmm_10_compute_regloss_sigmoid(__pyx_self, __pyx_v_n_samples, __pyx_v_weights, __pyx_v_dists, __pyx_v_true_targets, __pyx_v_max_dist);
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_5scseg_4_hmm_10_compute_irls_update_stats(CYTHON_UNUSED PyObject *__pyx_self, int __pyx_v_n_samples, __Pyx_memviewslice __pyx_v_weights, __Pyx_memviewslice __pyx_v_dists, __Pyx_memviewslice __pyx_v_true_targets, __Pyx_memviewslice __pyx_v_hessian, __Pyx_memviewslice __pyx_v_gradient) {
-  __pyx_t_5scseg_4_hmm_dtype_t __pyx_v_h;
-  __pyx_t_5scseg_4_hmm_dtype_t __pyx_v_r;
+static PyObject *__pyx_pf_5scseg_4_hmm_10_compute_regloss_sigmoid(CYTHON_UNUSED PyObject *__pyx_self, __Pyx_memviewslice __pyx_v_n_samples, __Pyx_memviewslice __pyx_v_weights, __Pyx_memviewslice __pyx_v_dists, __Pyx_memviewslice __pyx_v_true_targets, __pyx_t_5scseg_4_hmm_dtype_t __pyx_v_max_dist) {
+  __pyx_t_5scseg_4_hmm_dtype_t __pyx_v_res;
   int __pyx_v_s;
+  int __pyx_v_icell;
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
-  int __pyx_t_1;
+  Py_ssize_t __pyx_t_1;
   int __pyx_t_2;
-  int __pyx_t_3;
-  Py_ssize_t __pyx_t_4;
-  Py_ssize_t __pyx_t_5;
+  Py_ssize_t __pyx_t_3;
+  long __pyx_t_4;
+  int __pyx_t_5;
   Py_ssize_t __pyx_t_6;
   Py_ssize_t __pyx_t_7;
-  Py_ssize_t __pyx_t_8;
+  int __pyx_t_8;
   Py_ssize_t __pyx_t_9;
   Py_ssize_t __pyx_t_10;
   Py_ssize_t __pyx_t_11;
   Py_ssize_t __pyx_t_12;
   Py_ssize_t __pyx_t_13;
   Py_ssize_t __pyx_t_14;
-  Py_ssize_t __pyx_t_15;
-  Py_ssize_t __pyx_t_16;
-  Py_ssize_t __pyx_t_17;
-  Py_ssize_t __pyx_t_18;
-  Py_ssize_t __pyx_t_19;
-  Py_ssize_t __pyx_t_20;
-  Py_ssize_t __pyx_t_21;
-  Py_ssize_t __pyx_t_22;
-  Py_ssize_t __pyx_t_23;
-  Py_ssize_t __pyx_t_24;
-  __Pyx_RefNannySetupContext("_compute_irls_update_stats", 0);
+  PyObject *__pyx_t_15 = NULL;
+  __Pyx_RefNannySetupContext("_compute_regloss_sigmoid", 0);
 
-  /* "scseg/_hmm.pyx":253
- *     cdef int s
+  /* "scseg/_hmm.pyx":271
+ * #def _compute_logreg_loss()
+ * def _compute_regloss_sigmoid(int[:] n_samples, dtype_t[:] weights, dtype_t[:,:] dists, dtype_t[:,:] true_targets, dtype_t max_dist):
+ *     cdef dtype_t res=0.0             # <<<<<<<<<<<<<<
+ *     cdef int s, icell
  * 
- *     if n_samples <= 0:             # <<<<<<<<<<<<<<
- *       return
- *     with nogil:
  */
-  __pyx_t_1 = ((__pyx_v_n_samples <= 0) != 0);
-  if (__pyx_t_1) {
+  __pyx_v_res = 0.0;
 
-    /* "scseg/_hmm.pyx":254
+  /* "scseg/_hmm.pyx":274
+ *     cdef int s, icell
  * 
- *     if n_samples <= 0:
- *       return             # <<<<<<<<<<<<<<
- *     with nogil:
- *       for s in range(n_samples):
- */
-    __Pyx_XDECREF(__pyx_r);
-    __pyx_r = Py_None; __Pyx_INCREF(Py_None);
-    goto __pyx_L0;
-
-    /* "scseg/_hmm.pyx":253
- *     cdef int s
- * 
- *     if n_samples <= 0:             # <<<<<<<<<<<<<<
- *       return
- *     with nogil:
- */
-  }
-
-  /* "scseg/_hmm.pyx":255
- *     if n_samples <= 0:
- *       return
  *     with nogil:             # <<<<<<<<<<<<<<
- *       for s in range(n_samples):
- *           # compute hessian
+ *         for icell in range(n_samples.shape[0]):
+ *             for s in range(n_samples[icell] - 1):
  */
   {
       #ifdef WITH_THREAD
@@ -5662,115 +5623,74 @@ static PyObject *__pyx_pf_5scseg_4_hmm_10_compute_irls_update_stats(CYTHON_UNUSE
       #endif
       /*try:*/ {
 
-        /* "scseg/_hmm.pyx":256
- *       return
+        /* "scseg/_hmm.pyx":275
+ * 
  *     with nogil:
- *       for s in range(n_samples):             # <<<<<<<<<<<<<<
- *           # compute hessian
- *           h = _sigmoid(weights[0] + weights[1]*dists[s])
+ *         for icell in range(n_samples.shape[0]):             # <<<<<<<<<<<<<<
+ *             for s in range(n_samples[icell] - 1):
+ *                 if dists[icell, s] <= max_dist:
  */
-        __pyx_t_2 = __pyx_v_n_samples;
-        for (__pyx_t_3 = 0; __pyx_t_3 < __pyx_t_2; __pyx_t_3+=1) {
-          __pyx_v_s = __pyx_t_3;
+        __pyx_t_1 = (__pyx_v_n_samples.shape[0]);
+        for (__pyx_t_2 = 0; __pyx_t_2 < __pyx_t_1; __pyx_t_2+=1) {
+          __pyx_v_icell = __pyx_t_2;
 
-          /* "scseg/_hmm.pyx":258
- *       for s in range(n_samples):
- *           # compute hessian
- *           h = _sigmoid(weights[0] + weights[1]*dists[s])             # <<<<<<<<<<<<<<
- *           r = h*(1-h)
- *           hessian[0,0] += r
+          /* "scseg/_hmm.pyx":276
+ *     with nogil:
+ *         for icell in range(n_samples.shape[0]):
+ *             for s in range(n_samples[icell] - 1):             # <<<<<<<<<<<<<<
+ *                 if dists[icell, s] <= max_dist:
+ *                     res += (true_targets[icell, s] - _sigmoid(weights[0] + weights[1]*dists[icell, s]))**2
  */
-          __pyx_t_4 = 0;
-          __pyx_t_5 = 1;
-          __pyx_t_6 = __pyx_v_s;
-          __pyx_v_h = __pyx_f_5scseg_4_hmm__sigmoid(((*((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=0 */ (__pyx_v_weights.data + __pyx_t_4 * __pyx_v_weights.strides[0]) ))) + ((*((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=0 */ (__pyx_v_weights.data + __pyx_t_5 * __pyx_v_weights.strides[0]) ))) * (*((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=0 */ (__pyx_v_dists.data + __pyx_t_6 * __pyx_v_dists.strides[0]) ))))));
+          __pyx_t_3 = __pyx_v_icell;
+          __pyx_t_4 = ((*((int *) ( /* dim=0 */ (__pyx_v_n_samples.data + __pyx_t_3 * __pyx_v_n_samples.strides[0]) ))) - 1);
+          for (__pyx_t_5 = 0; __pyx_t_5 < __pyx_t_4; __pyx_t_5+=1) {
+            __pyx_v_s = __pyx_t_5;
 
-          /* "scseg/_hmm.pyx":259
- *           # compute hessian
- *           h = _sigmoid(weights[0] + weights[1]*dists[s])
- *           r = h*(1-h)             # <<<<<<<<<<<<<<
- *           hessian[0,0] += r
- *           hessian[0,1] += r*dists[s]
- */
-          __pyx_v_r = (__pyx_v_h * (1.0 - __pyx_v_h));
-
-          /* "scseg/_hmm.pyx":260
- *           h = _sigmoid(weights[0] + weights[1]*dists[s])
- *           r = h*(1-h)
- *           hessian[0,0] += r             # <<<<<<<<<<<<<<
- *           hessian[0,1] += r*dists[s]
- *           hessian[1,1] += r*dists[s]*dists[s]
- */
-          __pyx_t_7 = 0;
-          __pyx_t_8 = 0;
-          *((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_hessian.data + __pyx_t_7 * __pyx_v_hessian.strides[0]) ) + __pyx_t_8 * __pyx_v_hessian.strides[1]) )) += __pyx_v_r;
-
-          /* "scseg/_hmm.pyx":261
- *           r = h*(1-h)
- *           hessian[0,0] += r
- *           hessian[0,1] += r*dists[s]             # <<<<<<<<<<<<<<
- *           hessian[1,1] += r*dists[s]*dists[s]
+            /* "scseg/_hmm.pyx":277
+ *         for icell in range(n_samples.shape[0]):
+ *             for s in range(n_samples[icell] - 1):
+ *                 if dists[icell, s] <= max_dist:             # <<<<<<<<<<<<<<
+ *                     res += (true_targets[icell, s] - _sigmoid(weights[0] + weights[1]*dists[icell, s]))**2
  * 
  */
-          __pyx_t_9 = __pyx_v_s;
-          __pyx_t_10 = 0;
-          __pyx_t_11 = 1;
-          *((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_hessian.data + __pyx_t_10 * __pyx_v_hessian.strides[0]) ) + __pyx_t_11 * __pyx_v_hessian.strides[1]) )) += (__pyx_v_r * (*((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=0 */ (__pyx_v_dists.data + __pyx_t_9 * __pyx_v_dists.strides[0]) ))));
+            __pyx_t_6 = __pyx_v_icell;
+            __pyx_t_7 = __pyx_v_s;
+            __pyx_t_8 = (((*((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_dists.data + __pyx_t_6 * __pyx_v_dists.strides[0]) ) + __pyx_t_7 * __pyx_v_dists.strides[1]) ))) <= __pyx_v_max_dist) != 0);
+            if (__pyx_t_8) {
 
-          /* "scseg/_hmm.pyx":262
- *           hessian[0,0] += r
- *           hessian[0,1] += r*dists[s]
- *           hessian[1,1] += r*dists[s]*dists[s]             # <<<<<<<<<<<<<<
+              /* "scseg/_hmm.pyx":278
+ *             for s in range(n_samples[icell] - 1):
+ *                 if dists[icell, s] <= max_dist:
+ *                     res += (true_targets[icell, s] - _sigmoid(weights[0] + weights[1]*dists[icell, s]))**2             # <<<<<<<<<<<<<<
  * 
- *           # compute gradient
+ *     return res
  */
-          __pyx_t_12 = __pyx_v_s;
-          __pyx_t_13 = __pyx_v_s;
-          __pyx_t_14 = 1;
-          __pyx_t_15 = 1;
-          *((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_hessian.data + __pyx_t_14 * __pyx_v_hessian.strides[0]) ) + __pyx_t_15 * __pyx_v_hessian.strides[1]) )) += ((__pyx_v_r * (*((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=0 */ (__pyx_v_dists.data + __pyx_t_12 * __pyx_v_dists.strides[0]) )))) * (*((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=0 */ (__pyx_v_dists.data + __pyx_t_13 * __pyx_v_dists.strides[0]) ))));
+              __pyx_t_9 = __pyx_v_icell;
+              __pyx_t_10 = __pyx_v_s;
+              __pyx_t_11 = 0;
+              __pyx_t_12 = 1;
+              __pyx_t_13 = __pyx_v_icell;
+              __pyx_t_14 = __pyx_v_s;
+              __pyx_v_res = (__pyx_v_res + pow(((*((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_true_targets.data + __pyx_t_9 * __pyx_v_true_targets.strides[0]) ) + __pyx_t_10 * __pyx_v_true_targets.strides[1]) ))) - __pyx_f_5scseg_4_hmm__sigmoid(((*((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=0 */ (__pyx_v_weights.data + __pyx_t_11 * __pyx_v_weights.strides[0]) ))) + ((*((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=0 */ (__pyx_v_weights.data + __pyx_t_12 * __pyx_v_weights.strides[0]) ))) * (*((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_dists.data + __pyx_t_13 * __pyx_v_dists.strides[0]) ) + __pyx_t_14 * __pyx_v_dists.strides[1]) ))))))), 2.0));
 
-          /* "scseg/_hmm.pyx":265
+              /* "scseg/_hmm.pyx":277
+ *         for icell in range(n_samples.shape[0]):
+ *             for s in range(n_samples[icell] - 1):
+ *                 if dists[icell, s] <= max_dist:             # <<<<<<<<<<<<<<
+ *                     res += (true_targets[icell, s] - _sigmoid(weights[0] + weights[1]*dists[icell, s]))**2
  * 
- *           # compute gradient
- *           gradient[0] += (h - true_targets[s])             # <<<<<<<<<<<<<<
- *           gradient[1] += (h - true_targets[s]) * dists[s]
- *       hessian[1,0] = hessian[0,1]
  */
-          __pyx_t_16 = __pyx_v_s;
-          __pyx_t_17 = 0;
-          *((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=0 */ (__pyx_v_gradient.data + __pyx_t_17 * __pyx_v_gradient.strides[0]) )) += (__pyx_v_h - (*((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=0 */ (__pyx_v_true_targets.data + __pyx_t_16 * __pyx_v_true_targets.strides[0]) ))));
-
-          /* "scseg/_hmm.pyx":266
- *           # compute gradient
- *           gradient[0] += (h - true_targets[s])
- *           gradient[1] += (h - true_targets[s]) * dists[s]             # <<<<<<<<<<<<<<
- *       hessian[1,0] = hessian[0,1]
- */
-          __pyx_t_18 = __pyx_v_s;
-          __pyx_t_19 = __pyx_v_s;
-          __pyx_t_20 = 1;
-          *((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=0 */ (__pyx_v_gradient.data + __pyx_t_20 * __pyx_v_gradient.strides[0]) )) += ((__pyx_v_h - (*((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=0 */ (__pyx_v_true_targets.data + __pyx_t_18 * __pyx_v_true_targets.strides[0]) )))) * (*((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=0 */ (__pyx_v_dists.data + __pyx_t_19 * __pyx_v_dists.strides[0]) ))));
+            }
+          }
         }
-
-        /* "scseg/_hmm.pyx":267
- *           gradient[0] += (h - true_targets[s])
- *           gradient[1] += (h - true_targets[s]) * dists[s]
- *       hessian[1,0] = hessian[0,1]             # <<<<<<<<<<<<<<
- */
-        __pyx_t_21 = 0;
-        __pyx_t_22 = 1;
-        __pyx_t_23 = 1;
-        __pyx_t_24 = 0;
-        *((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_hessian.data + __pyx_t_23 * __pyx_v_hessian.strides[0]) ) + __pyx_t_24 * __pyx_v_hessian.strides[1]) )) = (*((__pyx_t_5scseg_4_hmm_dtype_t *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_hessian.data + __pyx_t_21 * __pyx_v_hessian.strides[0]) ) + __pyx_t_22 * __pyx_v_hessian.strides[1]) )));
       }
 
-      /* "scseg/_hmm.pyx":255
- *     if n_samples <= 0:
- *       return
+      /* "scseg/_hmm.pyx":274
+ *     cdef int s, icell
+ * 
  *     with nogil:             # <<<<<<<<<<<<<<
- *       for s in range(n_samples):
- *           # compute hessian
+ *         for icell in range(n_samples.shape[0]):
+ *             for s in range(n_samples[icell] - 1):
  */
       /*finally:*/ {
         /*normal exit:*/{
@@ -5778,28 +5698,42 @@ static PyObject *__pyx_pf_5scseg_4_hmm_10_compute_irls_update_stats(CYTHON_UNUSE
           __Pyx_FastGIL_Forget();
           Py_BLOCK_THREADS
           #endif
-          goto __pyx_L6;
+          goto __pyx_L5;
         }
-        __pyx_L6:;
+        __pyx_L5:;
       }
   }
 
-  /* "scseg/_hmm.pyx":248
+  /* "scseg/_hmm.pyx":280
+ *                     res += (true_targets[icell, s] - _sigmoid(weights[0] + weights[1]*dists[icell, s]))**2
  * 
+ *     return res             # <<<<<<<<<<<<<<
+ */
+  __Pyx_XDECREF(__pyx_r);
+  __pyx_t_15 = PyFloat_FromDouble(__pyx_v_res); if (unlikely(!__pyx_t_15)) __PYX_ERR(0, 280, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_15);
+  __pyx_r = __pyx_t_15;
+  __pyx_t_15 = 0;
+  goto __pyx_L0;
+
+  /* "scseg/_hmm.pyx":270
  * 
- * def _compute_irls_update_stats(int n_samples, dtype_t[:] weights, dtype_t[:] dists, dtype_t[:] true_targets, dtype_t[:,:] hessian, dtype_t[:] gradient):             # <<<<<<<<<<<<<<
- * 
- *     cdef dtype_t h, r
+ * #def _compute_logreg_loss()
+ * def _compute_regloss_sigmoid(int[:] n_samples, dtype_t[:] weights, dtype_t[:,:] dists, dtype_t[:,:] true_targets, dtype_t max_dist):             # <<<<<<<<<<<<<<
+ *     cdef dtype_t res=0.0
+ *     cdef int s, icell
  */
 
   /* function exit code */
-  __pyx_r = Py_None; __Pyx_INCREF(Py_None);
+  __pyx_L1_error:;
+  __Pyx_XDECREF(__pyx_t_15);
+  __Pyx_AddTraceback("scseg._hmm._compute_regloss_sigmoid", __pyx_clineno, __pyx_lineno, __pyx_filename);
+  __pyx_r = NULL;
   __pyx_L0:;
+  __PYX_XDEC_MEMVIEW(&__pyx_v_n_samples, 1);
   __PYX_XDEC_MEMVIEW(&__pyx_v_weights, 1);
   __PYX_XDEC_MEMVIEW(&__pyx_v_dists, 1);
   __PYX_XDEC_MEMVIEW(&__pyx_v_true_targets, 1);
-  __PYX_XDEC_MEMVIEW(&__pyx_v_hessian, 1);
-  __PYX_XDEC_MEMVIEW(&__pyx_v_gradient, 1);
   __Pyx_XGIVEREF(__pyx_r);
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
@@ -19351,8 +19285,8 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
   {&__pyx_n_s_cline_in_traceback, __pyx_k_cline_in_traceback, sizeof(__pyx_k_cline_in_traceback), 0, 0, 1, 1},
   {&__pyx_n_s_cnts, __pyx_k_cnts, sizeof(__pyx_k_cnts), 0, 0, 1, 1},
   {&__pyx_n_s_compute_beta_sstats, __pyx_k_compute_beta_sstats, sizeof(__pyx_k_compute_beta_sstats), 0, 0, 1, 1},
-  {&__pyx_n_s_compute_irls_update_stats, __pyx_k_compute_irls_update_stats, sizeof(__pyx_k_compute_irls_update_stats), 0, 0, 1, 1},
   {&__pyx_n_s_compute_log_reg_targets, __pyx_k_compute_log_reg_targets, sizeof(__pyx_k_compute_log_reg_targets), 0, 0, 1, 1},
+  {&__pyx_n_s_compute_regloss_sigmoid, __pyx_k_compute_regloss_sigmoid, sizeof(__pyx_k_compute_regloss_sigmoid), 0, 0, 1, 1},
   {&__pyx_n_s_compute_theta_sstats, __pyx_k_compute_theta_sstats, sizeof(__pyx_k_compute_theta_sstats), 0, 0, 1, 1},
   {&__pyx_kp_s_contiguous_and_direct, __pyx_k_contiguous_and_direct, sizeof(__pyx_k_contiguous_and_direct), 0, 0, 1, 0},
   {&__pyx_kp_s_contiguous_and_indirect, __pyx_k_contiguous_and_indirect, sizeof(__pyx_k_contiguous_and_indirect), 0, 0, 1, 0},
@@ -19371,10 +19305,8 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
   {&__pyx_n_s_fwdlattice, __pyx_k_fwdlattice, sizeof(__pyx_k_fwdlattice), 0, 0, 1, 1},
   {&__pyx_n_s_getstate, __pyx_k_getstate, sizeof(__pyx_k_getstate), 0, 0, 1, 1},
   {&__pyx_kp_s_got_differing_extents_in_dimensi, __pyx_k_got_differing_extents_in_dimensi, sizeof(__pyx_k_got_differing_extents_in_dimensi), 0, 0, 1, 0},
-  {&__pyx_n_s_gradient, __pyx_k_gradient, sizeof(__pyx_k_gradient), 0, 0, 1, 1},
-  {&__pyx_n_s_h, __pyx_k_h, sizeof(__pyx_k_h), 0, 0, 1, 1},
-  {&__pyx_n_s_hessian, __pyx_k_hessian, sizeof(__pyx_k_hessian), 0, 0, 1, 1},
   {&__pyx_n_s_i, __pyx_k_i, sizeof(__pyx_k_i), 0, 0, 1, 1},
+  {&__pyx_n_s_icell, __pyx_k_icell, sizeof(__pyx_k_icell), 0, 0, 1, 1},
   {&__pyx_n_s_id, __pyx_k_id, sizeof(__pyx_k_id), 0, 0, 1, 1},
   {&__pyx_n_s_import, __pyx_k_import, sizeof(__pyx_k_import), 0, 0, 1, 1},
   {&__pyx_n_s_itemsize, __pyx_k_itemsize, sizeof(__pyx_k_itemsize), 0, 0, 1, 1},
@@ -19388,6 +19320,7 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
   {&__pyx_n_s_loglikeli, __pyx_k_loglikeli, sizeof(__pyx_k_loglikeli), 0, 0, 1, 1},
   {&__pyx_n_s_lsig, __pyx_k_lsig, sizeof(__pyx_k_lsig), 0, 0, 1, 1},
   {&__pyx_n_s_main, __pyx_k_main, sizeof(__pyx_k_main), 0, 0, 1, 1},
+  {&__pyx_n_s_max_dist, __pyx_k_max_dist, sizeof(__pyx_k_max_dist), 0, 0, 1, 1},
   {&__pyx_n_s_memview, __pyx_k_memview, sizeof(__pyx_k_memview), 0, 0, 1, 1},
   {&__pyx_n_s_merged_fw, __pyx_k_merged_fw, sizeof(__pyx_k_merged_fw), 0, 0, 1, 1},
   {&__pyx_n_s_mode, __pyx_k_mode, sizeof(__pyx_k_mode), 0, 0, 1, 1},
@@ -19414,12 +19347,12 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
   {&__pyx_n_s_pyx_type, __pyx_k_pyx_type, sizeof(__pyx_k_pyx_type), 0, 0, 1, 1},
   {&__pyx_n_s_pyx_unpickle_Enum, __pyx_k_pyx_unpickle_Enum, sizeof(__pyx_k_pyx_unpickle_Enum), 0, 0, 1, 1},
   {&__pyx_n_s_pyx_vtable, __pyx_k_pyx_vtable, sizeof(__pyx_k_pyx_vtable), 0, 0, 1, 1},
-  {&__pyx_n_s_r, __pyx_k_r, sizeof(__pyx_k_r), 0, 0, 1, 1},
   {&__pyx_n_s_range, __pyx_k_range, sizeof(__pyx_k_range), 0, 0, 1, 1},
   {&__pyx_n_s_reduce, __pyx_k_reduce, sizeof(__pyx_k_reduce), 0, 0, 1, 1},
   {&__pyx_n_s_reduce_cython, __pyx_k_reduce_cython, sizeof(__pyx_k_reduce_cython), 0, 0, 1, 1},
   {&__pyx_n_s_reduce_ex, __pyx_k_reduce_ex, sizeof(__pyx_k_reduce_ex), 0, 0, 1, 1},
   {&__pyx_n_s_reg_target_stats, __pyx_k_reg_target_stats, sizeof(__pyx_k_reg_target_stats), 0, 0, 1, 1},
+  {&__pyx_n_s_res, __pyx_k_res, sizeof(__pyx_k_res), 0, 0, 1, 1},
   {&__pyx_n_s_s, __pyx_k_s, sizeof(__pyx_k_s), 0, 0, 1, 1},
   {&__pyx_n_s_scseg__hmm, __pyx_k_scseg__hmm, sizeof(__pyx_k_scseg__hmm), 0, 0, 1, 1},
   {&__pyx_n_s_setstate, __pyx_k_setstate, sizeof(__pyx_k_setstate), 0, 0, 1, 1},
@@ -19732,17 +19665,17 @@ static int __Pyx_InitCachedConstants(void) {
   __Pyx_GIVEREF(__pyx_tuple__28);
   __pyx_codeobj__29 = (PyObject*)__Pyx_PyCode_New(6, 0, 12, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__28, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_src_scseg__hmm_pyx, __pyx_n_s_compute_log_reg_targets, 215, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__29)) __PYX_ERR(0, 215, __pyx_L1_error)
 
-  /* "scseg/_hmm.pyx":248
+  /* "scseg/_hmm.pyx":270
  * 
- * 
- * def _compute_irls_update_stats(int n_samples, dtype_t[:] weights, dtype_t[:] dists, dtype_t[:] true_targets, dtype_t[:,:] hessian, dtype_t[:] gradient):             # <<<<<<<<<<<<<<
- * 
- *     cdef dtype_t h, r
+ * #def _compute_logreg_loss()
+ * def _compute_regloss_sigmoid(int[:] n_samples, dtype_t[:] weights, dtype_t[:,:] dists, dtype_t[:,:] true_targets, dtype_t max_dist):             # <<<<<<<<<<<<<<
+ *     cdef dtype_t res=0.0
+ *     cdef int s, icell
  */
-  __pyx_tuple__30 = PyTuple_Pack(9, __pyx_n_s_n_samples, __pyx_n_s_weights, __pyx_n_s_dists, __pyx_n_s_true_targets, __pyx_n_s_hessian, __pyx_n_s_gradient, __pyx_n_s_h, __pyx_n_s_r, __pyx_n_s_s); if (unlikely(!__pyx_tuple__30)) __PYX_ERR(0, 248, __pyx_L1_error)
+  __pyx_tuple__30 = PyTuple_Pack(8, __pyx_n_s_n_samples, __pyx_n_s_weights, __pyx_n_s_dists, __pyx_n_s_true_targets, __pyx_n_s_max_dist, __pyx_n_s_res, __pyx_n_s_s, __pyx_n_s_icell); if (unlikely(!__pyx_tuple__30)) __PYX_ERR(0, 270, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__30);
   __Pyx_GIVEREF(__pyx_tuple__30);
-  __pyx_codeobj__31 = (PyObject*)__Pyx_PyCode_New(6, 0, 9, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__30, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_src_scseg__hmm_pyx, __pyx_n_s_compute_irls_update_stats, 248, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__31)) __PYX_ERR(0, 248, __pyx_L1_error)
+  __pyx_codeobj__31 = (PyObject*)__Pyx_PyCode_New(5, 0, 8, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__30, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_src_scseg__hmm_pyx, __pyx_n_s_compute_regloss_sigmoid, 270, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__31)) __PYX_ERR(0, 270, __pyx_L1_error)
 
   /* "View.MemoryView":284
  *         return self.name
@@ -20084,16 +20017,16 @@ static int __pyx_pymod_exec__hmm(PyObject *__pyx_pyinit_module)
   if (PyDict_SetItem(__pyx_d, __pyx_n_s_compute_log_reg_targets, __pyx_t_1) < 0) __PYX_ERR(0, 215, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "scseg/_hmm.pyx":248
+  /* "scseg/_hmm.pyx":270
  * 
- * 
- * def _compute_irls_update_stats(int n_samples, dtype_t[:] weights, dtype_t[:] dists, dtype_t[:] true_targets, dtype_t[:,:] hessian, dtype_t[:] gradient):             # <<<<<<<<<<<<<<
- * 
- *     cdef dtype_t h, r
+ * #def _compute_logreg_loss()
+ * def _compute_regloss_sigmoid(int[:] n_samples, dtype_t[:] weights, dtype_t[:,:] dists, dtype_t[:,:] true_targets, dtype_t max_dist):             # <<<<<<<<<<<<<<
+ *     cdef dtype_t res=0.0
+ *     cdef int s, icell
  */
-  __pyx_t_1 = PyCFunction_NewEx(&__pyx_mdef_5scseg_4_hmm_11_compute_irls_update_stats, NULL, __pyx_n_s_scseg__hmm); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 248, __pyx_L1_error)
+  __pyx_t_1 = PyCFunction_NewEx(&__pyx_mdef_5scseg_4_hmm_11_compute_regloss_sigmoid, NULL, __pyx_n_s_scseg__hmm); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 270, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  if (PyDict_SetItem(__pyx_d, __pyx_n_s_compute_irls_update_stats, __pyx_t_1) < 0) __PYX_ERR(0, 248, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_d, __pyx_n_s_compute_regloss_sigmoid, __pyx_t_1) < 0) __PYX_ERR(0, 270, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
   /* "scseg/_hmm.pyx":1
@@ -23013,6 +22946,29 @@ __pyx_fail:
     retcode = __Pyx_ValidateAndInit_memviewslice(axes_specs, 0,
                                                  PyBUF_RECORDS, 3,
                                                  &__Pyx_TypeInfo_nn___pyx_t_5scseg_4_hmm_dtype_t, stack,
+                                                 &result, obj);
+    if (unlikely(retcode == -1))
+        goto __pyx_fail;
+    return result;
+__pyx_fail:
+    result.memview = NULL;
+    result.data = NULL;
+    return result;
+}
+
+/* ObjectToMemviewSlice */
+      static CYTHON_INLINE __Pyx_memviewslice __Pyx_PyObject_to_MemoryviewSlice_ds_int(PyObject *obj) {
+    __Pyx_memviewslice result = { 0, 0, { 0 }, { 0 }, { 0 } };
+    __Pyx_BufFmt_StackElem stack[1];
+    int axes_specs[] = { (__Pyx_MEMVIEW_DIRECT | __Pyx_MEMVIEW_STRIDED) };
+    int retcode;
+    if (obj == Py_None) {
+        result.memview = (struct __pyx_memoryview_obj *) Py_None;
+        return result;
+    }
+    retcode = __Pyx_ValidateAndInit_memviewslice(axes_specs, 0,
+                                                 PyBUF_RECORDS, 1,
+                                                 &__Pyx_TypeInfo_int, stack,
                                                  &result, obj);
     if (unlikely(retcode == -1))
         goto __pyx_fail;
