@@ -75,7 +75,8 @@ def _forward(int n_samples, int n_components,
              dtype_t[:] log_theta,
              dtype_t[:, :] log_beta,
              dtype_t[:] sigmoid_arg,
-             dtype_t[:, :, :] fwdlattice):
+             dtype_t[:, :, :] fwdlattice,
+             int complikeli):
 
     cdef int t, i, j
     cdef dtype_t[::view.contiguous] wb0 = np.zeros(n_components)
@@ -84,7 +85,7 @@ def _forward(int n_samples, int n_components,
         np.full((n_components, n_components), -INFINITY)
     cdef dtype_t merged_fw
     cdef dtype_t lsig, nlsig
-    cdef dtype_t loglikeli
+    cdef dtype_t loglikeli = 0.0
 
     if n_samples <= 0:
         return
@@ -113,10 +114,11 @@ def _forward(int n_samples, int n_components,
                 fwdlattice[t, j, 0] = _logsumexp(wb0) + log_beta[j, t] + log_theta[j] + lsig
                 fwdlattice[t, j, 1] = _logsumexp(wb1) + log_beta[j, t] + nlsig
 
-        # finally compute the log-likelihood
-        loglikeli = _logsumexp2d(fwdlattice[0]) * cnts[0]
-        for t in range(1, n_samples):
-            loglikeli += (_logsumexp2d(fwdlattice[t]) - _logsumexp2d(fwdlattice[t - 1])) * cnts[t]
+        if complikeli>0:
+            # finally compute the log-likelihood
+            loglikeli = _logsumexp2d(fwdlattice[0]) * cnts[0]
+            for t in range(1, n_samples):
+                loglikeli += (_logsumexp2d(fwdlattice[t]) - _logsumexp2d(fwdlattice[t - 1])) * cnts[t]
 
     return loglikeli
 
@@ -197,9 +199,6 @@ def _compute_beta_sstats(int n_samples, int n_components,
         return
 
     with nogil:
-
-#        log_beta_stats[t] = 0.0
-
       for t in range(n_samples):
         for i in range(n_components):
           log_beta_stats[i,t] = 0.0

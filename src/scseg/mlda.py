@@ -204,7 +204,7 @@ def _update_doc_distribution_markovlda(X, y, exp_topic_word_distr, doc_topic_pri
 
             # perform forward backward algorithm
             _backward(len(ids), n_topics, expected_log_doc_topic_d, expected_log_topic_word_d, log_sig_arg, bwdlattice)
-            _forward(len(ids), n_topics, cnts, expected_log_doc_topic_d, expected_log_topic_word_d, log_sig_arg, fwdlattice)
+            _forward(len(ids), n_topics, cnts, expected_log_doc_topic_d, expected_log_topic_word_d, log_sig_arg, fwdlattice, 0)
 
             doc_topic_d = np.zeros(n_topics)
             # collect sufficient statistcs to update doc_topic_d
@@ -224,7 +224,7 @@ def _update_doc_distribution_markovlda(X, y, exp_topic_word_distr, doc_topic_pri
         # Contribution of document d to the expected sufficient
         # statistics for the M step.
         if cal_sstats:
-            _forward(len(ids), n_topics, cnts, expected_log_doc_topic_d, expected_log_topic_word_d, log_sig_arg, fwdlattice)
+            _forward(len(ids), n_topics, cnts, expected_log_doc_topic_d, expected_log_topic_word_d, log_sig_arg, fwdlattice, 0)
             _backward(len(ids), n_topics, expected_log_doc_topic_d, expected_log_topic_word_d, log_sig_arg, bwdlattice)
 
             log_beta_stats = np.zeros_like(suff_stats[:, ids])
@@ -861,7 +861,7 @@ class Scseg(BaseEstimator, TransformerMixin):
                 log_sig_arg = y[idx_d, :(len(ids)-1)]*self.reg_weights_[1] + self.reg_weights_[0]
                 fwdlattice = np.zeros((len(ids), self._n_components, 2))
                 score += _forward(len(ids), self._n_components, cnts, expected_log_doc_topic_d,
-                         expected_log_topic_word_d, log_sig_arg, fwdlattice)
+                         expected_log_topic_word_d, log_sig_arg, fwdlattice, 1)
         return score
 
 
