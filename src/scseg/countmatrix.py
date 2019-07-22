@@ -17,8 +17,12 @@ def get_count_matrix_(filename, header=True, offset=0):
     return smat
 
 def get_cell_annotation_first_row_(filename):
-    with gzip.open(filename, 'r') as f:
-        line = f.readline().decode("utf-8")
+    
+    open_ = gzip.open if filename.endswith('.gz') else open
+    with open_(filename, 'r') as f:
+        line = f.readline()
+        if hasattr(line, 'decode'):
+            line = line.decode('utf-8')
         line = line.split('\n')[0]
         line = line.split(' ')[-1]
         line = line.split('\t')[-1]
@@ -154,3 +158,4 @@ def split_train_test(data):
     val_data = data.subset(idxs[:ntest])
     train_data = data.subset(idxs[ntest:])
     return train_data, val_data
+

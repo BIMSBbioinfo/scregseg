@@ -173,7 +173,7 @@ def _update_doc_distribution_markovlda(X, y, exp_topic_word_distr, doc_topic_pri
     loglikeli = 0.0
 
     for idx_d in xrange(n_samples):
-
+        #print(idx_d)
         if is_sparse_x:
             ids = X_indices[X_indptr[idx_d]:X_indptr[idx_d + 1]]
             cnts = X_data[X_indptr[idx_d]:X_indptr[idx_d + 1]]
@@ -653,6 +653,7 @@ class Scseg(BaseEstimator, TransformerMixin):
             # In the literature, the weight is `rho`
             weight = np.power(self.learning_offset + self.n_batch_iter_,
                               -self.learning_decay)
+
             doc_ratio = float(total_samples) / X.shape[0]
             self.components_ *= (1 - weight)
             self.components_ += (weight * (self.topic_word_prior_
@@ -666,8 +667,10 @@ class Scseg(BaseEstimator, TransformerMixin):
                 return _compute_regloss_sigmoid(lens_.astype('int32'), weights, dists_, reg_targets_, max_dist_)
 
             ores = minimize(objective, self.reg_weights_, args=(l, dists, reg_targets, self.max_dist_))
-            self.reg_weights_ = ores.x
-
+            if batch_update:
+                self.reg_weights_ = ores.x
+            else:
+                self.reg_weights_ = (1 - weight) * self.reg_weights_ + weight * ores.x
 
         self.exp_dirichlet_component_ = _dirichlet_expectation_2d(self.components_)
         if y is None:
@@ -859,6 +862,7 @@ class Scseg(BaseEstimator, TransformerMixin):
                 # likelihood for the markov lda
 
                 log_sig_arg = y[idx_d, :(len(ids)-1)]*self.reg_weights_[1] + self.reg_weights_[0]
+                log_sig_arg[y[idx_d, :(len(ids)-1)] > self.max_dist_] = 100.
                 fwdlattice = np.zeros((len(ids), self._n_components, 2))
                 score += _forward(len(ids), self._n_components, cnts, expected_log_doc_topic_d,
                          expected_log_topic_word_d, log_sig_arg, fwdlattice, 1)
