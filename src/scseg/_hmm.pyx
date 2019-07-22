@@ -3,6 +3,7 @@
 cimport cython
 from cython cimport view
 from numpy.math cimport expl, logl, tanhl, log1pl, isinf, fabsl, INFINITY, PI
+from cython.parallel import prange
 
 import numpy as np
 
@@ -92,9 +93,6 @@ def _forward(int n_samples, int n_components,
 
     cdef int t, i, j
     cdef dtype_t[::view.contiguous] wb0 = np.zeros(n_components)
-    cdef dtype_t[::view.contiguous] wb1 = np.zeros(n_components)
-    cdef dtype_t[:, ::view.contiguous] log_same = \
-        np.full((n_components, n_components), -INFINITY)
     cdef dtype_t merged_fw
     cdef dtype_t lsig, nlsig
     cdef dtype_t loglikeli = 0.0
@@ -107,21 +105,15 @@ def _forward(int n_samples, int n_components,
         for i in range(n_components):
             fwdlattice[0, i, 0] = log_theta[i] + log_beta[i, 0]
             fwdlattice[0, i, 1] = -INFINITY
-            log_same[i,i] = 0.0
 
         for t in range(1, n_samples):
-            lsig = _logsigmoid(sigmoid_arg[t - 1])
-            nlsig = _logsigmoid(-sigmoid_arg[t - 1])
-            for i in range(n_components):
+            lsig = logl(0.5 + 0.5*tanhl(0.5*sigmoid_arg[t - 1]))
+            nlsig = logl(0.5 + 0.5*tanhl(-0.5*sigmoid_arg[t - 1]))
+            for i in prange(n_components):
               # sum over indep or same topic
-              merged_fw = _logaddexp(fwdlattice[t - 1, i, 0], fwdlattice[t - 1, i, 1])
-              #if an independent topic emerges:
-              wb0[i] = merged_fw
+              wb0[i] = _logaddexp(fwdlattice[t - 1, i, 0], fwdlattice[t - 1, i, 1])
 
-            for j in range(n_components):
-                    # if the same topic is extended:
-#                    wb1[i] = merged_fw + log_same[i, j]
-
+            for j in prange(n_components):
                 fwdlattice[t, j, 0] = _logsumexp(wb0) + log_beta[j, t] + log_theta[j] + lsig
                 fwdlattice[t, j, 1] = wb0[j] + log_beta[j, t] + nlsig
 
@@ -159,12 +151,17 @@ def _backward(int n_samples, int n_components,
             log_same[i,i] = 0.0
 
         for t in range(n_samples - 2, -1, -1):
+            #lsig = logl(0.5 + 0.5*tanhl(0.5*sigmoid_arg[t - 1]))
+            #nlsig = logl(0.5 + 0.5*tanhl(-0.5*sigmoid_arg[t - 1]))
             lsig = _logsigmoid(sigmoid_arg[t])
             nlsig = _logsigmoid(-sigmoid_arg[t])
 
             for i in range(n_components):
                 for j in range(n_components):
-                    wb1[j] = _logaddexp(log_same[i, j] + nlsig,  log_theta[j] + lsig) + log_beta[j, t + 1] + bwdlattice[t + 1, j]
+                    if i != j:
+                        wb1[j] = log_theta[j] + lsig + log_beta[j, t + 1] + bwdlattice[t + 1, j]
+                    else:
+                        wb1[j] = _logaddexp(log_same[i, j] + nlsig,  log_theta[j] + lsig) + log_beta[j, t + 1] + bwdlattice[t + 1, j]
                 bwdlattice[t, i] = _logsumexp(wb1)
 
 @cython.boundscheck(False)

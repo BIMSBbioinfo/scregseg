@@ -5,7 +5,7 @@ import pandas as pd
 from scipy.sparse import csc_matrix
 
 
-def get_count_matrix_(filename, header=True, offset=0):
+def get_count_matrix_(filename, shape, header=True, offset=0):
     if header:
         spdf = pd.read_csv(filename, sep='\t', skiprows=1)
     else:
@@ -13,12 +13,17 @@ def get_count_matrix_(filename, header=True, offset=0):
     if offset > 0:
         spdf.region -= offset
         spdf.cell -= offset
-    smat = csc_matrix((spdf['count'], (spdf.region, spdf.cell)), dtype='float')
+    smat = csc_matrix((spdf['count'], (spdf.region, spdf.cell)),
+                      shape=shape, dtype='float')
     return smat
 
 def get_cell_annotation_first_row_(filename):
-    with gzip.open(filename, 'r') as f:
-        line = f.readline().decode("utf-8")
+
+    open_ = gzip.open if filename.endswith('.gz') else open
+    with open_(filename, 'r') as f:
+        line = f.readline()
+        if hasattr(line, 'decode'):
+            line = line.decode('utf-8')
         line = line.split('\n')[0]
         line = line.split(' ')[-1]
         line = line.split('\t')[-1]
@@ -34,9 +39,11 @@ class CountMatrix:
 
     @classmethod
     def create_from_countmatrix(cls, countmatrixfile, regionannotation, transform=None, header=True, index_offset=0):
-        cmat = get_count_matrix_(countmatrixfile, header=header, offset=index_offset)
+
         cannot = get_cell_annotation_first_row_(countmatrixfile)
         rannot = get_regions_from_bed_(regionannotation)
+        shape = rannot.shape[0], len(cannot)
+        cmat = get_count_matrix_(countmatrixfile, shape, header=header, offset=index_offset)
         return cls(cmat, rannot, cannot, transform)
 
     def __init__(self, countmatrix, regionannotation, cellannotation,

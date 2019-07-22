@@ -13,11 +13,13 @@ from sklearn.decomposition._online_lda import _dirichlet_expectation_2d
 from sklearn.decomposition._online_lda import mean_change
 from sklearn.decomposition.online_lda import _update_doc_distribution
 from sklearn.decomposition import LatentDirichletAllocation
+from sklearn.linear_model import LogisticRegression
 from scseg.mlda import _update_doc_distribution_markovlda
 from scseg.mlda import _update_doc_distribution_lda
 
 from scseg import CountMatrix
 from scseg import Scseg
+import pytest
 
 np.seterr(divide='ignore')
 
@@ -684,3 +686,248 @@ def test_transform():
     np.testing.assert_allclose(otrans, new_lda_trans)
 
     np.testing.assert_allclose(otrans, mlda_trans)
+
+def test_transform_w_regression_max_dist_zero():
+    countmatrixfile = '/local/wkopp/source/markovlda/genomebins_binsize2000.minmapq10.mincount0.tab.gz'
+    bedfile =  '/local/wkopp/source/markovlda/genomebins_binsize2000.minmapq10.mincount0.bed.gz'
+    minreadsincells = 1000
+    minreadsinpeaks = 20
+    maxreadsincells = 30000
+
+    def trans(x):
+        return x/2000.
+
+    cm = CountMatrix.create_from_countmatrix(countmatrixfile, bedfile,
+                               transform=trans)
+
+    cm.filter_count_matrix(minreadsincells, maxreadsincells,
+                           minreadsinpeaks, binarize=False)
+
+    data = cm.cmat.T
+    dists = cm.get_distance_matrix()
+
+    np.testing.assert_equal(data.shape, (1139, 219633))
+    np.testing.assert_equal(dists.shape, (1139, 16410))
+
+    data = data[:5]
+    dists = dists[:5]
+
+    n_components = 2
+    sseg = Scseg(n_components, random_state=0)
+    sseg_markov = Scseg(n_components, random_state=0, no_regression=False, reg_weights=np.array([0., 0.]), max_dist=0)
+    lda = LatentDirichletAllocation(n_components, random_state=0)
+
+    # get score of original lda
+    lda.fit(data)
+    otrans = lda.transform(data)
+
+    # get score of lda version of the new code
+    sseg.fit(data)
+    new_lda_trans = sseg.transform(data)
+
+    sseg_markov.fit(data, dists)
+    mlda_trans = sseg_markov.transform(data, dists)
+
+    np.testing.assert_allclose(otrans, new_lda_trans)
+
+    np.testing.assert_allclose(otrans, mlda_trans)
+    np.testing.assert_allclose(sseg_markov.reg_weights_, np.array([0., 0.]))
+
+def test_transform_w_regression_max_dist_20():
+    countmatrixfile = '/local/wkopp/source/markovlda/genomebins_binsize2000.minmapq10.mincount0.tab.gz'
+    bedfile =  '/local/wkopp/source/markovlda/genomebins_binsize2000.minmapq10.mincount0.bed.gz'
+    minreadsincells = 1000
+    minreadsinpeaks = 20
+    maxreadsincells = 30000
+
+    def trans(x):
+        return x/2000.
+
+    cm = CountMatrix.create_from_countmatrix(countmatrixfile, bedfile,
+                               transform=trans)
+
+    cm.filter_count_matrix(minreadsincells, maxreadsincells,
+                           minreadsinpeaks, binarize=False)
+
+    data = cm.cmat.T
+    dists = cm.get_distance_matrix()
+
+    np.testing.assert_equal(data.shape, (1139, 219633))
+    np.testing.assert_equal(dists.shape, (1139, 16410))
+
+    data = data[:5]
+    dists = dists[:5]
+
+    n_components = 5
+    sseg = Scseg(n_components, random_state=0)
+    sseg_markov = Scseg(n_components, random_state=0, 
+                        no_regression=False,
+                        reg_weights=np.array([0., 0.]),
+                        max_dist=20)
+    lda = LatentDirichletAllocation(n_components, random_state=0)
+
+    # get score of original lda
+    lda.fit(data)
+    otrans = lda.transform(data)
+
+    # get score of lda version of the new code
+    sseg.fit(data)
+    new_lda_trans = sseg.transform(data)
+
+    sseg_markov.fit(data, dists)
+    mlda_trans = sseg_markov.transform(data, dists)
+
+    np.testing.assert_allclose(otrans, new_lda_trans)
+
+    with pytest.raises(Exception):
+        np.testing.assert_allclose(otrans, mlda_trans)
+    
+    with pytest.raises(Exception):
+        np.testing.assert_allclose(sseg_markov.reg_weights_, np.array([0., 0.]))
+
+
+def test_transform_w_regression_max_dist_default():
+    countmatrixfile = '/local/wkopp/source/markovlda/genomebins_binsize2000.minmapq10.mincount0.tab.gz'
+    bedfile =  '/local/wkopp/source/markovlda/genomebins_binsize2000.minmapq10.mincount0.bed.gz'
+    minreadsincells = 1000
+    minreadsinpeaks = 20
+    maxreadsincells = 30000
+
+    def trans(x):
+        return x/2000.
+
+    cm = CountMatrix.create_from_countmatrix(countmatrixfile, bedfile,
+                               transform=trans)
+
+    cm.filter_count_matrix(minreadsincells, maxreadsincells,
+                           minreadsinpeaks, binarize=False)
+
+    data = cm.cmat.T
+    dists = cm.get_distance_matrix()
+
+    np.testing.assert_equal(data.shape, (1139, 219633))
+    np.testing.assert_equal(dists.shape, (1139, 16410))
+
+    data = data[:5]
+    dists = dists[:5]
+
+    n_components = 5
+    sseg = Scseg(n_components, random_state=0)
+    sseg_markov = Scseg(n_components, random_state=0, 
+                        no_regression=False,
+                        reg_weights=np.array([0., 0.]),
+                        max_dist=40)
+    lda = LatentDirichletAllocation(n_components, random_state=0)
+
+    # get score of original lda
+    lda.fit(data)
+    otrans = lda.transform(data)
+
+    # get score of lda version of the new code
+    sseg.fit(data)
+    new_lda_trans = sseg.transform(data)
+
+    sseg_markov.fit(data, dists)
+    mlda_trans = sseg_markov.transform(data, dists)
+
+    np.testing.assert_allclose(otrans, new_lda_trans)
+
+    with pytest.raises(Exception):
+        np.testing.assert_allclose(otrans, mlda_trans)
+    
+    with pytest.raises(Exception):
+        np.testing.assert_allclose(sseg_markov.reg_weights_, np.array([0., 0.]))
+
+
+def test_buenrostro():
+
+    countmatrixfile = '/local/wkopp/source/markovlda/GSE96769_scATACseq_counts.txt.gz'
+    bedfile =  '/local/wkopp/source/markovlda/GSE96769_PeakFile_20160207.bed.gz'
+    minreadsincells = 1000
+    minreadsinpeaks = 20
+    maxreadsincells = 30000
+    n_components = 20
+    
+    def trans(x):
+        return x/2000.
+
+    refcells = ['-CMP', '-GMP', '-pDC', '-MEP', '-UNK', '-HSC', '-LMPP', '-mono', '-MCP', '-MPP', '-CLP']
+    cell2idx = {k:i for i, k in enumerate(refcells)}
+
+    def cellnames(labels, refcells):
+        return [r for l in labels for r in refcells if r in l]
+    
+    binarize=False
+    print('using binarize={}'.format(binarize))
+    
+    cm = CountMatrix.create_from_countmatrix(countmatrixfile, bedfile,
+                                             transform=trans, header=False, index_offset=1)
+    
+    cm.filter_count_matrix(minreadsincells, maxreadsincells,
+                           minreadsinpeaks, binarize=True)
+    
+    perm = np.random.permutation(200)
+    
+    data = cm.cmat.T
+    
+    data = data[:200, :10000]
+    dists = cm.get_distance_matrix()[:200]
+
+    labels = cellnames(cm.cannot, refcells)
+    
+    train_data = data[perm[:180]]
+    test_data = data[perm[180:]]
+    
+    train_dists = dists[perm[:180]]
+    test_dists = dists[perm[180:]]
+    
+    train_labels = [cell2idx[labels[p]] for p in perm[:180]]
+    test_labels = [cell2idx[labels[p]] for p in perm[180:]]
+    
+    #import cProfile:
+    
+    #lda = LatentDirichletAllocation(20, random_state=0, learning_method='online')
+    lda = LatentDirichletAllocation(n_components, random_state=0, learning_method='batch', max_iter=2, max_doc_update_iter=1)
+    lda.fit(train_data)
+    
+    ltrain_tr = lda.transform(train_data)
+    ltest_tr = lda.transform(test_data)
+    
+    clf = LogisticRegression(random_state=0, solver='lbfgs',
+                             multi_class='multinomial').fit(ltrain_tr, train_labels)
+    
+    lscore = clf.score(ltest_tr, test_labels)
+    
+    for rw, md in [(np.array([100., 0.]), 100), (np.array([100., 0.]), -1), (np.array([-100., 0.]), -1), (np.array([-100., 0.]), 0)]:
+        print('reg_weights', rw, 'max_dist', md)
+        sseg = Scseg(n_components, random_state=0, no_regression=True,
+                     reg_weights=rw,
+                     max_dist=md, max_iter=2, max_doc_update_iter=1,
+                     verbose=1, learning_method='batch',
+                     batch_size=64)
+        
+        
+       # sseg = Scseg(n_components, random_state=0,
+       #              reg_weights=np.array([-5., .1]),
+       #              max_dist=-1, max_iter=40, max_doc_update_iter=10,
+       #              verbose=1, learning_method='batch',
+       #              batch_size=64)
+       # 
+        sseg.fit(train_data, train_dists)
+        mtrain_tr = sseg.transform(train_data)
+        mtest_tr = sseg.transform(test_data)
+        
+        clf = LogisticRegression(random_state=0, solver='lbfgs',
+                                 multi_class='multinomial').fit(mtrain_tr, train_labels)
+        
+        mscore = clf.score(mtest_tr, test_labels)
+        
+        #sseg.score(test_data, test_dists)
+        mtrain_tr = sseg.transform(train_data, train_dists)
+        mtest_tr = sseg.transform(test_data, test_dists)
+    
+        np.testing.assert_allclose(lda.components_, sseg.components_)
+        np.testing.assert_allclose(ltrain_tr, mtrain_tr)
+        np.testing.assert_allclose(ltest_tr, mtest_tr, atol=1e-5)
+        np.testing.assert_allclose(lscore, mscore)
+    
