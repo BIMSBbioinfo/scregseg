@@ -5,10 +5,12 @@ import tempfile
 from pybedtools import BedTool
 from pybedtools import Interval
 from pybedtools.helpers import cleanup
-from hmmlearn.hmm import MultiModalMultinomialHMM
+from .hmm import MultiModalMultinomialHMM
 from scipy.stats import binom
 from scipy.stats import norm
 from scipy.sparse import csc_matrix
+from scipy.sparse import lil_matrix
+from scipy.sparse import issparse as is_sparse
 import pickle
 import os
 import gzip
@@ -18,28 +20,71 @@ import matplotlib.pyplot as plt
 from itertools import product
 from scipy.stats import hypergeom
 from sklearn.decomposition import LatentDirichletAllocation
+from sklearn.utils import check_random_state
+from scipy.special import logsumexp
+from hmmlearn.utils import normalize
 
+
+from numba import jit, njit
+from numba import prange
+from operator import mod, floordiv, pow
+#faster_fft(self._cnt_conditional[int(np.ceil(length/2))], self._cnt_conditional[int(np.floor(length/2))], self.n_components, max_length)
+
+@njit(parallel=True)
+def faster_fft(c1, c2, ncomp, maxlen):
+    """
+    computes P(c1 + c2, current_state| prev_state) = sum_{middle_state} P(c1, current_state | middle_state) * P(c2, middle_state | prev_state)
+    in Fourier space
+    """
+
+    fft_cnt_dist = np.zeros((maxlen+1, ncomp, ncomp, ncomp), dtype=np.complex128)
+    for i in prange(pow(ncomp, 3)):
+        do_i = mod(i, ncomp)
+        curr_i = mod(floordiv(i, ncomp), ncomp)
+        prev_i = mod(floordiv(i, ncomp*ncomp), ncomp)
+        
+        for ic in range(maxlen+1):
+            for middle_i in range(ncomp):
+                fft_cnt_dist[ic, do_i, prev_i, curr_i] += c1[ic, do_i, prev_i, middle_i] * c2[ic, do_i, middle_i, curr_i]
+    return fft_cnt_dist
 
 class Scseg(object):
 
     _enr = None
+    _cnt_storage = {}
+    _cnt_conditional = {}
 
     def __init__(self, model):
         self._segments = None
-        self._nameprefix = 'cluster_'
+        self._nameprefix = 'state_'
         self.model = model
         self._color = {name: el for name, el in \
                        zip(self.to_statenames(np.arange(self.n_components)), sns.color_palette('bright', self.n_components))}
 
-    def save(self, path):
+    def save_model(self, path):
+        """
+        saves current model parameters
+        """
         os.makedirs(os.path.dirname(path), exist_ok=True)
+        #mpath = os.path.join(path, 'modelparams', 'hmm.npz')
         savelist = [self.model.transmat_, self.model.startprob_] + self.model.emissionprob_
         np.savez(path, *savelist)
 
+    def save(self, path):
+        """
+        saves current model parameters
+        """
+        self.save_model(os.path.join(path, 'modelparams', 'hmm.npz'))
 
+        if hasattr(self, "_segments"):
+            self.export_segmentation(os.path.join(path, 'segments', 'segmentation.tsv'), 0.0)
+        
     @classmethod
     def load(cls, path):
-        npzfile = np.load(path)
+        """
+        loads model parameters from path
+        """
+        npzfile = np.load(os.path.join(path, 'modelparams', 'hmm.npz'))
 
         trans = npzfile['arr_0']
         start = npzfile['arr_1']
@@ -51,19 +96,36 @@ class Scseg(object):
         model.emissionprob_ = emissions
         model.n_features = [e.shape[1] for e in emissions]
 
-        return cls(model)
+        scmodel = cls(model)
 
+        scmodel.load_segments(os.path.join(path, 'segments', 'segmentation.tsv'))
+
+        return scmodel
+
+    def load_segments(self, path):
+        if os.path.exists(path):
+            self._segments = pd.read_csv(path, sep='\t')
 
     def to_statenames(self, states):
+        """
+        converts list of state ids (integer) to list of state names (str)
+        """
         return [self.to_statename(state) for state in states]
 
     def to_statename(self, state):
+        """
+        converts state id (integer) to state name (str)
+        """
         return '{}{}'.format(self._nameprefix, state)
 
     def to_stateid(self, statename):
+        """
+        converts state name (str) to state id (integer)
+        """
+   
         return int(statename[len(self._nameprefix):])
 
-    def cell2state_enrichment(self, data):
+    def cell2state_enrichment(self, data, mode='logfold', prob_max_threshold=0.0, post=False):
         """ Determines whether a states is overrepresented among
         the accessible sites in a given cellself.
 
@@ -71,74 +133,97 @@ class Scseg(object):
         and the log-fold-change is determine by Obs[state proportion]/Expected[state proportion].
         """
 
-        stateprob = self.model.get_stationary_distribution()
+        #stateprob = self.model.get_stationary_distribution()
         
-        expected_segfreq = stateprob * data.shape[0]
+        if post:
+            # use posterior decoding
+            print('use post')
+            _, statescores = self.model.score_samples(data)
+            Z = statescores.T
+        else:
+            states = self.model.predict(data)
 
-        states = self.model.predict(data)
+            values = np.ones(len(states))
+            values[self._segments.Prob_max < prob_max_threshold] = 0
 
-        Z = csc_matrix((np.ones(len(states)),
-                       (states.astype('int'), np.arange(len(states),dtype='int'))))
+            Z = csc_matrix((values,
+                           (states.astype('int'), np.arange(len(states),dtype='int'))))
 
-        logfoldenr = []
-        logpvalues = []
+        enrs = []
 
         for d in data:
             d_ = d.copy()
             d_[d_>0] = 1
 
             # adding a pseudo-count of 1 to avoid division by zero
-            obs_seqfreq = Z.dot(d_).toarray() + 1.
-            obs_seqfreq = obs_seqfreq / obs_seqfreq.sum(0, keepdims=True)
+            #obs_seqfreq = Z.dot(d_).toarray().T
+            if is_sparse(Z):
+                obs_seqfreq = Z.dot(d_).toarray().T
+            else:
+                obs_seqfreq = d_.T.dot(Z.T)
 
-            # log fold-change
-            fold = np.log10(obs_seqfreq) - np.log10(expected_segfreq)
-            logfoldenr.append(fold)
+            if mode == 'probability':
+                mat = obs_seqfreq / obs_seqfreq.sum(1, keepdims=True)
+            elif mode == 'zscore':
+                mat = zscore(obs_seqfreq, axis=1)
+            elif mode in ['logfold', 'chisqstat']:
+                mat = self.broadregion_enrichment(obs_seqfreq, obs_seqfreq.sum(1), mode=mode)
+            else:
+                raise ValueError('{} not supported for cell2state association'.format(mode))
 
-            ff = fold.flatten()
-            # standard deviation estimated from the left-half of the distribution
-            scale = np.sqrt(np.mean(np.square(ff[ff<0])))
+            enrs.append(mat)
 
-
-            rnorm = norm(0.0, scale)
-            logpvalues.append(rnorm.logsf(fold))
-
-        return logfoldenr, logpvalues
-
+        return enrs
+        
     def plot_state_statistics(self):
+        """
+        plot state statistics
+        """
         if self._segments is None:
             raise ValueError("No segmentation results available. Please run segment(data, regions) first.")
 
         fig, ax = plt.subplots(1, 2)
-        state_counts=pd.Series(self._segments.name).value_counts()
+        state_counts = pd.Series(self._segments.name).value_counts()
 
         sns.barplot(y=[l for l in state_counts.index], 
-                    x=state_counts, ax=ax[0],
+                    x=state_counts,
+                    ax=ax[0],
                     palette=[self.color[i] for i in state_counts.index])
 
         sns.heatmap(self.model.transmat_, ax=ax[1], cmap='Reds')
 
         return fig
 
-    def plot_readdepth(self):
+    def plot_readdepth(self, labels):
+        """
+        plots read depths associated with states
+        """
         fig, axes = plt.subplots(1,len(self.model.emissionprob_))
         if not isinstance(axes, np.ndarray):
             axes = np.array([axes])
+        segs = self._segments.copy()
         for i, ax in enumerate(axes):
-            sns.boxplot(x="readdepth_"+str(i), y='name', data=self._segments, orient='h', ax=ax)
+            segs['log_readdepth_{}'.format(labels[i])] = np.log10(segs['readdepth_'+str(i)] + 1)
+        for i, ax in enumerate(axes):
+            sns.boxplot(x="log_readdepth_{}".format(labels[i]), y='name', data=segs, orient='h', ax=ax)
+        fig.tight_layout()
         return fig
                     
     def plot_logfolds_dist(self, logfoldenr, query_state=None):
+        """
+        plots log fold distribution
+        """
         fig, axes = plt.subplots(len(logfoldenr))
         if not isinstance(axes, np.ndarray):
             axes = np.array([axes])
         for ax, fold in zip(axes, logfoldenr):
 
             if query_state is not None:
-                istate = self.to_stateid(query_state)
-                fold = fold[istate]
+                #istate = self.to_stateid(query_state)
+                #fold = fold[istate]
+                fold = fold[query_state]
 
-            ff = fold.flatten()
+            ff = fold.values.flatten()
             sns.distplot(ff, ax=ax)
 
             x = np.linspace(-1.5, 2.5)
@@ -152,7 +237,16 @@ class Scseg(object):
         return self._color
 
     def segment(self, data, regions):
-        """ determine segments """
+        """
+        performs segmentation.
+
+        Parameters
+        ----------
+        data : list(np.array) or list(scipy.sparse.csc_matrix)
+            List of count matrices
+        regions : pd.DataFrame
+            Dataframe containing the genomic intervals (e.g. from a bed file).
+        """
 
         bed = BedTool(regions)
 
@@ -183,9 +277,25 @@ class Scseg(object):
         cleanup()
 
 
-    def export_bed(self, filename, individual_beds=False, prob_max_threshold=0.99):
+    def export_segmentation(self, filename, prob_max_threshold=0.99):
+        """
+        Exports the segmentation results table.
+        """
 
         os.makedirs(os.path.dirname(filename), exist_ok=True)
+
+        if self._segments is None:
+            raise ValueError("No segmentation results available. Please run segment(data, regions) first.")
+
+        self._segments[(self._segments.Prob_max >= prob_max_threshold)].to_csv(filename, sep='\t', index=False)
+
+
+    def export_bed(self, dirname, individual_beds=False, prob_max_threshold=0.99):
+        """
+        Exports the segmentation results in bed format.
+        """
+
+        os.makedirs(dirname, exist_ok=True)
 
         if self._segments is None:
             raise ValueError("No segmentation results available. Please run segment(data, regions) first.")
@@ -194,37 +304,23 @@ class Scseg(object):
             self._single_bed = []
             for comp in range(self.n_components):
                 self._segments[(self._segments.name == self.to_statename(comp)) & (self._segments.Prob_max >=prob_max_threshold)].to_csv(
-                    filename + self.to_statename(comp) + '.bed', sep='\t',
+                    os.path.join(dirname, 'state_{}.bed'.format(comp)), sep='\t',
                     header=False, index=False,
                     columns=['chrom', 'start', 'end',
                              'name', 'score', 'strand',
                              'thickStart', 'thickEnd', 'itemRbg'])
 
         else:
-            self._segments[(self._segments.Prob_max >=prob_max_threshold)].to_csv(filename, sep='\t',
+            self._segments[(self._segments.Prob_max >=prob_max_threshold)].to_csv(os.path.join(dirname, 'segments.bed'), sep='\t',
                            header=False, index=False,
                            columns=['chrom', 'start', 'end',
                                     'name', 'score', 'strand',
                                     'thickStart', 'thickEnd', 'itemRbg'])
 
-#    def export_collapsed_data(self, data, filename, prob_max_threshold=0.99, logfold_threshold=0.5):
-#        os.makedirs(os.path.dirname(filename), exist_ok=True)
-#        if self._segments is None:
-#            raise ValueError("No segmentation results available. Please run segment(data, regions) first.")
-#        logfold, _ = self.cell2state_enrichment(data)
-#
-#        Cover.create_from_array('save', 
-#            for comp in range(self.n_components):
-#                self._segments[(self._segments.name == self.to_statename(comp)) & (self._segments.Prob_max >= prob_max_threshold)].to_csv(
-#                    filename + self.to_statename(comp) + '.bed', sep='\t',
-#                    header=False, index=False,
-#                    columns=['chrom', 'start', 'end',
-#                             'name', 'score', 'strand',
-#                             'thickStart', 'thickEnd', 'itemRbg'])
-#
 
     def annotate(self, annotations):
         """Annotate the bins with BED, BAM or BIGWIG files."""
+
         tmpdir = tempfile.mkdtemp()
         filename = 'dummyexport'
         tmpfilename = os.path.join(tmpdir, filename)
@@ -246,7 +342,8 @@ class Scseg(object):
             if isinstance(file, list):
                 self._segments[key] = file
                 continue
-            if file.endswith('.bed') or file.endswith('.bed.gz') or file.endswith('.narrowPeak'):
+            if file.endswith('.bed') or file.endswith('.bed.gz') or file.endswith('.narrowPeak') or \
+               file.endswith('.bedgraph'):
                 cov = Cover.create_from_bed(key, bedfiles=file, roi=tmpfilename,
                                             binsize=binsize, resolution=binsize, store_whole_genome=False,
                                             cache=True)
@@ -268,13 +365,144 @@ class Scseg(object):
     def n_components(self):
         return self.model.n_components
 
-    def geneset_enrichment(self, segments, genesets, genes, prob_max_threshold=0.99):
-        """Obtain the state counts along a feature annotation."""
+    def geneset_observed_state_counts_old(self, genesets, genes, flanking=50000):
+        """
+        collect state counts around gene sets for enrichment analysis.
+       
+        """
+        if isinstance(genes, str) and os.path.exists(genes):
+            genes = BedTool(genes)
+
+        genesetnames = [os.path.basename(x) for x in genesets]
+
+        states = self._segments.name.unique()
+        nstates = len(states)
+
+        ngsets = len(genesets)
+
+        print('Segmentation enrichment for {} states and {} sets.'.format(nstates, ngsets))
+        tmpdir = tempfile.mkdtemp()
+        filename = 'dummyexport'
+        tmpfilename = os.path.join(tmpdir, filename)
+        self._segments.to_csv(tmpfilename, sep='\t', header=False, index=False, columns=['chrom', 'start', 'end', 'name'])
+
+        segment_bedtool = BedTool(tmpfilename)
+
+        # obtain tss's for genes
+        tss = BedTool([Interval(iv.chrom, iv.end if iv.strand=='-' else iv.start,
+                                (iv.end if iv.strand=='-' else iv.start) + 1,
+                                name=iv.name) for iv in genes]).sort()
+
+        observed_segmentcounts = np.zeros((ngsets, self.n_components))
+        geneset_length = np.zeros(ngsets)
+
+        for igeneset, geneset in enumerate(genesets):
+            
+            if isinstance(geneset, str) and os.path.exists(geneset):
+                if geneset.endswith('.bed'):
+                    genenames =[iv.name for iv in BedTool(geneset)]
+                else:
+                    genenames = pd.read_csv(geneset).values.flatten()
+            else:
+                genenames = geneset
+
+            #flank tss's by flanking window
+            flanked_tss_ = BedTool([Interval(iv.chrom, max(0, iv.start-flanking), iv.end+flanking, name=iv.name) for iv in tss if iv.name in genenames])
+
+            # collect segments in the surounding region
+            roi_segments = segment_bedtool.intersect(flanked_tss_, wa=True, u=True)
+            
+            geneset_length[igeneset] = len(roi_segments)
+            # obtain segment counts
+
+            for iv in roi_segments:
+                observed_segmentcounts[igeneset, self.to_stateid(iv.name)] += 1
+
+        os.remove(tmpfilename)
+        os.rmdir(tmpdir)
+        return observed_segmentcounts, geneset_length, genesetnames
+
+    def geneset_observed_state_counts(self, genesets, flanking=50000):
+        """
+        collect state counts around gene sets for enrichment analysis.
+       
+        """
+
+        genesetnames = [os.path.basename(x) for x in genesets]
+
+        states = self._segments.name.unique()
+        nstates = len(states)
+
+        ngsets = len(genesets)
+
+        print('Segmentation enrichment for {} states and {} sets.'.format(nstates, ngsets))
+        tmpdir = tempfile.mkdtemp()
+        filename = 'dummyexport'
+        tmpfilename = os.path.join(tmpdir, filename)
+        self._segments.to_csv(tmpfilename, sep='\t', header=False, index=False, columns=['chrom', 'start', 'end', 'name'])
+
+        segment_bedtool = BedTool(tmpfilename)
+
+        observed_segmentcounts = np.zeros((ngsets, self.n_components))
+        geneset_length = np.zeros(ngsets)
+
+        for igeneset, geneset in enumerate(genesets):
+            
+            # obtain tss's for genes
+            tss = BedTool([Interval(iv.chrom, iv.end if iv.strand=='-' else iv.start,
+                                    (iv.end if iv.strand=='-' else iv.start) + 1,
+                                    name=iv.name) for iv in BedTool(geneset)]).sort()
+
+            #flank tss's by flanking window
+            flanked_tss_ = BedTool([Interval(iv.chrom, max(0, iv.start-flanking), iv.end+flanking, name=iv.name) for iv in tss])
+
+            # collect segments in the surounding region
+            roi_segments = segment_bedtool.intersect(flanked_tss_, wa=True, u=True)
+            
+            geneset_length[igeneset] = len(roi_segments)
+            # obtain segment counts
+
+            for iv in roi_segments:
+                observed_segmentcounts[igeneset, self.to_stateid(iv.name)] += 1
+
+        os.remove(tmpfilename)
+        os.rmdir(tmpdir)
+        return observed_segmentcounts, geneset_length, genesetnames
+
+    def observed_state_counts(self, regions, flanking=0):
+        if isinstance(regions, str) and os.path.exists(regions):
+            regions = BedTool(regions)
+
+        _segments = self._segments
+        regionnames = ['{}:{}-{}'.format(iv.chrom, iv.start, iv.end) for iv in regions]
+
+        states = _segments.name.unique()
+        nstates = len(states)
+
+        nregions = len(regions)
+
+        print('Segmentation enrichment for {} states and {} regions.'.format(nstates, nregions))
+
+        observed_segmentcounts = np.zeros((nregions, self.n_components))
+        region_length = np.zeros(nregions)
+
+        for iregion, region in enumerate(regions):
+            
+            subregs = _segments[(_segments.chrom == region.chrom) & (_segments.start >= region.start) &  (_segments.end <= region.end)]
+            region_length[iregion] = len(subregs)
+            
+            for istate in range(self.n_components):
+               
+                observed_segmentcounts[iregion, istate] = len(subregs[subregs.name == self.to_statename(istate)])
+        return observed_segmentcounts, region_length, regionnames
+
+    def geneset_enrichment(self, genesets, genes, prob_max_threshold=0.99):
+        """Runs hypergeometric test for gene set enrichment."""
 
         if isinstance(genes, str) and os.path.exists(genes):
             genes = BedTool(genes)
 
-        _segments = segments
+        _segments = self._segments
 
         states = _segments.name.unique()
         nstates = len(states)
@@ -342,100 +570,94 @@ class Scseg(object):
 
         return enr
 
-    def sample_enrichment(self, ref_anchors, samplefiles, samplenames, other_anchors=None, prob_max_threshold=0.99):
-        if not isinstance(ref_anchors, BedTool):
-            ref_anchors = BedTool(ref_anchors)
-        ref_anchors = BedTool([Interval(iv.chrom, iv.start, iv.end, name=str(i)) for i, iv in enumerate(ref_anchors)])
+#    def sample_enrichment(self, ref_anchors, samplefiles, samplenames, other_anchors=None, prob_max_threshold=0.99):
+#        if not isinstance(ref_anchors, BedTool):
+#            ref_anchors = BedTool(ref_anchors)
+#        ref_anchors = BedTool([Interval(iv.chrom, iv.start, iv.end, name=str(i)) for i, iv in enumerate(ref_anchors)])
+#
+#        state2refanchor = np.zeros((self.n_components, len(ref_anchors)))
+#        states = self._segments.name.unique()
+#        
+#        for istate in range(self.n_components):
+#            state = self.to_statename(istate)
+#            segments = self._segments[(self._segments.name == state) & (self._segments.Prob_max >= prob_max_threshold)]
+#            segbed = BedTool([Interval(row.chrom, row.start, row.end) for _, row in segments.iterrows()]).sort().merge()
+#
+#            overlapbed = ref_anchors.intersect(segbed, wa=True)
+#            state2refanchor[istate, np.asarray([int(iv.name) for iv in overlapbed])] = 1
+#        
+#        if hasattr(samplefiles, 'shape') and samplefiles.shape[0] == len(ref_anchors):
+#            featuremat = samplefiles
+#        else:
+#            featuremat = np.zeros((len(ref_anchors), len(samplefiles)))
+#            if other_anchors is not None and not isinstance(other_anchors, BedTool):
+#                other_anchors = BedTool(other_anchors)
+#
+#            other_anchors = BedTool([Interval(iv.chrom, iv.start, iv.end, name=str(i)) for i, iv in enumerate(other_anchors)])
+#            for isample, sample in enumerate(samplefiles):
+#                if not isinstance(sample, BedTool):
+#                    sample = BedTool(sample)
+#                overlap = other_anchors.intersect(sample, wa=True)
+#                for iv in overlap:
+#                    featuremat[int(iv.name), isample] = 1
+#
+#        # start with the enrichment test
+#
+#        overlap = state2refanchor.dot(featuremat)
+#
+#        enr = np.zeros_like(overlap)
+#
+#        ns = state2refanchor.sum(1)
+#        Ns = featuremat.sum(0)
+#        ntotal = (state2refanchor.sum(0)>0).sum()
+#
+#        for istate in range(self.n_components):
+#            for ifeature in range(featuremat.shape[1]):
+#                enr[istate, ifeature] = -hypergeom.logsf(overlap[istate, ifeature]-1, ntotal, ns[istate], Ns[ifeature])
+#
+#        enr = pd.DataFrame(enr,
+#                           index=self.to_statenames(np.arange(self.n_components)),
+#                           columns=samplenames)
+#        enr = enr.T
+#
+#        return enr
 
-        state2refanchor = np.zeros((self.n_components, len(ref_anchors)))
-        states = self._segments.name.unique()
+
+    def broadregion_enrichment(self, state_counts, regionlengths, regionnames=None, mode='logfold'):
         
-        for istate in range(self.n_components):
-            state = self.to_statename(istate)
-            segments = self._segments[(self._segments.name == state) & (self._segments.Prob_max >= prob_max_threshold)]
-            segbed = BedTool([Interval(row.chrom, row.start, row.end) for _, row in segments.iterrows()]).sort().merge()
-
-            overlapbed = ref_anchors.intersect(segbed, wa=True)
-            state2refanchor[istate, np.asarray([int(iv.name) for iv in overlapbed])] = 1
+        stateprob = self.model.get_stationary_distribution()
         
-        if hasattr(samplefiles, 'shape') and samplefiles.shape[0] == len(ref_anchors):
-            featuremat = samplefiles
-        else:
-            featuremat = np.zeros((len(ref_anchors), len(samplefiles)))
-            if other_anchors is not None and not isinstance(other_anchors, BedTool):
-                other_anchors = BedTool(other_anchors)
+        enr = np.zeros_like(state_counts)
 
-            other_anchors = BedTool([Interval(iv.chrom, iv.start, iv.end, name=str(i)) for i, iv in enumerate(other_anchors)])
-            for isample, sample in enumerate(samplefiles):
-                if not isinstance(sample, BedTool):
-                    sample = BedTool(sample)
-                overlap = other_anchors.intersect(sample, wa=True)
-                for iv in overlap:
-                    featuremat[int(iv.name), isample] = 1
+        e = np.outer(regionlengths, stateprob)
+        #if e.shape != state_counts.shape:
+        #    e = e.T
 
-        # start with the enrichment test
+        if mode == 'logfold':
+            enr = np.log10(np.where(state_counts==0, 1, state_counts)) - np.log10(np.where(state_counts==0, 1, e))
+        elif mode == 'chisqstat':
+            stat = np.where((state_counts - e) >= 0.0, (state_counts - e), 0.0)
+            
+            enr = stat**2 / e**2
+        elif mode == 'pvalue':
+            for ireg, scnt in enumerate(state_counts.sum(1)):
 
-        overlap = state2refanchor.dot(featuremat)
+                self._make_broadregion_null_distribution(np.array([int(scnt)]))
+                null_dist, _ = self._get_broadregion_null_distribution(int(scnt))
 
-        enr = np.zeros_like(overlap)
+                for istate in range(self.n_components):
+                    n_obs = int(state_counts[ireg, istate])
+                    enr[ireg, istate] = -min(np.log10(max(0.0, null_dist[n_obs:, istate].sum())), 15)
 
-        ns = state2refanchor.sum(1)
-        Ns = featuremat.sum(0)
-        ntotal = (state2refanchor.sum(0)>0).sum()
-
-        for istate in range(self.n_components):
-            for ifeature in range(featuremat.shape[1]):
-                enr[istate, ifeature] = -hypergeom.logsf(overlap[istate, ifeature]-1, ntotal, ns[istate], Ns[ifeature])
-
-        enr = pd.DataFrame(enr,
-                           index=self.to_statenames(np.arange(self.n_components)),
-                           columns=samplenames)
-        enr = enr.T
-
-        return enr
+        enrdf = pd.DataFrame(enr, columns=self.to_statenames(np.arange(self.n_components)),
+                             index=regionnames)
+            
+        return enrdf
 
 
-    def broadregion_enrichment(self, regions):
-        if isinstance(regions, str) and os.path.exists(regions):
-            regions = BedTool(regions)
-        
-        region2state_enr_logpvalue = np.zeros((len(regions), self.n_components))
-        region2state_enr_logfold = np.zeros((len(regions), self.n_components))
-        region2state_enr_fold = np.zeros((len(regions), self.n_components))
-        region2state_cnts = np.zeros((len(regions), self.n_components))
-
-        maxlen = 0
-        for ireg, region in enumerate(regions):
-            regsegs = self._segments[(self._segments.chrom==region.chrom) &
-                                     (self._segments.start>=region.start) &
-                                     (self._segments.end<=region.end)]
-            if maxlen < regsegs.shape[0]:
-                maxlen = regsegs.shape[0]
-
-        self._make_broadregion_null_distribution(maxlen)
-
-        for ireg, region in enumerate(regions):
-            regsegs = self._segments[(self._segments.chrom==region.chrom) &
-                                     (self._segments.start>=region.start) &
-                                     (self._segments.end<=region.end)]
-            reg_length = regsegs.shape[0]
-
-            null_dist, expected_counts = self._get_broadregion_null_distribution(reg_length)
-
-            for istate in range(self.n_components):
-                n_obs = regsegs[regsegs.name == self.to_statename(istate)].shape[0]           
-                region2state_enr_logpvalue[ireg, istate] = -np.log(null_dist[n_obs:, istate].sum())
-                region2state_enr_logfold[ireg, istate] = np.log(n_obs/expected_counts[istate])
-                region2state_enr_fold[ireg, istate] = (n_obs-expected_counts[istate])/expected_counts[istate]
-                region2state_cnts[ireg, istate] = n_obs
-
-        return region2state_enr_logpvalue, region2state_enr_logfold, region2state_enr_fold
-        # obtain the observed number of states 
-
-
-    def _make_broadregion_null_distribution(self, length, keep_lengths):
-        cnt_storage = {}
-        cnt_dist = np.zeros((length + 1, self.n_components, self.n_components))
+    def _init_broadregion_null_distribution(self, max_len):
+        max_len = int(max_len)
+        cnt_dist = np.zeros((max_len+1, self.n_components, self.n_components))
 
         stationary = self.model.get_stationary_distribution()
 
@@ -445,109 +667,291 @@ class Scseg(object):
                 shift = 1 if dostate_i == curr_i else 0
                 
                 cnt_dist[shift, dostate_i, curr_i] += stationary[curr_i]
-        if 1 in keep_lengths:
-            cnt_storage[0] = cnt_dist
+
+        fft_cnt_dist = np.empty((max_len+1, self.n_components, self.n_components), dtype='complex128')
+        for dostate_i in range(self.n_components):
+            for curr_i in range(self.n_components):
+               fft_cnt_dist[:, dostate_i, curr_i] = np.fft.fft(cnt_dist[:, dostate_i, curr_i])
+
+        self._fft_init_cnt_dist = fft_cnt_dist
+        self._cnt_storage = {}
+        self._cnt_conditional = {}
+
+
+    def _make_broadregion_conditional_null_distribution(self, length, max_length):
+        max_length = int(max_length)
+        length = int(length)
+
+        if length < 1:
+            return
+
+        if length in self._cnt_conditional:
+            return
+
+#        print('start evaluating {}'.format(length))
+        if length == 1:
+            # initialization condition
+            # adding one more bin
+            # respresents P(Csi, sj | s0)
+            cnt_dist = np.zeros((max_length + 1, self.n_components, self.n_components, self.n_components))
+            for dostate_i in range(self.n_components):
+                for prev_i in range(self.n_components):
+                    for curr_i in range(self.n_components):
+                        shift = 1 if dostate_i == curr_i else 0
+                        
+                        cnt_dist[shift, dostate_i, prev_i, curr_i] += self.model.transmat_[prev_i, curr_i]
+
+            fft_cnt_dist = np.zeros((max_length + 1, self.n_components, self.n_components, self.n_components), dtype='complex128')
+            for dostate_i in range(self.n_components):
+                for prev_i in range(self.n_components):
+                    for curr_i in range(self.n_components):
+                        fft_cnt_dist[:, dostate_i, prev_i, curr_i] = np.fft.fft(cnt_dist[:, dostate_i, prev_i, curr_i])
+
+        else:
+            self._make_broadregion_conditional_null_distribution(int(np.ceil(length/2)), max_length)
+            self._make_broadregion_conditional_null_distribution(int(np.floor(length/2)), max_length)
+ 
+            if True:
+                fft_cnt_dist = faster_fft(self._cnt_conditional[int(np.ceil(length/2))], self._cnt_conditional[int(np.floor(length/2))], self.n_components, max_length)
+            else:
+                fft_cnt_dist = np.zeros((max_length+1, self.n_components, self.n_components, self.n_components), dtype='complex128')
+                
+                for prev_i in range(self.n_components):
+                    for middle_i in range(self.n_components):
+                        for curr_i in range(self.n_components):
+
+                            cnt_1 = self._cnt_conditional[int(np.ceil(length/2))][:, :, prev_i, middle_i]
+                            cnt_2 = self._cnt_conditional[int(np.floor(length/2))][:, :, middle_i, curr_i]
+
+                            fft_cnt_dist[:, :, prev_i, curr_i] += cnt_1 * cnt_2
+
+#        print('end evaluating {}'.format(length))
+        self._cnt_conditional[length] = fft_cnt_dist
+
+    def _finalize_broadregion_null_distribution(self, keep_lengths):
+        
+        max_length = int(keep_lengths.max())
+
+        for length in keep_lengths:
+            self._make_broadregion_conditional_null_distribution(length - 1, max_length)
+
+#        print('cond_keys:', [k for k in self._cnt_conditional])
+#        print('cnt_stor:', [k for k in self._cnt_storage])
+        for length in keep_lengths:
+            length = int(length)
+#            print('lookup for {}'.format(length-1))
+            if length == 1:
+                fft_tmp_cnt = self._fft_init_cnt_dist
+            else:
+                fft_tmp_cnt = np.zeros_like(self._fft_init_cnt_dist)
+
+                for dostate_i in range(self.n_components):
+                    for prev_i in range(self.n_components):
+                        for curr_i in range(self.n_components):
+                            fft_tmp_cnt[:,dostate_i, curr_i] += self._fft_init_cnt_dist[:, dostate_i, prev_i] * \
+                                                                     self._cnt_conditional[length - 1][:, dostate_i, prev_i, curr_i]
+
+            fft_tmp_cnt = fft_tmp_cnt.sum(-1)
+            tmp_cnt = np.zeros((max_length+1, self.n_components))
+            self._cnt_storage[length] = tmp_cnt
+            for dostate_i in range(self.n_components):
+                self._cnt_storage[length][:, dostate_i]  = np.fft.ifft(fft_tmp_cnt[:, dostate_i]).real
+
+
+    def _make_broadregion_null_distribution(self, keep_lengths):
+        
+        self._init_broadregion_null_distribution(keep_lengths.max())
+
+        self._finalize_broadregion_null_distribution(keep_lengths)
+
+        #for k in self._cnt_storage:
+        #    np.testing.assert_allclose(self._cnt_storage[k].sum(), self.n_components)
+
+    def _make_broadregion_null_distribution_slow(self, keep_lengths):
+        
+        length = int(keep_lengths.max())
+        cnt_dist = np.zeros((2, self.n_components, self.n_components))
+
+        stationary = self.model.get_stationary_distribution()
+
+        # initialize array
+        for dostate_i in range(self.n_components):
+            for curr_i in range(self.n_components):
+                shift = 1 if dostate_i == curr_i else 0
+                
+                cnt_dist[shift, dostate_i, curr_i] += stationary[curr_i]
+        if 1 in keep_lengths and 1 not in self._cnt_storage:
+            self._cnt_storage[1] = cnt_dist.sum(-1)
 
         for icnt in range(length-1):
-            joint_cnt_dist = np.zeros_like(cnt_dist)
+            if (icnt % 1000) == 0:
+                print("iter {}/{}".format(icnt, length))
+            joint_cnt_dist = np.zeros((icnt + 3, self.n_components, self.n_components))
             for dostate_i in range(self.n_components):
                 for prev_i in range(self.n_components):
                     for curr_i in range(self.n_components):
                         shift = 1 if dostate_i == curr_i else 0
                         if dostate_i == curr_i:
-                            joint_cnt_dist[1:, dostate_i, curr_i] += cnt_dist[:-1, dostate_i, prev_i] *self.model.transmat_[prev_i, curr_i]
+                            joint_cnt_dist[1:(icnt+3), dostate_i, curr_i] += cnt_dist[:(icnt+2), dostate_i, prev_i] * self.model.transmat_[prev_i, curr_i]
                         else:
-                            joint_cnt_dist[:, dostate_i, curr_i] += cnt_dist[:, dostate_i, prev_i] *self.model.transmat_[prev_i, curr_i]
+                            joint_cnt_dist[:(icnt+2), dostate_i, curr_i] += cnt_dist[:(icnt+2), dostate_i, prev_i] * self.model.transmat_[prev_i, curr_i]
             cnt_dist = joint_cnt_dist
-            if (icnt+1) in keep_lengths:
-                cnt_storage[icnt+1] = cnt_dist
+            if (icnt+2) in keep_lengths and (icnt+2) not in self._cnt_storage:
+                self._cnt_storage[icnt+2] = cnt_dist.sum(-1)
 
-        
-        self._cnt_dist = {k: cnt_storage[k].sum(-1) for k in cnt_storage}
-        for k in self._cnt_dist:
-            np.testing.assert_allclose(self._cnt_dist[k].sum(), self.n_components)
+        for k in self._cnt_storage:
+            np.testing.assert_allclose(self._cnt_storage[k].sum(), self.n_components)
 
     def _get_broadregion_null_distribution(self, length):
-        return self._cnt_dist[length-1], self._cnt_dist[length-1].T.dot(np.arange(self._cnt_dist.shape[1]))
+        return self._cnt_storage[length], \
+               self._cnt_storage[length].T.dot(np.arange(self._cnt_storage[length].shape[0]))
 
 
-    @property
-    def state_annotation(self):
-        if self._enr is None:
-            raise ValueError("State annotation enrichment not yet performed. Use geneset_enrichment")
-        return self._enrfeaturemat
+#    @property
+#    def state_annotation(self):
+#        if self._enr is None:
+#            raise ValueError("State annotation enrichment not yet performed. Use geneset_enrichment")
+#        return self._enr
+#
+#    def subcluster(self, data, query_states, n_subclusters, 
+#                   logfold_threshold=None, state_prob_threshold=0.99):
+#                   
+#        sdata, subdf, mapelem = self.get_subdata(data, query_states, state_prob_threshold=state_prob_threshold)
+#
+#        print(sdata.shape)
+#        labels, label_probs = self.do_subclustering(sdata, n_subclusters)
+#        x = ['subcluster_{}'.format(labels[mapelem[i]]) for i in range(len(subdf.index))]
+#
+#        subdf.name = x
+#        return subdf, sdata
 
-    def subcluster(self, data, query_states, n_subclusters, 
-                   logfold_threshold, state_prob_threshold=0.99):
-                   
-        sdata, subdf, mapelem = self.get_subdata(data, query_states, logfold_threshold, state_prob_threshold)
+    def finetuning(self, data, query_states, n_subclusters, 
+                   state_prob_threshold=0.99, min_explain_subcluster=0.5,
+                   params='st',
+                   n_iter_finetune=15):
 
-        print(sdata.shape)
-        labels, label_probs = self.do_subclustering(sdata, n_subclusters)
-        x = ['subcluster_{}'.format(labels[mapelem[i]]) for i in range(len(subdf.index))]
-
-        subdf.name = x
-        return subdf, sdata
-
-    def get_subdata(self, data, query_states, logfold_threshold, state_prob_threshold=0.99):
+        logfold_threshold=None           
 
         if not isinstance(query_states, list):
             query_states = [query_states]
 
-        if not isinstance(logfold_threshold, list):
-            logfold_threshold = [logfold_threshold]
+        replacement_collection = {}
+
+        for qstate in query_states:
+
+            sdata, subdf = self.get_subdata(data, qstate, state_prob_threshold=state_prob_threshold)
+             
+            for sd in sdata:
+                print('subcluster {} with subdata {}x{}'.format(qstate, sd.shape[0], sd.shape[1]))
+
+            mm = MixtureOfMultinomials(n_subclusters, n_iters=100, random_state=64)
+
+            print('mix fitting')
+            mm.fit(sdata)
+
+            replacement_collection[qstate] = mm.get_important_components(min_explain_subcluster)
+
+        for r in replacement_collection:
+            print(r + ': {}'.format(replacement_collection[r][0]))
+        newcomps_ = self.get_augmented_components(replacement_collection)
+
+        ncomp = newcomps_[0].shape[0]
+
+        print('new number of segments: {}'.format(ncomp))
+
+        # instantiate a new hmm and freeze the emissions
+        model = MultiModalMultinomialHMM(ncomp, init_params='st', params='st',
+                                         verbose=True,
+                                         n_iter=10, random_state=32)
+
+        model.emissionprob_ = newcomps_
+        model.n_features = [e.shape[1] for e in newcomps_]
+        
+        model.fit(data)
+
+        return model
+
+    def get_subdata(self, data, query_states, collapse_neighbors=True, state_prob_threshold=0.99):
+
+        if not isinstance(data, list):
+            data = [data]
+        if not isinstance(query_states, list):
+            query_states = [query_states]
 
         subset = self._segments[(self._segments.name.isin(query_states)) 
                                 & (self._segments.Prob_max >= state_prob_threshold)].copy()
         
+        submats = []
+
+        if not collapse_neighbors:
+            for datum in data:
+
+                sm = np.asarray(datum[subset.index].todense())
+
+                submats.append(sm)
+
+            return submats, subset
+
+
         # determine neighboring bins that can be merged together
         prevind = -2
+        prevstate = ''
         nelem = 0
         mapelem = []
-        for i in subset.index:
+        for i, r in subset.iterrows():
+            curstate = r['name']
             nelem += 1
-            if i == (prevind + 1):
+            if i == (prevind + 1) and prevstate == curstate:
                nelem -= 1
             mapelem.append(nelem - 1)
             prevind = i
+            prevstate = curstate
 
-        logfolds, _ = self.cell2state_enrichment(data)
-    
-        submats = []
-        mapelems = []
-        for datum, logfold, th in zip(data, logfolds, logfold_threshold):
-            logfold = logfold[[self.to_stateid(query_state) for query_state in query_states]]
 
-            keepcells = np.where(logfold >= th)[0]
+        subset['common'] = mapelem
+        print(subset.shape)
 
-            submat = np.zeros((nelem, len(keepcells)))
+        subset_merged = subset.groupby(['common', 'name']).aggregate({'chrom': 'first',
+                                        'start': 'min',
+                                        'end': 'max', 'name':'first'})
 
-            sm = np.asarray(datum[subset.index][:, keepcells].todense())
+        print(subset_merged.shape)
+        for datum in data:
+
+            dat = datum.tolil()
+            submat = lil_matrix((nelem, datum.shape[1]))
+            #sm = np.asarray(datum[subset.index].todense())
 
             for i, i2m in enumerate(mapelem):
-                submat[i2m, :] += sm[i]
-            submats.append(submat)
-            mapelems.append(mapelem)
+                #submat[i2m, :] += sm[i]
+                submat[i2m, :] += datum[subset.index[i]]
 
-        return submats, subset, mapelems
+            submats.append(submat.tocsc())
 
-    def do_subclustering(self, submat, n_subclusters, method='mixture'):
-        if method=='mixture':
-
-            clust = MixtureOfMultinomials(n_subclusters, random_state=32)
-        else:
-            clust = LDAWrapper(n_subclusters)
-
-        clust.fit(submat)
-
-        tr = clust.transform(submat)
-        labels = clust.predict(submat)
-        return labels, tr
+        return submats, subset_merged
 
 
-from sklearn.utils import check_random_state
-from scipy.misc import logsumexp
-from hmmlearn.utils import normalize
+    def get_augmented_components(self, relacement_components):
+        
+        # number of original components
+        ncomp = self.n_components
+
+        # components to be replaced
+        irm = np.array([self.to_stateid(rlp) for rlp in relacement_components])
+
+        # subtract those from the original components
+        keepcomp = np.setdiff1d(np.arange(ncomp), irm)
+        #keepcomp = np.arange(ncomp)
+        keep_ems = [ems[keepcomp].copy() for ems in self.model.emissionprob_]
+
+        # append the replacement components
+        augm_ems = []
+        rc = relacement_components
+        for i in range(len(self.model.emissionprob_)):
+            augm_ems.append(np.concatenate((keep_ems[i], ) + tuple([rc[k][i] for k in rc if rc[k][i].shape[0]>1]), axis=0))
+
+        return augm_ems
+
 
 class MixtureOfMultinomials:
     def __init__(self, n_clusters, n_iters=10, random_state=None, verbose=False):
@@ -560,33 +964,45 @@ class MixtureOfMultinomials:
      
 
     def fit(self, data):
+        if not isinstance(data, list):
+            data = [data]
+
         # init 
         self._init(data)
         self._check()
         if self.verbose: print('init', self.score(data))
         for iit in range(self.n_iters):
             p_z = self._e_step(data)
-            np.testing.assert_allclose(p_z.sum(), data.shape[0])
+            np.testing.assert_allclose(p_z.sum(), data[0].shape[0])
             self._m_step(data, p_z)
             self._check()
             if self.verbose: print(iit, self.score(data))
     
     def _check(self):
-        assert np.all(self.components > 0.0)
         assert np.all(self.pi > 0.0)
-        np.testing.assert_allclose(self.components.sum(), self.n_clusters)
         np.testing.assert_allclose(self.pi.sum(), 1.)
+        for i in range(len(self.components)):
+            assert np.all(self.components[i] > 0.0)
+            np.testing.assert_allclose(self.components[i].sum(), self.n_clusters)
 
     def _init(self, data):
+   
         self.random_state_ = check_random_state(self.random_state)
-
-        self.components = data[self.random_state_.permutation(data.shape[1])[:self.n_clusters]]*.2 + \
-                          self.random_state_.rand(self.n_clusters, data.shape[1]) * .1 
-        normalize(self.components, axis=1)
 
         self.pi = np.ones(self.n_clusters)
 
         normalize(self.pi)
+
+        seed_regions = self.random_state_.permutation(data[0].shape[0])[:self.n_clusters]
+
+        self.components = []
+        for i in range(len(data)):
+
+            ex = data[i][seed_regions] + self.component_prior
+            normalize(ex, axis=1)
+            self.components.append(ex)
+            #normalize(self.components, axis=1)
+
 
     def predict(self, data):
         p_z = self._e_step(data)
@@ -597,7 +1013,10 @@ class MixtureOfMultinomials:
         return self._e_step(data)
 
     def _log_likeli(self, data):
-        log_p_z = data.dot(np.log(self.components.T)) + np.log(self.pi)[None,:]
+        log_p_z = np.zeros((data[0].shape[0], self.n_clusters))
+        for i, datum in enumerate(data):
+            log_p_z += datum.dot(np.log(self.components[i].T))
+        log_p_z += np.log(self.pi)[None,:]
         return log_p_z
 
     def _e_step(self, data):
@@ -606,15 +1025,29 @@ class MixtureOfMultinomials:
         return np.exp(log_p_z)
 
     def _m_step(self, data, p_z):
-        stats = p_z.T.dot(data) + self.component_prior
-        self.components = stats
-        normalize(self.components, axis=1)
-
         self.pi = p_z.sum(0) + self.pi_prior
         normalize(self.pi)
 
+        for i, datum in enumerate(data):
+            stats = p_z.T.dot(datum) + self.component_prior
+            self.components[i] = stats
+            normalize(self.components[i], axis=1)
+
+
     def score(self, data):
         return logsumexp(self._log_likeli(data), axis=1).sum()
+
+    def get_important_components(self, min_explanation=0.5):
+        def get_major_indices(pi, mexp):
+            ipi = np.argsort(pi)
+
+            return ipi[np.cumsum(pi[ipi]) > mexp]
+        #i = np.where(self.pi >= min_explanation)[0]
+        i = get_major_indices(self.pi, min_explanation)
+        print('{}: n components: {}, proportion explained: {}'.format(self.pi, len(i), self.pi[i].sum()))
+        #print('explained proportion of data: {}'.format(self.pi[i].sum()))
+        return [comp[i].copy() for comp in self.components]
+
 
 class LDAWrapper:
     def __init__(self, lda):
