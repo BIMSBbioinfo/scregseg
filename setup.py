@@ -94,6 +94,8 @@ setup(
                 'sklearn',
                 'scipy',
                 'numpy',
+                'hmmlearn',
+                'janggu',
                 'pandas'
     ],
     extras_require={
@@ -113,16 +115,4 @@ setup(
             'scseg = scseg.cli:main',
         ]
     },
-    #cmdclass={'build_ext': optional_build_ext},
-    ext_modules=cythonize([
-        Extension(
-            splitext(relpath(path, 'src').replace(os.sep, '.'))[0],
-            sources=[path],
-            include_dirs=[dirname(path), numpy.get_include()],
-            libraries=['npymath'],
-            library_dirs=[os.path.join(numpy.get_include(), '..', 'lib')]
-        )
-        for root, _, _ in os.walk('src')
-        for path in glob(join(root, '*.pyx'))
-    ]),
 )
