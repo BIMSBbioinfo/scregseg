@@ -248,6 +248,7 @@ def main():
         scmodel = Scseg.load(args.storage)
         print('summarize results ...')
         make_state_summary(scmodel, args.storage, args.labels)
+        print('loglikelihood = {}'.format(scmodel.model.score(data)))
 
     elif args.program == 'seg_to_bed':
 
