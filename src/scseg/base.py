@@ -19,6 +19,7 @@ from .utils import _check_array, get_nsamples, get_batch
 #: Supported decoder algorithms.
 DECODER_ALGORITHMS = frozenset(("viterbi", "map"))
 
+EPS = 1e-6
 
 class MinibatchMonitor(ConvergenceMonitor):
     @property
@@ -639,12 +640,12 @@ class _BaseHMM(BaseEstimator):
         # The ``np.where`` calls guard against updating forbidden states
         # or transitions in e.g. a left-right HMM.
         if 's' in self.params:
-            startprob_ = self.startprob_prior - 1.0 + stats['start']
+            startprob_ = self.startprob_prior - 1.0 + stats['start'] + EPS
             self.startprob_ = np.where(self.startprob_ == 0.0,
                                        self.startprob_, startprob_)
             normalize(self.startprob_)
         if 't' in self.params:
-            transmat_ = self.transmat_prior - 1.0 + stats['trans']
+            transmat_ = self.transmat_prior - 1.0 + stats['trans'] + EPS
             self.transmat_ = np.where(self.transmat_ == 0.0,
                                       self.transmat_, transmat_)
             normalize(self.transmat_, axis=1)
