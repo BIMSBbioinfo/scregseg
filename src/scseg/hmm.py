@@ -104,6 +104,7 @@ class MultiModalMultinomialHMM(_BaseHMM):
                  batch_size=10000,
                  minibatchlearning=False,
                  learningrate=0.05, momentum=0.85,
+                 n_jobs=1, 
                  decay=0.1, schedule_steps=10):
         self.emission_prior=emission_prior
         _BaseHMM.__init__(self, n_components,
@@ -116,6 +117,7 @@ class MultiModalMultinomialHMM(_BaseHMM):
                           batch_size=batch_size,
                           minibatchlearning=minibatchlearning,
                           learningrate=learningrate,
+                          n_jobs=n_jobs,
                           momentum=momentum)
 
     def _init(self, X, lengths=None):
@@ -176,7 +178,6 @@ class MultiModalMultinomialHMM(_BaseHMM):
 
         if 'e' in self.params:
             for i, x in enumerate(X):
-                stats['obs'][i] += self.emission_prior
                 stats['obs'][i] += x.T.tocsr().dot(posteriors).T
 
     def _do_mstep(self, stats):
@@ -184,6 +185,7 @@ class MultiModalMultinomialHMM(_BaseHMM):
 
         if 'e' in self.params:
             for i, suffstats in enumerate(stats['obs']):
+                suffstats += self.emission_prior
                 self.emissionprob_[i] = (suffstats / suffstats.sum(axis=1)[:, np.newaxis])
 
     def _do_mstep_minibatch(self, stats):

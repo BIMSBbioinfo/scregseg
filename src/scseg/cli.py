@@ -76,6 +76,7 @@ segment.add_argument('--storage', dest='storage', type=str, help="Location for s
 segment.add_argument('--nstates', dest='nstates', type=int, default=20)
 segment.add_argument('--randomseed', dest='randomseed', type=int, default=32, help='Random seed')
 segment.add_argument('--niter', dest='niter', type=int, default=100, help='Number of EM iterations')
+segment.add_argument('--n_jobs', dest='n_jobs', type=int, default=1, help='Number Jobs')
 
 seg2bed = subparsers.add_parser('seg_to_bed', help='Export segmentation to bed-file or files')
 seg2bed.add_argument('--storage', dest='storage', type=str, help="Location for storing output")
@@ -154,8 +155,9 @@ def load_count_matrices(countfiles, bedfile):
         data.append(cm.cmat)
     return data, cannot
 
-def run_segmentation(data, bedfile, nstates, niter, random_state):
-    model = MultinomialHMM(n_components=nstates, n_iter=niter, random_state=random_state, verbose=True)
+def run_segmentation(data, bedfile, nstates, niter, random_state, n_jobs):
+    model = MultinomialHMM(n_components=nstates, n_iter=niter, random_state=random_state, verbose=True,
+                           n_jobs=n_jobs)
     model.fit(data)
     scmodel = Scseg(model)
     scmodel.segment(data, bedfile)
@@ -232,7 +234,7 @@ def main():
         data, cell_annot = load_count_matrices(args.counts, args.regions)
 
         print('fitting the hmm ...')
-        scmodel = run_segmentation(data, args.regions, args.nstates, args.niter, args.randomseed)
+        scmodel = run_segmentation(data, args.regions, args.nstates, args.niter, args.randomseed, args.n_jobs)
         #scmodel = Scseg.load(args.storage)
         #scmodel.segment(data, args.regions)
 

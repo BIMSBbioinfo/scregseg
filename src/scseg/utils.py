@@ -43,12 +43,12 @@ def iter_from_X_lengths(X, lengths, state=None):
     elif isinstance(lengths, int):
         # this chunk is for mini-batch learning
         if state is None:
-            starts = np.random.permutation(np.arange(0, x.shape[0], lengths))
+            starts = np.arange(0, x.shape[0], lengths)
         else:
             starts = state.permutation(np.arange(0, x.shape[0], lengths))
         for i, start in enumerate(starts):
             yield start, min(start + lengths, x.shape[0])
-    else:
+    elif isinstance(lengths, list):
         n_samples = x.shape[0]
         end = np.cumsum(lengths).astype(np.int32)
         start = end - lengths

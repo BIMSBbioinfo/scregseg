@@ -15,11 +15,24 @@ from hmmlearn.base import ConvergenceMonitor
 from hmmlearn.utils import normalize, log_normalize, log_mask_zero
 from .utils import iter_from_X_lengths
 from .utils import _check_array, get_nsamples, get_batch
+from sklearn.utils._joblib import Parallel, delayed, effective_n_jobs
 
 #: Supported decoder algorithms.
 DECODER_ALGORITHMS = frozenset(("viterbi", "map"))
 
 EPS = 1e-6
+
+def compute_posterior(self, X):
+    stats = self._initialize_sufficient_statistics()
+    framelogprob = self._compute_log_likelihood(X)
+    logprob, fwdlattice = self._do_forward_pass(framelogprob)
+#    curr_logprob += logprob
+    bwdlattice = self._do_backward_pass(framelogprob)
+    posteriors = self._compute_posteriors(fwdlattice, bwdlattice)
+    self._accumulate_sufficient_statistics(
+        stats, X, framelogprob, posteriors, fwdlattice,
+        bwdlattice)
+    return framelogprob, posteriors, fwdlattice, bwdlattice, logprob, stats
 
 class MinibatchMonitor(ConvergenceMonitor):
     @property
@@ -100,6 +113,7 @@ class _BaseHMM(BaseEstimator):
                  batch_size=10000,
                  minibatchlearning=False,
                  learningrate=0.05,
+                 n_jobs=1, 
                  momentum=0.85, decay=0.1,
                  schedule_steps=10):
         self.n_components = n_components
@@ -119,6 +133,7 @@ class _BaseHMM(BaseEstimator):
         self.momentum = momentum
         self.decay = decay
         self.schedule_steps = schedule_steps
+        self.n_jobs = n_jobs
         if minibatchlearning:
             self.monitor_ = MinibatchMonitor(self.tol, self.n_iter, self.verbose)
         else:
@@ -420,18 +435,57 @@ class _BaseHMM(BaseEstimator):
                     break
 
         if True:
+            n_jobs = effective_n_jobs(self.n_jobs)
+            parallel = Parallel(n_jobs=n_jobs, verbose=max(0,
+                                self.verbose - 1))
+            
+            print('using {} jobs'.format(n_jobs))
+            lengths = X[0].shape[0]//n_jobs
+
+#            results = parallel(delayed(compute_posterior)(self, get_batch(X, i, j))
+#                               for i, j in iter_from_X_lengths(X, lengths))
+#
+#            framelogprob, posteriors, fwdlattice, bwdlattice, logprob = zip(*results)
+#            n = 0
+#            for i, j in iter_from_X_lengths(X, lengths):
+#                self._accumulate_sufficient_statistics(
+#                    stats, get_batch(X, i, j), framelogprob[n], posteriors[n], fwdlattice[n],
+#                    bwdlattice[n])
+#                curr_logprob += logprob
+#                n += 1
+
             for iter in range(self.n_iter):
-                stats = self._initialize_sufficient_statistics()
+                #stats = self._initialize_sufficient_statistics()
                 curr_logprob = 0
+                
+                results = parallel(delayed(compute_posterior)(self, get_batch(X, i, j))
+                                   for i, j in iter_from_X_lengths(X, lengths))
+
+                framelogprob, posteriors, fwdlattice, bwdlattice, logprob, statssub = zip(*results)
+                n = 0
+                stats = self._initialize_sufficient_statistics()
                 for i, j in iter_from_X_lengths(X, lengths):
-                    framelogprob = self._compute_log_likelihood(get_batch(X, i, j))
-                    logprob, fwdlattice = self._do_forward_pass(framelogprob)
-                    curr_logprob += logprob
-                    bwdlattice = self._do_backward_pass(framelogprob)
-                    posteriors = self._compute_posteriors(fwdlattice, bwdlattice)
-                    self._accumulate_sufficient_statistics(
-                        stats, get_batch(X, i, j), framelogprob, posteriors, fwdlattice,
-                        bwdlattice)
+                #    self._accumulate_sufficient_statistics(
+                #        stats, get_batch(X, i, j), framelogprob[n], posteriors[n], fwdlattice[n],
+                #        bwdlattice[n])
+                    for k in stats:
+                        if isinstance(stats[k], list):
+                            for i, _ in enumerate(stats[k]):
+                                stats[k][i] += statssub[n][k][i]
+                        else:
+                            stats[k] += statssub[n][k]
+                    curr_logprob += logprob[n]
+                    n += 1
+
+           #     for i, j in iter_from_X_lengths(X, lengths):
+           #         framelogprob = self._compute_log_likelihood(get_batch(X, i, j))
+           #         logprob, fwdlattice = self._do_forward_pass(framelogprob)
+           #         curr_logprob += logprob
+           #         bwdlattice = self._do_backward_pass(framelogprob)
+           #         posteriors = self._compute_posteriors(fwdlattice, bwdlattice)
+           #         self._accumulate_sufficient_statistics(
+           #             stats, get_batch(X, i, j), framelogprob, posteriors, fwdlattice,
+           #             bwdlattice)
 
                 # XXX must be before convergence check, because otherwise
                 #     there won't be any updates for the case ``n_iter=1``.
