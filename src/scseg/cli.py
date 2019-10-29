@@ -22,6 +22,7 @@ from scseg.countmatrix import write_cannot_table
 from scseg.countmatrix import make_counting_bins
 from scseg.countmatrix import sparse_count_reads_in_regions
 from scseg.hmm import MultiModalMultinomialHMM as MultinomialHMM
+from scseg.hmm import MultiModalMixHMM as MixMultinomialHMM
 from scseg import Scseg
 from scipy.sparse import hstack
 import matplotlib.pyplot as plt
@@ -77,6 +78,7 @@ segment.add_argument('--nstates', dest='nstates', type=int, default=20)
 segment.add_argument('--randomseed', dest='randomseed', type=int, default=32, help='Random seed')
 segment.add_argument('--niter', dest='niter', type=int, default=100, help='Number of EM iterations')
 segment.add_argument('--n_jobs', dest='n_jobs', type=int, default=1, help='Number Jobs')
+segment.add_argument('--meth', dest='meth', type=str, default='mul', choices=['mix','mul'], help='multinomialhmm or mixhmm')
 
 seg2bed = subparsers.add_parser('seg_to_bed', help='Export segmentation to bed-file or files')
 seg2bed.add_argument('--storage', dest='storage', type=str, help="Location for storing output")
@@ -155,9 +157,13 @@ def load_count_matrices(countfiles, bedfile):
         data.append(cm.cmat)
     return data, cannot
 
-def run_segmentation(data, bedfile, nstates, niter, random_state, n_jobs):
-    model = MultinomialHMM(n_components=nstates, n_iter=niter, random_state=random_state, verbose=True,
-                           n_jobs=n_jobs)
+def run_segmentation(data, bedfile, nstates, niter, random_state, n_jobs, meth):
+    if meth == 'mix':
+        model = MixMultinomialHMM(n_components=nstates, n_iter=niter, random_state=random_state, verbose=True,
+                               n_jobs=n_jobs)
+    else:
+        model = MultinomialHMM(n_components=nstates, n_iter=niter, random_state=random_state, verbose=True,
+                               n_jobs=n_jobs)
     model.fit(data)
     scmodel = Scseg(model)
     scmodel.segment(data, bedfile)
@@ -184,7 +190,8 @@ def plot_state_annotation_relationship(model, storage, labels, threshold=0.0, gr
         if len(model._segments[label].unique()) == 2:
             sns.countplot(y='name', hue=label, data=model._segments[model._segments.Prob_max>=threshold], ax=ax)
         else:
-            sns.boxplot(x=label, y='name', data=model._segments[model._segments.Prob_max>=threshold], hue=groupby, orient='h', ax=ax)
+            model._segments['log_'+label] = np.log10(model._segments[label]+1)
+            sns.boxplot(x='log_'+label, y='name', data=model._segments[model._segments.Prob_max>=threshold], hue=groupby, orient='h', ax=ax)
         gr = '' if groupby is None else '_'+groupby
         print('writing {}'.format(os.path.join(storage, 'annotation', label + gr+'_relation.png')))
         fig.tight_layout()
@@ -234,7 +241,7 @@ def main():
         data, cell_annot = load_count_matrices(args.counts, args.regions)
 
         print('fitting the hmm ...')
-        scmodel = run_segmentation(data, args.regions, args.nstates, args.niter, args.randomseed, args.n_jobs)
+        scmodel = run_segmentation(data, args.regions, args.nstates, args.niter, args.randomseed, args.n_jobs, args.meth)
         #scmodel = Scseg.load(args.storage)
         #scmodel.segment(data, args.regions)
 
@@ -294,6 +301,10 @@ def main():
         for i, folds in enumerate(assoc):
             sns.clustermap(folds, cmap="Blues", robust=True).savefig(os.path.join(args.storage,
                        'celltyping', 'cellstate_heatmap_{}_{}.png'.format(method, datanames[i])))
+            print(folds.shape, scmodel.n_components, celllabels[i].shape, celllabels[i].head())
+            df = pd.DataFrame(folds, columns=[scmodel.to_statename(i) for i in range(scmodel.n_components)],
+                              index=celllabels[i].cell)
+            df.to_csv(os.path.join(args.storage, 'celltyping', 'cell2state_{}.csv'.format(method)))
 
         tot_assoc = np.concatenate(assoc, axis=0)
         embedding = UMAP().fit_transform(tot_assoc)
