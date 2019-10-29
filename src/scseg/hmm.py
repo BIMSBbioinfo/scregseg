@@ -19,6 +19,7 @@ from scipy.sparse import issparse
 from scipy.stats import nbinom
 from sklearn import cluster
 from sklearn.utils import check_random_state
+import os
 
 from hmmlearn import _utils
 from .base import _BaseHMM
@@ -131,12 +132,22 @@ class MultiModalMultinomialHMM(_BaseHMM):
             self.n_features = []
             self.emissionprob_ = []
             for modi in range(len(X)):
+                # random init but with read depth offset
                 _, n_features = X[modi].shape
 
                 self.n_features.append(n_features)
 
-                self.emissionprob_.append(self.random_state \
-                    .rand(self.n_components, n_features))
+#                self.emissionprob_.append(self.random_state \
+#                    .rand(self.n_components, n_features))
+
+                x = np.array(X[modi].sum(0))
+                normalize(x)
+                r = self.random_state.rand(self.n_components, n_features)
+
+                normalize(r)
+                x = .9*x + .1*r
+                self.emissionprob_.append(x)
+                    #.rand(self.n_components, n_features))
                 normalize(self.emissionprob_[-1], axis=1)
 
     def _check(self):
@@ -151,6 +162,16 @@ class MultiModalMultinomialHMM(_BaseHMM):
                 raise ValueError("emissionprobs must sum to 1.0 (got {})"
                                          .format(emission.sum(axis=1)))
             assert np.all(emission > 0.0), "emissionprobs must be positive"
+
+    def save(self, path):
+        """
+        saves current model parameters
+        """
+        path = os.path.join(path, 'hmm.npz')
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        #mpath = os.path.join(path, 'modelparams', 'hmm.npz')
+        savelist = [self.transmat_, self.startprob_] + self.emissionprob_
+        np.savez(path, *savelist)
 
     def _compute_log_likelihood(self, X):
         res = np.zeros((get_nsamples(X), self.n_components))

@@ -61,20 +61,11 @@ class Scseg(object):
         self._color = {name: el for name, el in \
                        zip(self.to_statenames(np.arange(self.n_components)), sns.color_palette('bright', self.n_components))}
 
-    def save_model(self, path):
-        """
-        saves current model parameters
-        """
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        #mpath = os.path.join(path, 'modelparams', 'hmm.npz')
-        savelist = [self.model.transmat_, self.model.startprob_] + self.model.emissionprob_
-        np.savez(path, *savelist)
-
     def save(self, path):
         """
         saves current model parameters
         """
-        self.save_model(os.path.join(path, 'modelparams', 'hmm.npz'))
+        self.model.save(os.path.join(path, 'modelparams'))
 
         if hasattr(self, "_segments"):
             self.export_segmentation(os.path.join(path, 'segments', 'segmentation.tsv'), 0.0)
@@ -84,17 +75,36 @@ class Scseg(object):
         """
         loads model parameters from path
         """
-        npzfile = np.load(os.path.join(path, 'modelparams', 'hmm.npz'))
+        if os.path.exists(os.path.join(path, 'modelparams', 'hmm.npz')):
+            npzfile = np.load(os.path.join(path, 'modelparams', 'hmm.npz'))
 
-        trans = npzfile['arr_0']
-        start = npzfile['arr_1']
-        emissions = [npzfile[file] for file in npzfile.files[2:]]
+            trans = npzfile['arr_0']
+            start = npzfile['arr_1']
+            emissions = [npzfile[file] for file in npzfile.files[2:]]
 
-        model = MultiModalMultinomialHMM(len(start))
-        model.transmat_ = trans
-        model.startprob_ = start
-        model.emissionprob_ = emissions
-        model.n_features = [e.shape[1] for e in emissions]
+            model = MultiModalMultinomialHMM(len(start))
+            model.transmat_ = trans
+            model.startprob_ = start
+            model.emissionprob_ = emissions
+            model.n_features = [e.shape[1] for e in emissions]
+        if os.path.exists(os.path.join(path, 'modelparams', 'mixhmm.npz')):
+            npzfile = np.load(os.path.join(path, 'modelparams', 'mixhmm.npz'))
+
+            trans = npzfile['arr_0']
+            start = npzfile['arr_1']
+            alpha = npzfile['arr_2']
+            emissions = [npzfile[file] for file in npzfile.files[3:]]
+            elen = len(emissions) // 2
+            em = emissions[:elen]
+            eb = emissions[elen:]
+
+            model = MultiModalMultinomialHMM(len(start))
+            model.transmat_ = trans
+            model.startprob_ = start
+            model.alpha_ = alpha
+            model.emissionprob_ = em
+            model.emissionbackground_ = eb
+            model.n_features = [e.shape[1] for e in emissions]
 
         scmodel = cls(model)
 
