@@ -22,6 +22,7 @@ from scseg.countmatrix import write_cannot_table
 from scseg.countmatrix import make_counting_bins
 from scseg.countmatrix import sparse_count_reads_in_regions
 from scseg.hmm import MultiModalMultinomialHMM as MultinomialHMM
+from scseg.hmm import MultiModalDirMulHMM as DirMultinomialHMM
 from scseg.hmm import MultiModalMixHMM as MixMultinomialHMM
 from scseg import Scseg
 from scipy.sparse import hstack
@@ -78,7 +79,7 @@ segment.add_argument('--nstates', dest='nstates', type=int, default=20)
 segment.add_argument('--randomseed', dest='randomseed', type=int, default=32, help='Random seed')
 segment.add_argument('--niter', dest='niter', type=int, default=100, help='Number of EM iterations')
 segment.add_argument('--n_jobs', dest='n_jobs', type=int, default=1, help='Number Jobs')
-segment.add_argument('--meth', dest='meth', type=str, default='mul', choices=['mix','mul'], help='multinomialhmm or mixhmm')
+segment.add_argument('--meth', dest='meth', type=str, default='mul', choices=['mix','mul', 'dirmul'], help='multinomialhmm or mixhmm')
 
 seg2bed = subparsers.add_parser('seg_to_bed', help='Export segmentation to bed-file or files')
 seg2bed.add_argument('--storage', dest='storage', type=str, help="Location for storing output")
@@ -160,6 +161,9 @@ def load_count_matrices(countfiles, bedfile):
 def run_segmentation(data, bedfile, nstates, niter, random_state, n_jobs, meth):
     if meth == 'mix':
         model = MixMultinomialHMM(n_components=nstates, n_iter=niter, random_state=random_state, verbose=True,
+                               n_jobs=n_jobs)
+    elif meth == 'dirmul':
+        model = DirMultinomialHMM(n_components=nstates, n_iter=niter, random_state=random_state, verbose=True,
                                n_jobs=n_jobs)
     else:
         model = MultinomialHMM(n_components=nstates, n_iter=niter, random_state=random_state, verbose=True,

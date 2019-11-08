@@ -6,6 +6,8 @@ from pybedtools import BedTool
 from pybedtools import Interval
 from pybedtools.helpers import cleanup
 from .hmm import MultiModalMultinomialHMM
+from .hmm import MultiModalMixHMM
+from .hmm import MultiModalDirMulHMM
 from scipy.stats import binom
 from scipy.stats import norm
 from scipy.sparse import csc_matrix
@@ -76,35 +78,11 @@ class Scseg(object):
         loads model parameters from path
         """
         if os.path.exists(os.path.join(path, 'modelparams', 'hmm.npz')):
-            npzfile = np.load(os.path.join(path, 'modelparams', 'hmm.npz'))
-
-            trans = npzfile['arr_0']
-            start = npzfile['arr_1']
-            emissions = [npzfile[file] for file in npzfile.files[2:]]
-
-            model = MultiModalMultinomialHMM(len(start))
-            model.transmat_ = trans
-            model.startprob_ = start
-            model.emissionprob_ = emissions
-            model.n_features = [e.shape[1] for e in emissions]
+            model = MultiModalMultinomialHMM.load(os.path.join(path, 'modelparams', 'hmm.npz'))
+        if os.path.exists(os.path.join(path, 'modelparams', 'dirmulhmm.npz')):
+            model = MultiModalDirMulHMM.load(os.path.join(path, 'modelparams', 'dirmulhmm.npz'))
         if os.path.exists(os.path.join(path, 'modelparams', 'mixhmm.npz')):
-            npzfile = np.load(os.path.join(path, 'modelparams', 'mixhmm.npz'))
-
-            trans = npzfile['arr_0']
-            start = npzfile['arr_1']
-            alpha = npzfile['arr_2']
-            emissions = [npzfile[file] for file in npzfile.files[3:]]
-            elen = len(emissions) // 2
-            em = emissions[:elen]
-            eb = emissions[elen:]
-
-            model = MultiModalMultinomialHMM(len(start))
-            model.transmat_ = trans
-            model.startprob_ = start
-            model.alpha_ = alpha
-            model.emissionprob_ = em
-            model.emissionbackground_ = eb
-            model.n_features = [e.shape[1] for e in emissions]
+            model = MultiModalMixHMM.load(os.path.join(path, 'modelparams', 'mixhmm.npz'))
 
         scmodel = cls(model)
 
@@ -208,7 +186,7 @@ class Scseg(object):
         """
         plots read depths associated with states
         """
-        fig, axes = plt.subplots(1,len(self.model.emissionprob_))
+        fig, axes = plt.subplots(1,len(self.model.n_features))
         if not isinstance(axes, np.ndarray):
             axes = np.array([axes])
         segs = self._segments.copy()
@@ -835,51 +813,51 @@ class Scseg(object):
 #        subdf.name = x
 #        return subdf, sdata
 
-    def finetuning(self, data, query_states, n_subclusters, 
-                   state_prob_threshold=0.99, min_explain_subcluster=0.5,
-                   params='st',
-                   n_iter_finetune=15):
-
-        logfold_threshold=None           
-
-        if not isinstance(query_states, list):
-            query_states = [query_states]
-
-        replacement_collection = {}
-
-        for qstate in query_states:
-
-            sdata, subdf = self.get_subdata(data, qstate, state_prob_threshold=state_prob_threshold)
-             
-            for sd in sdata:
-                print('subcluster {} with subdata {}x{}'.format(qstate, sd.shape[0], sd.shape[1]))
-
-            mm = MixtureOfMultinomials(n_subclusters, n_iters=100, random_state=64)
-
-            print('mix fitting')
-            mm.fit(sdata)
-
-            replacement_collection[qstate] = mm.get_important_components(min_explain_subcluster)
-
-        for r in replacement_collection:
-            print(r + ': {}'.format(replacement_collection[r][0]))
-        newcomps_ = self.get_augmented_components(replacement_collection)
-
-        ncomp = newcomps_[0].shape[0]
-
-        print('new number of segments: {}'.format(ncomp))
-
-        # instantiate a new hmm and freeze the emissions
-        model = MultiModalMultinomialHMM(ncomp, init_params='st', params='st',
-                                         verbose=True,
-                                         n_iter=10, random_state=32)
-
-        model.emissionprob_ = newcomps_
-        model.n_features = [e.shape[1] for e in newcomps_]
-        
-        model.fit(data)
-
-        return model
+#    def finetuning(self, data, query_states, n_subclusters, 
+#                   state_prob_threshold=0.99, min_explain_subcluster=0.5,
+#                   params='st',
+#                   n_iter_finetune=15):
+#
+#        logfold_threshold=None           
+#
+#        if not isinstance(query_states, list):
+#            query_states = [query_states]
+#
+#        replacement_collection = {}
+#
+#        for qstate in query_states:
+#
+#            sdata, subdf = self.get_subdata(data, qstate, state_prob_threshold=state_prob_threshold)
+#             
+#            for sd in sdata:
+#                print('subcluster {} with subdata {}x{}'.format(qstate, sd.shape[0], sd.shape[1]))
+#
+#            mm = MixtureOfMultinomials(n_subclusters, n_iters=100, random_state=64)
+#
+#            print('mix fitting')
+#            mm.fit(sdata)
+#
+#            replacement_collection[qstate] = mm.get_important_components(min_explain_subcluster)
+#
+#        for r in replacement_collection:
+#            print(r + ': {}'.format(replacement_collection[r][0]))
+#        newcomps_ = self.get_augmented_components(replacement_collection)
+#
+#        ncomp = newcomps_[0].shape[0]
+#
+#        print('new number of segments: {}'.format(ncomp))
+#
+#        # instantiate a new hmm and freeze the emissions
+#        model = MultiModalMultinomialHMM(ncomp, init_params='st', params='st',
+#                                         verbose=True,
+#                                         n_iter=10, random_state=32)
+#
+#        model.emissionprob_ = newcomps_
+#        model.n_features = [e.shape[1] for e in newcomps_]
+#        
+#        model.fit(data)
+#
+#        return model
 
     def get_subdata(self, data, query_states, collapse_neighbors=True, state_prob_threshold=0.99):
 
@@ -941,26 +919,26 @@ class Scseg(object):
         return submats, subset_merged
 
 
-    def get_augmented_components(self, relacement_components):
-        
-        # number of original components
-        ncomp = self.n_components
-
-        # components to be replaced
-        irm = np.array([self.to_stateid(rlp) for rlp in relacement_components])
-
-        # subtract those from the original components
-        keepcomp = np.setdiff1d(np.arange(ncomp), irm)
-        #keepcomp = np.arange(ncomp)
-        keep_ems = [ems[keepcomp].copy() for ems in self.model.emissionprob_]
-
-        # append the replacement components
-        augm_ems = []
-        rc = relacement_components
-        for i in range(len(self.model.emissionprob_)):
-            augm_ems.append(np.concatenate((keep_ems[i], ) + tuple([rc[k][i] for k in rc if rc[k][i].shape[0]>1]), axis=0))
-
-        return augm_ems
+#    def get_augmented_components(self, relacement_components):
+#        
+#        # number of original components
+#        ncomp = self.n_components
+#
+#        # components to be replaced
+#        irm = np.array([self.to_stateid(rlp) for rlp in relacement_components])
+#
+#        # subtract those from the original components
+#        keepcomp = np.setdiff1d(np.arange(ncomp), irm)
+#        #keepcomp = np.arange(ncomp)
+#        keep_ems = [ems[keepcomp].copy() for ems in self.model.emissionprob_]
+#
+#        # append the replacement components
+#        augm_ems = []
+#        rc = relacement_components
+#        for i in range(len(self.model.emissionprob_)):
+#            augm_ems.append(np.concatenate((keep_ems[i], ) + tuple([rc[k][i] for k in rc if rc[k][i].shape[0]>1]), axis=0))
+#
+#        return augm_ems
 
 
 class MixtureOfMultinomials:
