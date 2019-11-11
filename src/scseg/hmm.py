@@ -61,6 +61,39 @@ def dirmul_loglikeli(x, alpha, maxcounts=3):
     return res
 
 
+def dirmul_loglikeli_sp(x, alpha, maxcounts=3):
+    """
+    x : np.array
+      regions x cell count matrix
+    alpha : np.array
+      state x cell parameter matrix
+    """
+    x = x.tocsr().copy()
+    x.data[x.data>=maxcounts] = maxcounts - 1
+    alpha0 = alpha.sum(1)[None,:] # state x 1
+    n = np.asarray(x.sum(1)) # region x 1
+    res = gammaln(alpha0) - gammaln(n + alpha0)
+    # x = 1, 2, 3 .. number of counts
+    # n states
+    # n cells
+    precomp = gammaln(alpha[None,:,:] + np.arange(1, maxcounts)[:,None, None]) - gammaln(alpha)[None,:,:]
+    for idx in range(x.shape[0]):
+        ids = x.indices[x.indptr[idx]:x.indptr[idx+1]]
+        cnts = x.data[x.indptr[idx]:x.indptr[idx+1]].astype(np.int64)
+        res[idx] += precomp[cnts-1, :, ids].sum(0)
+    return res
+
+
+def test():
+    #10 regions, 3 cells, 4 states
+    x = csr_matrix(np.random.choice(4,(1000,300)))
+    alpha = np.random.rand(4,300)
+    dirmul_loglikeli_naive(x,alpha)
+    dirmul_loglikeli(x,alpha)
+    dirmul_loglikeli_sp(x,alpha)
+    # the batched version
+
+
 class MultiModalDirMulHMM(_BaseHMM):
     """Hidden Markov Model with dirichlet-ultinomial (discrete) emissions
     Parameters
@@ -235,7 +268,7 @@ class MultiModalDirMulHMM(_BaseHMM):
         # loop over datasets each represented via a multinomial
         for ep, es, x in zip(self.emission_prior_, self.emission_suffstats_, X):
             # compute the marginal likelihood with the current posterior parameters
-            res += dirmul_loglikeli(x, ep+es)
+            res += dirmul_loglikeli_sp(x, ep+es)
 
         return res
 
