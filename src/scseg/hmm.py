@@ -28,23 +28,6 @@ from hmmlearn.utils import normalize
 
 __all__ = ["MultiModalMultinomialHMM", "MultiModalMixHMM", "MultiModalDirMulHMM"]
 
-#from numba import jit, njit
-#from numba import prange
-#from operator import mod, floordiv, pow
-#
-#from numba.math import lgamma
-#
-#@njit(parallel=True)
-#@jit
-#def numba_dirmul_loglikeli(x, alpha):
-#    res = np.zeros((x.shape[0], alpha.shape[0]))
-#    for c in range(x.shape[1]):
-#        for i in range(x.shape[0]): # sum over datapoints / regions
-#            res[i,:] -= lgamma(x[i,c]+1).sum()
-#            for j in range(alpha.shape[0]): # sum over states
-#                res[i,j] += lgamma(x[i].toarray().flatten() + alpha[j]).sum()
-#    return res
-
 
 def dirmul_loglikeli_naive(x, alpha):
     x = x.tocsr()
