@@ -234,7 +234,7 @@ class MultiModalDirMulHMM(_BaseHMM):
 
     @classmethod
     def load(cls, path):
-        npzfile = np.load(os.path.join(path, 'modelparams', 'hmm.npz'))
+        npzfile = np.load(os.path.join(path, 'modelparams', 'dirmulhmm.npz'))
 
         trans = npzfile['arr_0']
         start = npzfile['arr_1']
