@@ -156,9 +156,9 @@ class MultiModalDirMulHMM(_BaseHMM):
     Examples
     --------
     >>> from hmmlearn.hmm import MultiModalMultinomialHMM
-    >>> MultiModalMultinomialHMM(n_components=2)
+    >>> MultiModalDirMulHMM(n_components=2)
     ...                             #doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
-    MultiModalMultinomialHMM(algorithm='viterbi',...
+    MultiModalDirMulHMM(algorithm='viterbi',...
     """
     # TODO: accept the prior on emissionprob_ for consistency.
     def __init__(self, n_components=1,
@@ -170,7 +170,7 @@ class MultiModalDirMulHMM(_BaseHMM):
                  batch_size=10000,
                  minibatchlearning=False,
                  learningrate=0.05, momentum=0.85,
-                 n_jobs=1, 
+                 n_jobs=1,
                  decay=0.1, schedule_steps=10):
         self.prior_obs = emission_prior
         _BaseHMM.__init__(self, n_components,
@@ -216,8 +216,6 @@ class MultiModalDirMulHMM(_BaseHMM):
                 normalize(r)
                 #x = .9*x + .1*r
                 self.emission_suffstats_.append(r)
-                    #.rand(self.n_components, n_features))
-                #normalize(self.emissionprob_[-1], axis=1)
 
     def _check(self):
         super(MultiModalDirMulHMM, self)._check()
@@ -376,7 +374,7 @@ class MultiModalMultinomialHMM(_BaseHMM):
                  batch_size=10000,
                  minibatchlearning=False,
                  learningrate=0.05, momentum=0.85,
-                 n_jobs=1, 
+                 n_jobs=1,
                  decay=0.1, schedule_steps=10):
         self.emission_prior=emission_prior
         _BaseHMM.__init__(self, n_components,
@@ -585,7 +583,7 @@ class MultiModalMixHMM(_BaseHMM):
                  batch_size=10000,
                  minibatchlearning=False,
                  learningrate=0.05, momentum=0.85,
-                 n_jobs=1, 
+                 n_jobs=1,
                  decay=0.1, schedule_steps=10):
         self.emission_prior=emission_prior
         _BaseHMM.__init__(self, n_components,
@@ -620,7 +618,7 @@ class MultiModalMixHMM(_BaseHMM):
                 x = np.array(X[modi].sum(0))
                 normalize(x)
                 self.emissionbackground_.append(x)
-                
+
                 r = self.random_state.rand(self.n_components, n_features)
 
                 normalize(r)
@@ -730,12 +728,12 @@ class MultiModalMixHMM(_BaseHMM):
         self.alpha_ = stats['alphas'] / stats['norm']
         print('alpha', self.alpha_)
         if stats['trim-alpha']:
-            self.alpha_ = np.where(self.alpha_ >.99, self.alpha_, .99) 
+            self.alpha_ = np.where(self.alpha_ >.99, self.alpha_, .99)
         #    self.alpha_ = np.ones_like(self.alpha_)
             print('but trimmed', self.alpha_)
 
         if 'e' in self.params:
-            
+
             #np.testing.assert_allclose(stats['alphas'], np.ones_like(res[0]))
             #assert all(stats['alphas'] < 1.), stats['alphas']
             #assert all(stats['alphas'] > 0.), stats['alphas']
@@ -746,6 +744,8 @@ class MultiModalMixHMM(_BaseHMM):
         self._check()
 
     def _do_mstep_minibatch(self, stats):
+        raise NotImplementedError
+
         super(MultiModalMixHMM, self)._do_mstep_minibatch(stats)
 
         if 'e' in self.params:

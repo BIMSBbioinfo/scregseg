@@ -44,7 +44,7 @@ def faster_fft(c1, c2, ncomp, maxlen):
         do_i = mod(i, ncomp)
         curr_i = mod(floordiv(i, ncomp), ncomp)
         prev_i = mod(floordiv(i, ncomp*ncomp), ncomp)
-        
+
         for ic in range(maxlen+1):
             for middle_i in range(ncomp):
                 fft_cnt_dist[ic, do_i, prev_i, curr_i] += c1[ic, do_i, prev_i, middle_i] * c2[ic, do_i, middle_i, curr_i]
@@ -71,7 +71,7 @@ class Scseg(object):
 
         if hasattr(self, "_segments"):
             self.export_segmentation(os.path.join(path, 'segments', 'segmentation.tsv'), 0.0)
-        
+
     @classmethod
     def load(cls, path):
         """
@@ -111,7 +111,7 @@ class Scseg(object):
         """
         converts state name (str) to state id (integer)
         """
-   
+
         return int(statename[len(self._nameprefix):])
 
     def cell2state_enrichment(self, data, mode='logfold', prob_max_threshold=0.0, post=False):
@@ -123,7 +123,7 @@ class Scseg(object):
         """
 
         #stateprob = self.model.get_stationary_distribution()
-        
+
         if post:
             # use posterior decoding
             print('use post')
@@ -163,7 +163,7 @@ class Scseg(object):
             enrs.append(mat)
 
         return enrs
-        
+
     def plot_state_statistics(self):
         """
         plot state statistics
@@ -174,7 +174,7 @@ class Scseg(object):
         fig, ax = plt.subplots(1, 2)
         state_counts = pd.Series(self._segments.name).value_counts()
 
-        sns.barplot(y=[l for l in state_counts.index], 
+        sns.barplot(y=[l for l in state_counts.index],
                     x=state_counts,
                     ax=ax[0],
                     palette=[self.color[i] for i in state_counts.index])
@@ -197,7 +197,7 @@ class Scseg(object):
             sns.boxplot(x="log_readdepth_{}".format(labels[i]), y='name', data=segs, orient='h', ax=ax)
         fig.tight_layout()
         return fig
-                    
+
     def plot_logfolds_dist(self, logfoldenr, query_state=None):
         """
         plots log fold distribution
@@ -357,7 +357,7 @@ class Scseg(object):
     def geneset_observed_state_counts_old(self, genesets, genes, flanking=50000):
         """
         collect state counts around gene sets for enrichment analysis.
-       
+
         """
         if isinstance(genes, str) and os.path.exists(genes):
             genes = BedTool(genes)
@@ -386,7 +386,7 @@ class Scseg(object):
         geneset_length = np.zeros(ngsets)
 
         for igeneset, geneset in enumerate(genesets):
-            
+
             if isinstance(geneset, str) and os.path.exists(geneset):
                 if geneset.endswith('.bed'):
                     genenames =[iv.name for iv in BedTool(geneset)]
@@ -400,7 +400,7 @@ class Scseg(object):
 
             # collect segments in the surounding region
             roi_segments = segment_bedtool.intersect(flanked_tss_, wa=True, u=True)
-            
+
             geneset_length[igeneset] = len(roi_segments)
             # obtain segment counts
 
@@ -414,7 +414,7 @@ class Scseg(object):
     def geneset_observed_state_counts(self, genesets, flanking=50000):
         """
         collect state counts around gene sets for enrichment analysis.
-       
+
         """
 
         genesetnames = [os.path.basename(x) for x in genesets]
@@ -436,7 +436,7 @@ class Scseg(object):
         geneset_length = np.zeros(ngsets)
 
         for igeneset, geneset in enumerate(genesets):
-            
+
             # obtain tss's for genes
             tss = BedTool([Interval(iv.chrom, iv.end if iv.strand=='-' else iv.start,
                                     (iv.end if iv.strand=='-' else iv.start) + 1,
@@ -447,7 +447,7 @@ class Scseg(object):
 
             # collect segments in the surounding region
             roi_segments = segment_bedtool.intersect(flanked_tss_, wa=True, u=True)
-            
+
             geneset_length[igeneset] = len(roi_segments)
             # obtain segment counts
 
@@ -476,12 +476,12 @@ class Scseg(object):
         region_length = np.zeros(nregions)
 
         for iregion, region in enumerate(regions):
-            
+
             subregs = _segments[(_segments.chrom == region.chrom) & (_segments.start >= region.start) &  (_segments.end <= region.end)]
             region_length[iregion] = len(subregs)
-            
+
             for istate in range(self.n_components):
-               
+
                 observed_segmentcounts[iregion, istate] = len(subregs[subregs.name == self.to_statename(istate)])
         return observed_segmentcounts, region_length, regionnames
 
@@ -529,7 +529,7 @@ class Scseg(object):
 
         gene2annot = np.zeros((ngene, ngsets))
         for igeneset, geneset in enumerate(genesets):
-            
+
                 if isinstance(geneset, str) and os.path.exists(geneset):
                     if geneset.endswith('.bed'):
                         genenames =[iv.name for iv in BedTool(geneset)]
@@ -550,7 +550,7 @@ class Scseg(object):
 
         for istate, _ in enumerate(states):
             for igeneset, _ in enumerate(genesets):
-                
+
                 enr[istate, igeneset] = -hypergeom.logsf(overlap[istate, igeneset]-1, ngene, ns[istate], Ns[igeneset])
 
         cleanup()
@@ -566,7 +566,7 @@ class Scseg(object):
 #
 #        state2refanchor = np.zeros((self.n_components, len(ref_anchors)))
 #        states = self._segments.name.unique()
-#        
+#
 #        for istate in range(self.n_components):
 #            state = self.to_statename(istate)
 #            segments = self._segments[(self._segments.name == state) & (self._segments.Prob_max >= prob_max_threshold)]
@@ -574,7 +574,7 @@ class Scseg(object):
 #
 #            overlapbed = ref_anchors.intersect(segbed, wa=True)
 #            state2refanchor[istate, np.asarray([int(iv.name) for iv in overlapbed])] = 1
-#        
+#
 #        if hasattr(samplefiles, 'shape') and samplefiles.shape[0] == len(ref_anchors):
 #            featuremat = samplefiles
 #        else:
@@ -613,9 +613,9 @@ class Scseg(object):
 
 
     def broadregion_enrichment(self, state_counts, regionlengths, regionnames=None, mode='logfold'):
-        
+
         stateprob = self.model.get_stationary_distribution()
-        
+
         enr = np.zeros_like(state_counts)
 
         e = np.outer(regionlengths, stateprob)
@@ -626,7 +626,7 @@ class Scseg(object):
             enr = np.log10(np.where(state_counts==0, 1, state_counts)) - np.log10(np.where(state_counts==0, 1, e))
         elif mode == 'chisqstat':
             stat = np.where((state_counts - e) >= 0.0, (state_counts - e), 0.0)
-            
+
             enr = stat**2 / e**2
         elif mode == 'pvalue':
             for ireg, scnt in enumerate(state_counts.sum(1)):
@@ -640,7 +640,7 @@ class Scseg(object):
 
         enrdf = pd.DataFrame(enr, columns=self.to_statenames(np.arange(self.n_components)),
                              index=regionnames)
-            
+
         return enrdf
 
 
@@ -654,7 +654,7 @@ class Scseg(object):
         for dostate_i in range(self.n_components):
             for curr_i in range(self.n_components):
                 shift = 1 if dostate_i == curr_i else 0
-                
+
                 cnt_dist[shift, dostate_i, curr_i] += stationary[curr_i]
 
         fft_cnt_dist = np.empty((max_len+1, self.n_components, self.n_components), dtype='complex128')
@@ -687,7 +687,7 @@ class Scseg(object):
                 for prev_i in range(self.n_components):
                     for curr_i in range(self.n_components):
                         shift = 1 if dostate_i == curr_i else 0
-                        
+
                         cnt_dist[shift, dostate_i, prev_i, curr_i] += self.model.transmat_[prev_i, curr_i]
 
             fft_cnt_dist = np.zeros((max_length + 1, self.n_components, self.n_components, self.n_components), dtype='complex128')
@@ -699,12 +699,12 @@ class Scseg(object):
         else:
             self._make_broadregion_conditional_null_distribution(int(np.ceil(length/2)), max_length)
             self._make_broadregion_conditional_null_distribution(int(np.floor(length/2)), max_length)
- 
+
             if True:
                 fft_cnt_dist = faster_fft(self._cnt_conditional[int(np.ceil(length/2))], self._cnt_conditional[int(np.floor(length/2))], self.n_components, max_length)
             else:
                 fft_cnt_dist = np.zeros((max_length+1, self.n_components, self.n_components, self.n_components), dtype='complex128')
-                
+
                 for prev_i in range(self.n_components):
                     for middle_i in range(self.n_components):
                         for curr_i in range(self.n_components):
@@ -718,7 +718,7 @@ class Scseg(object):
         self._cnt_conditional[length] = fft_cnt_dist
 
     def _finalize_broadregion_null_distribution(self, keep_lengths):
-        
+
         max_length = int(keep_lengths.max())
 
         for length in keep_lengths:
@@ -748,7 +748,7 @@ class Scseg(object):
 
 
     def _make_broadregion_null_distribution(self, keep_lengths):
-        
+
         self._init_broadregion_null_distribution(keep_lengths.max())
 
         self._finalize_broadregion_null_distribution(keep_lengths)
@@ -757,7 +757,7 @@ class Scseg(object):
         #    np.testing.assert_allclose(self._cnt_storage[k].sum(), self.n_components)
 
     def _make_broadregion_null_distribution_slow(self, keep_lengths):
-        
+
         length = int(keep_lengths.max())
         cnt_dist = np.zeros((2, self.n_components, self.n_components))
 
@@ -767,7 +767,7 @@ class Scseg(object):
         for dostate_i in range(self.n_components):
             for curr_i in range(self.n_components):
                 shift = 1 if dostate_i == curr_i else 0
-                
+
                 cnt_dist[shift, dostate_i, curr_i] += stationary[curr_i]
         if 1 in keep_lengths and 1 not in self._cnt_storage:
             self._cnt_storage[1] = cnt_dist.sum(-1)
@@ -802,9 +802,9 @@ class Scseg(object):
 #            raise ValueError("State annotation enrichment not yet performed. Use geneset_enrichment")
 #        return self._enr
 #
-#    def subcluster(self, data, query_states, n_subclusters, 
+#    def subcluster(self, data, query_states, n_subclusters,
 #                   logfold_threshold=None, state_prob_threshold=0.99):
-#                   
+#
 #        sdata, subdf, mapelem = self.get_subdata(data, query_states, state_prob_threshold=state_prob_threshold)
 #
 #        print(sdata.shape)
@@ -814,12 +814,12 @@ class Scseg(object):
 #        subdf.name = x
 #        return subdf, sdata
 
-#    def finetuning(self, data, query_states, n_subclusters, 
+#    def finetuning(self, data, query_states, n_subclusters,
 #                   state_prob_threshold=0.99, min_explain_subcluster=0.5,
 #                   params='st',
 #                   n_iter_finetune=15):
 #
-#        logfold_threshold=None           
+#        logfold_threshold=None
 #
 #        if not isinstance(query_states, list):
 #            query_states = [query_states]
@@ -829,7 +829,7 @@ class Scseg(object):
 #        for qstate in query_states:
 #
 #            sdata, subdf = self.get_subdata(data, qstate, state_prob_threshold=state_prob_threshold)
-#             
+#
 #            for sd in sdata:
 #                print('subcluster {} with subdata {}x{}'.format(qstate, sd.shape[0], sd.shape[1]))
 #
@@ -855,7 +855,7 @@ class Scseg(object):
 #
 #        model.emissionprob_ = newcomps_
 #        model.n_features = [e.shape[1] for e in newcomps_]
-#        
+#
 #        model.fit(data)
 #
 #        return model
@@ -867,9 +867,9 @@ class Scseg(object):
         if not isinstance(query_states, list):
             query_states = [query_states]
 
-        subset = self._segments[(self._segments.name.isin(query_states)) 
+        subset = self._segments[(self._segments.name.isin(query_states))
                                 & (self._segments.Prob_max >= state_prob_threshold)].copy()
-        
+
         submats = []
 
         if not collapse_neighbors:
@@ -921,7 +921,7 @@ class Scseg(object):
 
 
 #    def get_augmented_components(self, relacement_components):
-#        
+#
 #        # number of original components
 #        ncomp = self.n_components
 #
@@ -950,13 +950,13 @@ class MixtureOfMultinomials:
         self.n_iters = n_iters
         self.random_state = random_state
         self.verbose = verbose
-     
+
 
     def fit(self, data):
         if not isinstance(data, list):
             data = [data]
 
-        # init 
+        # init
         self._init(data)
         self._check()
         if self.verbose: print('init', self.score(data))
@@ -966,7 +966,7 @@ class MixtureOfMultinomials:
             self._m_step(data, p_z)
             self._check()
             if self.verbose: print(iit, self.score(data))
-    
+
     def _check(self):
         assert np.all(self.pi > 0.0)
         np.testing.assert_allclose(self.pi.sum(), 1.)
@@ -975,7 +975,7 @@ class MixtureOfMultinomials:
             np.testing.assert_allclose(self.components[i].sum(), self.n_clusters)
 
     def _init(self, data):
-   
+
         self.random_state_ = check_random_state(self.random_state)
 
         self.pi = np.ones(self.n_clusters)
@@ -1094,7 +1094,7 @@ def axt_to_bedtool(axtfile, ref_filters=None, other_filters=None, min_cons_len=1
             line = f.readline()
             if isinstance(line, bytes):
                 line = line.decode('utf-8')
-            if not line: 
+            if not line:
                 break
 
             items = line.split(' ')
@@ -1104,19 +1104,19 @@ def axt_to_bedtool(axtfile, ref_filters=None, other_filters=None, min_cons_len=1
                     trl = (int(items[3]) - int(items[2]))//2
                 else:
                     trl = trim_length
-           
+
                 mid = (float(items[2]) + float(items[3])) / 2.
                 ref_start = int(max(1, mid-trl))
                 ref_end = int(mid+trl)
 
                 riv = Interval(items[1], ref_start, ref_end, name=str(i))
-         
+
                 mid = (float(items[5]) + float(items[6])) / 2.
                 oth_start = int(max(1, mid-trl))
                 oth_end = int(mid+trl)
 
                 oiv = Interval(items[4], oth_start, oth_end, name=str(i))
-         
+
                 ref_iv_list.append(riv)
                 other_iv_list.append(oiv)
                 i += 1

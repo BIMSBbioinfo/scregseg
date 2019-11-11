@@ -1,5 +1,5 @@
 __version__ = '0.0.0'
 
-from .countmatrix import CountMatrix  # noqa
 from .scseg import Scseg  # noqa
-from .hmm import MultiModalMultinomialHMM
+from .hmm import MultiModalMultinomialHMM  # noqa
+from .hmm import MultiModalDirMulHMM  # noqa

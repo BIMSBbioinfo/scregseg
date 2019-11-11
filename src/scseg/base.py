@@ -113,7 +113,7 @@ class _BaseHMM(BaseEstimator):
                  batch_size=10000,
                  minibatchlearning=False,
                  learningrate=0.05,
-                 n_jobs=1, 
+                 n_jobs=1,
                  momentum=0.85, decay=0.1,
                  schedule_steps=10):
         self.n_components = n_components
@@ -438,15 +438,15 @@ class _BaseHMM(BaseEstimator):
             n_jobs = effective_n_jobs(self.n_jobs)
             parallel = Parallel(n_jobs=n_jobs, verbose=max(0,
                                 self.verbose - 1))
-            
+
             print('using {} jobs'.format(n_jobs))
             lengths = X[0].shape[0]//n_jobs
 
             for iter_ in range(self.n_iter):
                 #stats = self._initialize_sufficient_statistics()
-                
+
                 curr_logprob = 0
-                
+
                 results = parallel(delayed(compute_posterior)(self, get_batch(X, i, j))
                                    for i, j in iter_from_X_lengths(X, lengths))
 
