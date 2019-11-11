@@ -50,10 +50,11 @@ def dirmul_loglikeli(x, alpha, maxcounts=3):
     alpha0 = alpha.sum(1)[None,:] # state x cell
     n = np.asarray(x.sum(1)) # region x cell
     res = np.zeros((x.shape[0], alpha.shape[0]))
-    res += gammaln(alpha0) 
+    res += gammaln(alpha0)
     res -= gammaln(n+alpha0) # region x 1
-    res -= gammaln(alpha).sum(1, keepdims=True).T # 1 x state
-    precomp = gammaln(alpha[None,:,:] + np.arange(maxcounts)[:,None,None])
+#    res -= gammaln(alpha).sum(1, keepdims=True).T # 1 x state
+    precomp = np.zeros((maxcounts, ) + alpha.shape)
+    precomp[1:] = gammaln(alpha[None,:,:] + np.arange(1,maxcounts)[:,None,None]) - gammaln(alpha)[None,:,:]
     for i, j in iter_from_X_lengths(x, 10000): # sum over regions in batches of 10000
         xbatch = x[i:j].toarray().astype(np.int64)
         res[i:j] += precomp[xbatch, :, np.arange(xbatch.shape[-1])].sum(-2)
