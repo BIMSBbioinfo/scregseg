@@ -78,12 +78,13 @@ class Scseg(object):
         loads model parameters from path
         """
         if os.path.exists(os.path.join(path, 'modelparams', 'hmm.npz')):
-            model = MultiModalMultinomialHMM.load(os.path.join(path, 'modelparams', 'hmm.npz'))
-        if os.path.exists(os.path.join(path, 'modelparams', 'dirmulhmm.npz')):
-            model = MultiModalDirMulHMM.load(os.path.join(path, 'modelparams', 'dirmulhmm.npz'))
-        if os.path.exists(os.path.join(path, 'modelparams', 'mixhmm.npz')):
-            model = MultiModalMixHMM.load(os.path.join(path, 'modelparams', 'mixhmm.npz'))
-
+            model = MultiModalMultinomialHMM.load(path)
+        elif os.path.exists(os.path.join(path, 'modelparams', 'dirmulhmm.npz')):
+            model = MultiModalDirMulHMM.load(path)
+        elif os.path.exists(os.path.join(path, 'modelparams', 'mixhmm.npz')):
+            model = MultiModalMixHMM.load(path)
+        else:
+            raise ValueError("Model not available")
         scmodel = cls(model)
 
         scmodel.load_segments(os.path.join(path, 'segments', 'segmentation.tsv'))
