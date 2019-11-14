@@ -30,8 +30,6 @@ __all__ = ["MultiModalMultinomialHMM", "MultiModalMixHMM", "MultiModalDirMulHMM"
 
 
 def dirmul_loglikeli_naive(x, alpha):
-    x = x.tocsr()
-    x.data[x.data>=maxcounts] = maxcounts - 1
     alpha0 = alpha.sum(1)[None,:] # state x cell
     n = np.asarray(x.sum(1)) # region x cell
     res = gammaln(alpha0) - gammaln(n+alpha0)
@@ -45,8 +43,6 @@ def dirmul_loglikeli_naive(x, alpha):
     return res
 
 def dirmul_loglikeli(x, alpha, maxcounts=3):
-    x = x.tocsr().copy()
-    x.data[x.data>=maxcounts] = maxcounts - 1
     alpha0 = alpha.sum(1)[None,:] # state x cell
     n = np.asarray(x.sum(1)) # region x cell
     res = np.zeros((x.shape[0], alpha.shape[0]))
@@ -68,8 +64,6 @@ def dirmul_loglikeli_sp(x, alpha, maxcounts=3):
     alpha : np.array
       state x cell parameter matrix
     """
-    x = x.tocsr().copy()
-    x.data[x.data>=maxcounts] = maxcounts - 1
     alpha0 = alpha.sum(1)[None,:] # state x 1
     n = np.asarray(x.sum(1)) # region x 1
     res = gammaln(alpha0) - gammaln(n + alpha0)
@@ -173,6 +167,7 @@ class MultiModalDirMulHMM(_BaseHMM):
                  n_jobs=1,
                  decay=0.1, schedule_steps=10):
         self.prior_obs = emission_prior
+        self._maxcounts = 3
         _BaseHMM.__init__(self, n_components,
                           startprob_prior=startprob_prior,
                           transmat_prior=transmat_prior,
@@ -185,6 +180,14 @@ class MultiModalDirMulHMM(_BaseHMM):
                           learningrate=learningrate,
                           n_jobs=n_jobs,
                           momentum=momentum)
+
+    def _trim_array(self, X):
+        X_ = []
+        for x in X:
+            x = x.tocsr().copy()
+            x.data[x.data>=self._maxcounts] = self._maxcounts - 1
+            X_.append(x)
+        return X_
 
     def _init(self, X, lengths=None):
 
@@ -266,7 +269,7 @@ class MultiModalDirMulHMM(_BaseHMM):
         # loop over datasets each represented via a multinomial
         for ep, es, x in zip(self.emission_prior_, self.emission_suffstats_, X):
             # compute the marginal likelihood with the current posterior parameters
-            res += dirmul_loglikeli_sp(x, ep+es)
+            res += dirmul_loglikeli_sp(x, ep+es, self._maxcounts)
 
         return res
 

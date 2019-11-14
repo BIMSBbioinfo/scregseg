@@ -150,6 +150,9 @@ class _BaseHMM(BaseEstimator):
         eigvec = np.real_if_close(eigvecs[:, np.argmax(eigvals)])
         return eigvec / eigvec.sum()
 
+    def _trim_array(self, X):
+        return X
+
     def score_samples(self, X, lengths=None):
         """Compute the log probability under the model and compute posteriors.
 
@@ -175,6 +178,7 @@ class _BaseHMM(BaseEstimator):
         score : Compute the log probability under the model.
         decode : Find most likely state sequence corresponding to ``X``.
         """
+        X = self._trim_array(X)
         check_is_fitted(self, "startprob_")
         self._check()
 
@@ -214,6 +218,7 @@ class _BaseHMM(BaseEstimator):
             posteriors.
         decode : Find most likely state sequence corresponding to ``X``.
         """
+        X = self._trim_array(X)
         check_is_fitted(self, "startprob_")
         self._check()
 
@@ -267,6 +272,7 @@ class _BaseHMM(BaseEstimator):
             posteriors.
         score : Compute the log probability under the model.
         """
+        X = self._trim_array(X)
         check_is_fitted(self, "startprob_")
         self._check()
 
@@ -395,6 +401,7 @@ class _BaseHMM(BaseEstimator):
         self : object
             Returns self.
         """
+        X = self._trim_array(X)
         X = _check_array(X)
         self._init(X, lengths=lengths)
         self._check()
