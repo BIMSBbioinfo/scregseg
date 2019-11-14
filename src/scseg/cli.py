@@ -184,6 +184,7 @@ def make_state_summary(model, output, labels):
         datanames = ['mat{}'.format(i) for i in range(len(model.model.emissionprobs_))]
 
     make_folders(os.path.join(output, 'summary'))
+    model.get_state_stats().to_csv(os.path.join(output, 'summary', 'statesummary.csv'))
     model.plot_state_statistics().savefig(os.path.join(output, 'summary', 'statesummary.png'))
     model.plot_readdepth(datanames).savefig(os.path.join(output, 'summary', 'state_readdepth.png'))
 

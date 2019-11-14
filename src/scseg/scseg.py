@@ -164,15 +164,20 @@ class Scseg(object):
 
         return enrs
 
+    def get_state_stats(self):
+        if self._segments is None:
+            raise ValueError("No segmentation results available. Please run segment(data, regions) first.")
+
+        state_counts = pd.Series(self._segments.name).value_counts()
+        return state_counts
+
     def plot_state_statistics(self):
         """
         plot state statistics
         """
-        if self._segments is None:
-            raise ValueError("No segmentation results available. Please run segment(data, regions) first.")
 
         fig, ax = plt.subplots(1, 2)
-        state_counts = pd.Series(self._segments.name).value_counts()
+        state_counts = self.get_state_stats()
 
         sns.barplot(y=[l for l in state_counts.index],
                     x=state_counts,
