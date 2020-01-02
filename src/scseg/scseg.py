@@ -1,4 +1,5 @@
 import pandas as pd
+from sklearn.cluster import AgglomerativeClustering
 import numpy as np
 import seaborn as sns
 import tempfile
@@ -12,6 +13,8 @@ from scipy.stats import binom
 from scipy.stats import norm
 from scipy.sparse import csc_matrix
 from scipy.sparse import lil_matrix
+from scipy.sparse import hstack
+from scipy.stats import zscore
 from scipy.sparse import issparse as is_sparse
 import pickle
 import os
@@ -25,12 +28,11 @@ from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.utils import check_random_state
 from scipy.special import logsumexp
 from hmmlearn.utils import normalize
-
+from sklearn.cluster import AgglomerativeClustering
 
 from numba import jit, njit
 from numba import prange
 from operator import mod, floordiv, pow
-#faster_fft(self._cnt_conditional[int(np.ceil(length/2))], self._cnt_conditional[int(np.floor(length/2))], self.n_components, max_length)
 
 @njit(parallel=True)
 def faster_fft(c1, c2, ncomp, maxlen):
@@ -69,8 +71,9 @@ class Scseg(object):
         """
         self.model.save(os.path.join(path, 'modelparams'))
 
-        if hasattr(self, "_segments"):
-            self.export_segmentation(os.path.join(path, 'segments', 'segmentation.tsv'), 0.0)
+        if hasattr(self, "_segments") and self._segments is not None:
+            self.export_segmentation(os.path.join(path, 'segments',
+                                     'segmentation.tsv'), 0.0)
 
     @classmethod
     def load(cls, path):
@@ -114,7 +117,7 @@ class Scseg(object):
 
         return int(statename[len(self._nameprefix):])
 
-    def cell2state_enrichment(self, data, mode='logfold', prob_max_threshold=0.0, post=False):
+    def cell2state_counts(self, data, prob_max_threshold=0.0, post=False):
         """ Determines whether a states is overrepresented among
         the accessible sites in a given cellself.
 
@@ -151,11 +154,33 @@ class Scseg(object):
             else:
                 obs_seqfreq = d_.T.dot(Z.T)
 
+            mat = obs_seqfreq
+
+            enrs.append(mat)
+
+        return enrs
+
+    def cell2state(self, data, mode='logfold', prob_max_threshold=0.0, post=False):
+        """ Determines whether a states is overrepresented among
+        the accessible sites in a given cellself.
+
+        The P-value is determined using the binomial test
+        and the log-fold-change is determine by Obs[state proportion]/Expected[state proportion].
+        """
+
+        obs_seqfreqs = self.cell2state_counts(data, prob_max_threshold, post)
+
+        enrs = []
+
+        for obs_seqfreq in obs_seqfreqs:
+
             if mode == 'probability':
                 mat = obs_seqfreq / obs_seqfreq.sum(1, keepdims=True)
+            elif mode == 'raw':
+                mat = obs_seqfreq
             elif mode == 'zscore':
                 mat = zscore(obs_seqfreq, axis=1)
-            elif mode in ['logfold', 'chisqstat']:
+            elif mode in ['fold', 'logfold', 'chisqstat']:
                 mat = self.broadregion_enrichment(obs_seqfreq, obs_seqfreq.sum(1), mode=mode)
             else:
                 raise ValueError('{} not supported for cell2state association'.format(mode))
@@ -163,6 +188,13 @@ class Scseg(object):
             enrs.append(mat)
 
         return enrs
+
+    def cell2state_umap(self, cell2states):
+        x = UMAP().fit_transform(cell2states)
+        return pd.DataFrame(x, columns=['dim1', 'dim2'])
+
+    def plot_umap(self, cellstates):
+        return sns.scatterplot(x='dim1', y='dim2', data=cellstates)
 
     def get_state_stats(self):
         if self._segments is None:
@@ -624,11 +656,11 @@ class Scseg(object):
         enr = np.zeros_like(state_counts)
 
         e = np.outer(regionlengths, stateprob)
-        #if e.shape != state_counts.shape:
-        #    e = e.T
 
         if mode == 'logfold':
             enr = np.log10(np.where(state_counts==0, 1, state_counts)) - np.log10(np.where(state_counts==0, 1, e))
+        if mode == 'fold':
+            enr = np.where(state_counts==0, 1, state_counts)/np.where(state_counts==0, 1, e)
         elif mode == 'chisqstat':
             stat = np.where((state_counts - e) >= 0.0, (state_counts - e), 0.0)
 
@@ -682,7 +714,6 @@ class Scseg(object):
         if length in self._cnt_conditional:
             return
 
-#        print('start evaluating {}'.format(length))
         if length == 1:
             # initialization condition
             # adding one more bin
@@ -719,7 +750,6 @@ class Scseg(object):
 
                             fft_cnt_dist[:, :, prev_i, curr_i] += cnt_1 * cnt_2
 
-#        print('end evaluating {}'.format(length))
         self._cnt_conditional[length] = fft_cnt_dist
 
     def _finalize_broadregion_null_distribution(self, keep_lengths):
@@ -729,11 +759,8 @@ class Scseg(object):
         for length in keep_lengths:
             self._make_broadregion_conditional_null_distribution(length - 1, max_length)
 
-#        print('cond_keys:', [k for k in self._cnt_conditional])
-#        print('cnt_stor:', [k for k in self._cnt_storage])
         for length in keep_lengths:
             length = int(length)
-#            print('lookup for {}'.format(length-1))
             if length == 1:
                 fft_tmp_cnt = self._fft_init_cnt_dist
             else:
@@ -757,9 +784,6 @@ class Scseg(object):
         self._init_broadregion_null_distribution(keep_lengths.max())
 
         self._finalize_broadregion_null_distribution(keep_lengths)
-
-        #for k in self._cnt_storage:
-        #    np.testing.assert_allclose(self._cnt_storage[k].sum(), self.n_components)
 
     def _make_broadregion_null_distribution_slow(self, keep_lengths):
 
@@ -800,70 +824,135 @@ class Scseg(object):
         return self._cnt_storage[length], \
                self._cnt_storage[length].T.dot(np.arange(self._cnt_storage[length].shape[0]))
 
+    def make_seeds(self, data, nstates, 
+                   decoding_prob=0.90, n_jobs=10,
+                   maxclusters=10, regions=3000):
 
-#    @property
-#    def state_annotation(self):
-#        if self._enr is None:
-#            raise ValueError("State annotation enrichment not yet performed. Use geneset_enrichment")
-#        return self._enr
-#
-#    def subcluster(self, data, query_states, n_subclusters,
-#                   logfold_threshold=None, state_prob_threshold=0.99):
-#
-#        sdata, subdf, mapelem = self.get_subdata(data, query_states, state_prob_threshold=state_prob_threshold)
-#
-#        print(sdata.shape)
-#        labels, label_probs = self.do_subclustering(sdata, n_subclusters)
-#        x = ['subcluster_{}'.format(labels[mapelem[i]]) for i in range(len(subdf.index))]
-#
-#        subdf.name = x
-#        return subdf, sdata
+        post = self.model.predict_proba(data)
+        X = hstack(data)
+        seeds = np.empty((0, X.shape[1]))
 
-#    def finetuning(self, data, query_states, n_subclusters,
-#                   state_prob_threshold=0.99, min_explain_subcluster=0.5,
-#                   params='st',
-#                   n_iter_finetune=15):
+        # first, within each state apply LDA
+        print('precluster')
+        for stateid in range(self.n_components):
+            idx = post[:,stateid]>decoding_prob
+            
+            x = X[idx]
+            nsubclusters = min(max(x.shape[0] // regions, 1), maxclusters)
+            tmpseeds = np.empty((nsubclusters, X.shape[1]))
+    
+            lda = LatentDirichletAllocation(nsubclusters, max_iter=100,
+                                            n_jobs=n_jobs)
+            lda.fit(x.T)
+    
+            print('process {}: {} regions, {} clusters'.format(stateid, x.shape[0], nsubclusters))
+            idxs = np.argsort(lda.components_, 1)[:,-1000:][:,::-1]
+            for icomp in range(nsubclusters):
+                tmpseeds[icomp] = np.asarray(x[idxs[icomp]].sum(0)).flatten()
+            seeds = np.concatenate([seeds, tmpseeds], axis=0)
+
+        print('consolidate')
+        labels = AgglomerativeClustering(min(nstates, seeds.shape[0]),
+                                         affinity='cosine',
+                                         linkage='average').fit_predict(pd.DataFrame(seeds.T).corr())
+
+        new_states = np.empty((nstates, x.shape[1]))
+        for ilabel in range(nstates):
+            new_states[ilabel] = seeds[labels==ilabel].sum(0)
+
+        return np.split(new_states, np.cumsum([d.shape[1] for d in data])[:-1],  axis=1)
+        #return new_states
+        
+#    def state_filtering(self, data, stateid, nsubclusters=4, 
+#                                           n_cells=1000, decoding_prob=0.99, n_jobs=10):
+#        print('explore', stateid)
+#        post = self.model.predict_proba(data)
+#        idx = post[:,stateid]>decoding_prob
+#        
+#        X = hstack(data)
+#        X = X[idx]
+#        #v=np.var(X.toarray(), axis=0)
+#        #bestcells = np.argsort(v)[::-1][:n_cells]
+#        #
+#        #
+#        #x = X[:,bestcells].toarray()
+#        #x -= x.mean(axis=0, keepdims=True)
+#        #print(x.shape)
+#        #
+#        ac = LatentDirichletAllocation(nsubclusters, max_iter=100, n_jobs=n_jobs)
+#        ac.fit(x.T)
 #
-#        logfold_threshold=None
+#        idxs = np.argsort(lda.components_, 1)[:,-1000:][:,::-1]
+#        seeds = np.empty((nsubclusters, X.shape[1]))
+#        for icomp in ac.components_.shape[0]:
+#            
+#            ac.components_[icomp)
+#        
+#        labels = subcluster(x, nsubclusters)
+#    
+#        return bestcells, labels, x
 #
-#        if not isinstance(query_states, list):
-#            query_states = [query_states]
+#    def explore_state_correlationstructure(self, data, stateid, nsubclusters=4, 
+#                                           n_cells=1000, decoding_prob=0.99):
+#        bestcells, labels, x = self.state_filtering(data, stateid, nsubclusters, 
+#                                       n_cells, decoding_prob)
+#        
+#        print('rowclusters', labels.value_counts())
+#    
+#        lut = dict(zip(np.sort(labels.unique()), 
+#                   sns.color_palette("muted", n_colors=len(labels.unique()))))
+#        row_colors = labels.map(lut)
+#        g=sns.clustermap(pd.DataFrame(x).corr(),
+#                        vmax=.1, cmap="YlGnBu", 
+#                        row_colors=row_colors,
+#                        col_colors=row_colors,
+#                         figsize=(20,20))
+#        return g
 #
-#        replacement_collection = {}
+#    def extract_subcluster_seeds(self, data, stateid, nsubclusters=4, 
+#                                           n_cells=1000, decoding_prob=0.99):
+#        bestcells, labels, x = self.state_filtering(data, stateid, nsubclusters, 
+#                                       n_cells, decoding_prob)
+#        
+#        M = np.hstack(self.model.emission_suffstats_)
+#            
+#        
+#        # reuse the sufficient statistics
+#        cluster_seed_regions = np.zeros((nsubclusters, M.shape[1]))
+#        cluster_seed_regions += M[stateid:(stateid+1)] / nsubclusters
+#        cluster_seed_regions[:, bestcells] = 0
+#            
+#        # make suff stats uncorrelated according to the clustering
+#        for icluster in range(nsubclusters):
+#            cluster_seed_regions[icluster, bestcells[icluster==labels]] += \
+#               np.asarray(M[stateid:(stateid+1), 
+#                            bestcells[icluster==labels]].sum(0)).flatten()
+#            
+#        # merge with original suffstats
+#        M = np.delete(M, stateid, 0)
+#        cluster_seed_regions = np.concatenate([M, cluster_seed_regions], axis=0)
 #
-#        for qstate in query_states:
+#        # split up into submatrices
+#        lens = [d.shape[1] for d in data]
+#        np.cumsum(lens)
+#        new_seeds = []
+#        for i, end in enumerate(np.cumsum(lens)):
+#            start = 0 if i == 0 else np.cumsum(lens)[i-1]
+#            new_seeds.append(cluster_seed_regions[:, start:end])
+#                
+#        return new_seeds
 #
-#            sdata, subdf = self.get_subdata(data, qstate, state_prob_threshold=state_prob_threshold)
-#
-#            for sd in sdata:
-#                print('subcluster {} with subdata {}x{}'.format(qstate, sd.shape[0], sd.shape[1]))
-#
-#            mm = MixtureOfMultinomials(n_subclusters, n_iters=100, random_state=64)
-#
-#            print('mix fitting')
-#            mm.fit(sdata)
-#
-#            replacement_collection[qstate] = mm.get_important_components(min_explain_subcluster)
-#
-#        for r in replacement_collection:
-#            print(r + ': {}'.format(replacement_collection[r][0]))
-#        newcomps_ = self.get_augmented_components(replacement_collection)
-#
-#        ncomp = newcomps_[0].shape[0]
-#
-#        print('new number of segments: {}'.format(ncomp))
-#
-#        # instantiate a new hmm and freeze the emissions
-#        model = MultiModalMultinomialHMM(ncomp, init_params='st', params='st',
-#                                         verbose=True,
-#                                         n_iter=10, random_state=32)
-#
-#        model.emissionprob_ = newcomps_
-#        model.n_features = [e.shape[1] for e in newcomps_]
-#
-#        model.fit(data)
-#
-#        return model
+    def newModel(self, new_seeds, n_iter=100, n_jobs=1, verbose=True):
+        model = MultiModalDirMulHMM(new_seeds[0].shape[0], 
+                                    n_iter=n_iter,
+                                    n_jobs=n_jobs, verbose=verbose)
+        model.init_params = 'st'
+
+        model.emission_suffstats_ = new_seeds
+        model.emission_prior_ = self.model.emission_prior_
+        model.n_features = self.model.n_features
+
+        return model
 
     def get_subdata(self, data, query_states, collapse_neighbors=True, state_prob_threshold=0.99):
 
@@ -923,28 +1012,6 @@ class Scseg(object):
             submats.append(submat.tocsc())
 
         return submats, subset_merged
-
-
-#    def get_augmented_components(self, relacement_components):
-#
-#        # number of original components
-#        ncomp = self.n_components
-#
-#        # components to be replaced
-#        irm = np.array([self.to_stateid(rlp) for rlp in relacement_components])
-#
-#        # subtract those from the original components
-#        keepcomp = np.setdiff1d(np.arange(ncomp), irm)
-#        #keepcomp = np.arange(ncomp)
-#        keep_ems = [ems[keepcomp].copy() for ems in self.model.emissionprob_]
-#
-#        # append the replacement components
-#        augm_ems = []
-#        rc = relacement_components
-#        for i in range(len(self.model.emissionprob_)):
-#            augm_ems.append(np.concatenate((keep_ems[i], ) + tuple([rc[k][i] for k in rc if rc[k][i].shape[0]>1]), axis=0))
-#
-#        return augm_ems
 
 
 class MixtureOfMultinomials:
@@ -1041,23 +1108,6 @@ class MixtureOfMultinomials:
         print('{}: n components: {}, proportion explained: {}'.format(self.pi, len(i), self.pi[i].sum()))
         #print('explained proportion of data: {}'.format(self.pi[i].sum()))
         return [comp[i].copy() for comp in self.components]
-
-
-class LDAWrapper:
-    def __init__(self, lda):
-        self.lda = lda
-
-    def fit(self, data):
-        return self.lda.fit(data)
-
-    def transform(self, data):
-        return self.lda.transform(data)
-
-    def score(self, data):
-        return self.lda.score(data)
-
-    def predict(self, data):
-        return np.argmax(self.transform(data), axis=1)
 
 
 def subset_bam(mainbam, barcodes_to_keep, filename):
