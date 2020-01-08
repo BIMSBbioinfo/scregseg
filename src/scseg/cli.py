@@ -21,9 +21,8 @@ from scseg.countmatrix import get_cell_annotation_first_row_
 from scseg.countmatrix import write_cannot_table
 from scseg.countmatrix import make_counting_bins
 from scseg.countmatrix import sparse_count_reads_in_regions
-from scseg.hmm import MultiModalMultinomialHMM as MultinomialHMM
-from scseg.hmm import MultiModalDirMulHMM as DirMultinomialHMM
-from scseg.hmm import MultiModalMixHMM as MixMultinomialHMM
+from scseg.hmm import MultinomialHMM
+from scseg.hmm import DirMulHMM
 from scseg import Scseg
 from scipy.sparse import hstack
 import matplotlib.pyplot as plt
@@ -161,7 +160,7 @@ def load_count_matrices(countfiles, bedfile):
     return data, cannot
 
 def run_segmentation(data, bedfile, nstates, niter, random_state, n_jobs):
-    model = DirMultinomialHMM(n_components=nstates, n_iter=niter, random_state=random_state, verbose=True,
+    model = DirMulHMM(n_components=nstates, n_iter=niter, random_state=random_state, verbose=True,
                               n_jobs=n_jobs)
     model.fit(data)
     scmodel = Scseg(model)

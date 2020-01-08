@@ -6,9 +6,8 @@ import tempfile
 from pybedtools import BedTool
 from pybedtools import Interval
 from pybedtools.helpers import cleanup
-from .hmm import MultiModalMultinomialHMM
-from .hmm import MultiModalMixHMM
-from .hmm import MultiModalDirMulHMM
+from .hmm import MultinomialHMM
+from .hmm import DirMulHMM
 from scipy.stats import binom
 from scipy.stats import norm
 from scipy.sparse import csc_matrix
@@ -81,11 +80,9 @@ class Scseg(object):
         loads model parameters from path
         """
         if os.path.exists(os.path.join(path, 'modelparams', 'hmm.npz')):
-            model = MultiModalMultinomialHMM.load(path)
+            model = MultinomialHMM.load(path)
         elif os.path.exists(os.path.join(path, 'modelparams', 'dirmulhmm.npz')):
-            model = MultiModalDirMulHMM.load(path)
-        elif os.path.exists(os.path.join(path, 'modelparams', 'mixhmm.npz')):
-            model = MultiModalMixHMM.load(path)
+            model = DirMulHMM.load(path)
         else:
             raise ValueError("Model not available")
         scmodel = cls(model)
@@ -943,7 +940,7 @@ class Scseg(object):
 #        return new_seeds
 #
     def newModel(self, new_seeds, n_iter=100, n_jobs=1, verbose=True):
-        model = MultiModalDirMulHMM(new_seeds[0].shape[0], 
+        model = DirMulHMM(new_seeds[0].shape[0], 
                                     n_iter=n_iter,
                                     n_jobs=n_jobs, verbose=verbose)
         model.init_params = 'st'
