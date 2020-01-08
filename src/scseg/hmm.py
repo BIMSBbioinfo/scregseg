@@ -73,7 +73,7 @@ def dirmul_loglikeli_sp(x, alpha, maxcounts=3):
     precomp = gammaln(alpha[None,:,:] + np.arange(1, maxcounts)[:,None, None]) - gammaln(alpha)[None,:,:]
     for idx in range(x.shape[0]):
         ids = x.indices[x.indptr[idx]:x.indptr[idx+1]]
-        cnts = x.data[x.indptr[idx]:x.indptr[idx+1]].astype(np.int64)
+        cnts = np.where(x.data[x.indptr[idx]:x.indptr[idx+1]].astype(np.int64) >= maxcounts, maxcounts-1, x.data[x.indptr[idx]:x.indptr[idx+1]].astype(np.int64))
         res[idx] += precomp[cnts-1, :, ids].sum(0)
     return res
 
