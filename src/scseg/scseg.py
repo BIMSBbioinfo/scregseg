@@ -998,13 +998,13 @@ class Scseg(object):
         print(subset_merged.shape)
         for datum in data:
 
-            dat = datum.tolil()
+            dat = datum.tocsr()
             submat = lil_matrix((nelem, datum.shape[1]))
             #sm = np.asarray(datum[subset.index].todense())
 
             for i, i2m in enumerate(mapelem):
                 #submat[i2m, :] += sm[i]
-                submat[i2m, :] += datum[subset.index[i]]
+                submat[i2m, :] += dat[subset.index[i]]
 
             submats.append(submat.tocsc())
 
