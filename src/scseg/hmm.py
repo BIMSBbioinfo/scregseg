@@ -168,6 +168,7 @@ class DirMulHMM(_BaseHMM):
                  decay=0.1, schedule_steps=10):
         self.prior_obs = emission_prior
         self._maxcounts = 3
+        
         _BaseHMM.__init__(self, n_components,
                           startprob_prior=startprob_prior,
                           transmat_prior=transmat_prior,
@@ -255,6 +256,11 @@ class DirMulHMM(_BaseHMM):
 
         model.n_features = [e.shape[1] for e in es]
         return model
+
+    def print_progress(self):
+        if not self.verbose:
+            return
+        print('stateprob:', self.get_stationary_distribution())
 
     def save(self, path):
         """

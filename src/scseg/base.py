@@ -153,6 +153,9 @@ class _BaseHMM(BaseEstimator):
     def _trim_array(self, X):
         return X
 
+    def print_progress(self):
+        pass
+
     def score_samples(self, X, lengths=None):
         """Compute the log probability under the model and compute posteriors.
 
@@ -474,6 +477,7 @@ class _BaseHMM(BaseEstimator):
                 #     there won't be any updates for the case ``n_iter=1``.
                 self._do_mstep(stats)
 
+                self.print_progress()
                 self.monitor_.report(curr_logprob)
                 if self.monitor_.converged:
                     break
