@@ -16,11 +16,14 @@ from os.path import splitext
 from setuptools import find_packages
 from distutils.extension import Extension
 from distutils.core import setup
-from Cython.Build import cythonize
-from setuptools.command.build_ext import build_ext
 
 import numpy
-
+try:
+    # Allow installing package without any Cython available. This
+    # assumes you are going to include the .c files in your sdist.
+    import Cython
+except ImportError:
+    Cython = None
 
 def read(*names, **kwargs):
     with io.open(
@@ -109,6 +112,20 @@ setup(
         'scipy',
         'numpy',
         'pandas'
+    ] if Cython else [
+        'sklearn',
+        'scipy',
+        'numpy',
+        'pandas'
+    ],
+    ext_modules=[
+        Extension(
+            splitext(relpath(path, 'src').replace(os.sep, '.'))[0],
+            sources=[path],
+            include_dirs=[dirname(path), numpy.get_include()]
+        )
+        for root, _, _ in os.walk('src')
+        for path in glob(join(root, '*.pyx' if Cython else '*.c'))
     ],
     entry_points={
         'console_scripts': [

@@ -29,6 +29,15 @@ def compute_posterior(self, X):
 #    curr_logprob += logprob
     bwdlattice = self._do_backward_pass(framelogprob)
     posteriors = self._compute_posteriors(fwdlattice, bwdlattice)
+    if self.stochastic_update:
+        ids = (posteriors.cumsum(1) <= self.random_state.rand(posteriors.shape[0],1)).sum(1)
+ 
+        spost=np.zeros_like(posteriors)
+        i = np.arange(posteriors.shape[0])
+        spost[i, ids[i]] = 1
+
+        posteriors = spost
+
     self._accumulate_sufficient_statistics(
         stats, X, framelogprob, posteriors, fwdlattice,
         bwdlattice)
@@ -138,6 +147,7 @@ class _BaseHMM(BaseEstimator):
             self.monitor_ = MinibatchMonitor(self.tol, self.n_iter, self.verbose)
         else:
             self.monitor_ = ConvergenceMonitor(self.tol, self.n_iter, self.verbose)
+        self.check_fitted = "transmat_"
 
     def get_stationary_distribution(self):
         """Compute the stationary distribution of states.
@@ -145,7 +155,7 @@ class _BaseHMM(BaseEstimator):
         # The stationary distribution is proportional to the left-eigenvector
         # associated with the largest eigenvalue (i.e., 1) of the transition
         # matrix.
-        check_is_fitted(self, "transmat_")
+        check_is_fitted(self, self.check_fitted)
         eigvals, eigvecs = np.linalg.eig(self.transmat_.T)
         eigvec = np.real_if_close(eigvecs[:, np.argmax(eigvals)])
         return eigvec / eigvec.sum()
@@ -182,7 +192,7 @@ class _BaseHMM(BaseEstimator):
         decode : Find most likely state sequence corresponding to ``X``.
         """
         X = self._trim_array(X)
-        check_is_fitted(self, "startprob_")
+        check_is_fitted(self, self.check_fitted)
         self._check()
 
         X = _check_array(X)
@@ -222,7 +232,7 @@ class _BaseHMM(BaseEstimator):
         decode : Find most likely state sequence corresponding to ``X``.
         """
         X = self._trim_array(X)
-        check_is_fitted(self, "startprob_")
+        check_is_fitted(self, self.check_fitted)
         self._check()
 
         X = _check_array(X)
@@ -240,7 +250,7 @@ class _BaseHMM(BaseEstimator):
 
     def _decode_map(self, X):
         _, posteriors = self.score_samples(X)
-        logprob = np.max(posteriors, axis=1).sum()
+        logprob = np.max(np.log(posteriors), axis=1).sum()
         state_sequence = np.argmax(posteriors, axis=1)
         return logprob, state_sequence
 
@@ -276,7 +286,7 @@ class _BaseHMM(BaseEstimator):
         score : Compute the log probability under the model.
         """
         X = self._trim_array(X)
-        check_is_fitted(self, "startprob_")
+        check_is_fitted(self, self.check_fitted)
         self._check()
 
         algorithm = algorithm or self.algorithm
@@ -358,7 +368,7 @@ class _BaseHMM(BaseEstimator):
         state_sequence : array, shape (n_samples, )
             State sequence produced by the model.
         """
-        check_is_fitted(self, "startprob_")
+        check_is_fitted(self, self.check_fitted)
         self._check()
 
         if random_state is None:

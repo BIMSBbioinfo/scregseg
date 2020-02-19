@@ -3,9 +3,10 @@ import copy
 import gzip
 import numpy as np
 import pandas as pd
-from scipy.sparse import csc_matrix
+from scipy.sparse import csr_matrix
 from scipy.sparse import issparse
 from scipy.sparse import hstack
+from scipy.io import mmread, mmwrite
 from pybedtools import BedTool, Interval
 from pysam import AlignmentFile
 from collections import Counter
@@ -169,26 +170,26 @@ def sparse_count_reads_in_regions(bamfile, regions, storage,
     afile.close()
 
     # store the results in COO sparse matrix format
-    spcoo = sdokmat.tocoo()
-    print('matrix.shape={}, nnz={}'.format(spcoo.shape, spcoo.nnz))
-    # sort lexicographically
+    save_sparsematrix(storage, sdokmat, barcode_string.split(';'))
 
-    order_ = np.lexsort((spcoo.col, spcoo.row))
-    indices = np.asarray([x for x in zip(spcoo.row, spcoo.col)], dtype=np.int64)[order_]
-    values = spcoo.data.astype(np.float32)[order_]
-    cont = {'region': indices[:,0], 'cell': indices[:, 1], 'count': values}
-
-    df = pd.DataFrame(cont)
-    with open(storage, 'w') as title:
-        title.write('#  ' + barcode_string + '\n')
-
-    df.to_csv(storage, mode = 'a', sep='\t', header=True, index=False)
         
+def save_sparsematrix(filename, mat, barcodes):
+    spcoo = mat.tocoo()
+    mmwrite(filename, spcoo)
+
+    if isinstance(barcodes, pd.DataFrame):
+        df = barcodes
+    else:
+        df = pd.DataFrame({'barcodes': barcodes})
+    df.to_csv(filename + '.bct', sep='\t', header=True, index=False)
 
 def get_count_matrix_(filename, shape, header=True, offset=0):
     """
     read count matrix in sparse format
     """
+    if filename.endswith(".mtx"):
+        return mmread(filename).tocsr()
+
     if header:
         spdf = pd.read_csv(filename, sep='\t', skiprows=1)
     else:
@@ -196,7 +197,7 @@ def get_count_matrix_(filename, shape, header=True, offset=0):
     if offset > 0:
         spdf.region -= offset
         spdf.cell -= offset
-    smat = csc_matrix((spdf['count'], (spdf.region, spdf.cell)),
+    smat = csr_matrix((spdf['count'], (spdf.region, spdf.cell)),
                       shape=shape, dtype='float')
     return smat
 
@@ -217,9 +218,11 @@ def get_cell_annotation_first_row_(filename):
     return pd.DataFrame(annot, columns=['cell'])
 
 def get_cell_annotation(filename):
-    if os.path.exists(filename + '.cannot.tsv'):
-        return pd.read_csv(filename + '.cannot.tsv', sep='\t')
-    return get_cell_annotation_first_row_(filename)
+    if os.path.exists(filename + '.bct'):
+        return pd.read_csv(filename + '.bct', sep='\t')
+    #if os.path.exists(filename + '.cannot.tsv'):
+    #    return pd.read_csv(filename + '.cannot.tsv', sep='\t')
+    #return get_cell_annotation_first_row_(filename)
 
 def get_regions_from_bed_(filename):
     """
@@ -230,7 +233,7 @@ def get_regions_from_bed_(filename):
 
 
 def write_cannot_table(filename, table):
-    table.to_csv(filename + '.cannot.tsv', sep='\t', index=False)
+    table.to_csv(filename + '.bct', sep='\t', index=False)
 
 class CountMatrix:
 
@@ -241,6 +244,8 @@ class CountMatrix:
         """
             
         cannot = get_cell_annotation(countmatrixfile)
+        
+        cannot['cell'] = cannot[cannot.columns[0]]
         rannot = get_regions_from_bed_(regionannotation)
         shape = rannot.shape[0], len(cannot)
         cmat = get_count_matrix_(countmatrixfile, shape, header=header, offset=index_offset)
@@ -249,9 +254,9 @@ class CountMatrix:
     def __init__(self, countmatrix, regionannotation, cellannotation):
 
         if not issparse(countmatrix):
-            countmatrix = csc_matrix(countmatrix)
+            countmatrix = csr_matrix(countmatrix)
 
-        self.cmat = countmatrix
+        self.cmat = countmatrix.tocsr()
         self.cannot = cellannotation
         self.regions = regionannotation
         assert self.cmat.shape[0] == len(self.regions)
@@ -265,19 +270,32 @@ class CountMatrix:
         return self.cmat
 
     @classmethod
-    def merge(cls, cms):
-        cannot = pd.concat([cm.cannot for cm in cms], axis=0)
+    def merge(cls, cms, samplelabel=None):
+        newcannot = []
+        for i, cm in enumerate(cms):
+            ca = cm.cannot.copy()
+            print(ca)
+            if samplelabel is not None:
+                ca['sample'] = samplelabel[i]
+            else:
+                ca['sample'] = 'sample_{}'.format(i)
+            newcannot.append(ca)
+        cannot = pd.concat(newcannot, axis=0)
+        print(cannot)
         return cls(hstack([cm.cmat for cm in cms]), cms[0].regions, cannot)
 
     def filter_count_matrix(self, minreadsincells=1000, maxreadsincells=30000,
                             minreadsinpeaks=20,
-                            binarize=True):
+                            binarize=True, maxcount=None):
         """
         Applies filtering to the count matrix
         """
 
         if binarize:
             self.cmat.data[self.cmat.data > 0] = 1
+        if maxcount is not None:
+            self.cmat.data[self.cmat.data > maxcount] = maxcount 
+
         cellcounts = self.cmat.sum(axis=0)
         keepcells = np.where((cellcounts>=minreadsincells) & (cellcounts<maxreadsincells) & (self.cannot.cell.values!='dummy'))[1]
 
@@ -290,6 +308,20 @@ class CountMatrix:
         self.cmat = self.cmat[keepregions, :]
         self.regions = self.regions.iloc[keepregions]
 
+    def pseudobulk(self, cell, group):
+
+        grouplabels = list(set(group))
+
+        cnts = np.zeros((self.n_regions, len(grouplabels)))
+
+        for i, glab in enumerate(grouplabels):
+            ids = self.cannot.cell.isin(cell[group == glab])
+            ids = np.arange(self.cannot.shape[0])[ids]
+            cnts[:, i:(i+1)] = self.cmat[:, ids].sum(1)
+
+        cannot = pd.DataFrame(grouplabels, columns=['cell'])
+        return CountMatrix(csr_matrix(cnts), self.regions, cannot)
+        
     def __call__(self, icell=None):
         if icell is None:
             return self.cmat.toarray()
@@ -329,27 +361,35 @@ class CountMatrix:
         """
         Exports the associated regions to a bed file.
         """
-        self.regions.to_csv(filename, columns=['chrom', 'start', 'end'], sep='\t', index=False, header=False)
+        self.regions.to_csv(filename,
+                            columns=['chrom', 'start', 'end'],
+                            sep='\t', index=False, header=False)
 
     def export_counts(self, filename):
         """
         Exports the countmatrix in sparse format to a csv file
         """
 
-        spcoo = self.cmat.tocoo()
-        # sort lexicographically
-       
-        order_ = np.lexsort((spcoo.col, spcoo.row))
-        indices = np.asarray([x for x in zip(spcoo.row, spcoo.col)], dtype=np.int64)[order_]
-        values = spcoo.data.astype(np.float32)[order_]
-        cont = {'region': indices[:,0], 'cell': indices[:, 1], 'count': values}
-       
-        df = pd.DataFrame(cont)
-        with open(filename, 'w') as title:
-            title.write('#  ' + ';'.join(self.cannot.cell.values) + '\n')
-       
-        df.to_csv(filename, mode = 'a', sep='\t',
-                  header=True, index=False,
-                  columns=['region', 'cell', 'count'])
+        save_sparsematrix(filename, self.cmat, self.cannot)
+        #mmwrite(filename, self.cmat.tocoo())
 
-        write_cannot_table(filename, self.cannot)
+        #df = pd.DataFrame({'barcodes': self.cannot.cell.values})
+        #df.to_csv(filename + '.bct', sep='\t', header=True, index=False)
+
+#        spcoo = self.cmat.tocoo()
+#        # sort lexicographically
+#       
+#        order_ = np.lexsort((spcoo.col, spcoo.row))
+#        indices = np.asarray([x for x in zip(spcoo.row, spcoo.col)], dtype=np.int64)[order_]
+#        values = spcoo.data.astype(np.float32)[order_]
+#        cont = {'region': indices[:,0], 'cell': indices[:, 1], 'count': values}
+#       
+#        df = pd.DataFrame(cont)
+#        with open(filename, 'w') as title:
+#            title.write('#  ' + ';'.join(self.cannot.cell.values) + '\n')
+#       
+#        df.to_csv(filename, mode = 'a', sep='\t',
+#                  header=True, index=False,
+#                  columns=['region', 'cell', 'count'])
+#
+#        write_cannot_table(filename, self.cannot)

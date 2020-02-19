@@ -51,6 +51,31 @@ def faster_fft(c1, c2, ncomp, maxlen):
                 fft_cnt_dist[ic, do_i, prev_i, curr_i] += c1[ic, do_i, prev_i, middle_i] * c2[ic, do_i, middle_i, curr_i]
     return fft_cnt_dist
 
+def export_bed(subset, filename, individual_beds=False):
+    """
+    Exports the segmentation results in bed format.
+    """
+
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+
+    if individual_beds:
+        f = filename.split('.bed')[0]
+        
+        for state in subset.name.unique():
+            subset[(subset.name == state)].to_csv(
+                '{}_{}.bed'.format(f, state), sep='\t',
+                header=False, index=False,
+                columns=['chrom', 'start', 'end',
+                         'name', 'score', 'strand',
+                         'thickStart', 'thickEnd', 'itemRbg'])
+
+    else:
+        subset.to_csv(filename, sep='\t',
+                       header=False, index=False,
+                       columns=['chrom', 'start', 'end',
+                                'name', 'score', 'strand',
+                                'thickStart', 'thickEnd', 'itemRbg'])
+
 class Scseg(object):
 
     _enr = None
@@ -232,6 +257,24 @@ class Scseg(object):
         fig.tight_layout()
         return fig
 
+    def plot_normalized_emissions(self, idat):
+       fig, ax = plt.subplots()
+
+       em = self.model.emission_suffstats_[idat]
+
+       sem = em.sum(0, keepdims=True)/em.sum()
+
+       nem = em / em.sum(1, keepdims=True)
+
+       lodds = np.log(sem) - np.log(nem)
+       sns.heatmap(lodds, cmap="RdBu_r", center=0., ax=ax)
+       ax.set_ylabel("States")
+       ax.set_xlabel("Features")
+       ax.set_xticklabels([i for i in range(1, em.shape[1]+1)])
+       #ax.set_yticklabels([i for i in range(1, em.shape[0]+1)])
+
+       return fig
+
     def plot_logfolds_dist(self, logfoldenr, query_state=None):
         """
         plots log fold distribution
@@ -312,33 +355,6 @@ class Scseg(object):
 
         self._segments[(self._segments.Prob_max >= prob_max_threshold)].to_csv(filename, sep='\t', index=False)
 
-
-    def export_bed(self, dirname, individual_beds=False, prob_max_threshold=0.99):
-        """
-        Exports the segmentation results in bed format.
-        """
-
-        os.makedirs(dirname, exist_ok=True)
-
-        if self._segments is None:
-            raise ValueError("No segmentation results available. Please run segment(data, regions) first.")
-
-        if individual_beds:
-            self._single_bed = []
-            for comp in range(self.n_components):
-                self._segments[(self._segments.name == self.to_statename(comp)) & (self._segments.Prob_max >=prob_max_threshold)].to_csv(
-                    os.path.join(dirname, 'state_{}.bed'.format(comp)), sep='\t',
-                    header=False, index=False,
-                    columns=['chrom', 'start', 'end',
-                             'name', 'score', 'strand',
-                             'thickStart', 'thickEnd', 'itemRbg'])
-
-        else:
-            self._segments[(self._segments.Prob_max >=prob_max_threshold)].to_csv(os.path.join(dirname, 'segments.bed'), sep='\t',
-                           header=False, index=False,
-                           columns=['chrom', 'start', 'end',
-                                    'name', 'score', 'strand',
-                                    'thickStart', 'thickEnd', 'itemRbg'])
 
 
     def annotate(self, annotations):
@@ -950,6 +966,48 @@ class Scseg(object):
         model.n_features = self.model.n_features
 
         return model
+
+    def get_statecalls(self, query_states, collapse_neighbors=True, state_prob_threshold=0.99):
+
+        if not isinstance(query_states, list):
+            query_states = [query_states]
+
+        subset = self._segments[(self._segments.name.isin(query_states))
+                                & (self._segments.Prob_max >= state_prob_threshold)].copy()
+
+        if not collapse_neighbors:
+            return subset
+
+        # determine neighboring bins that can be merged together
+        prevind = -2
+        prevstate = ''
+        nelem = 0
+        mapelem = []
+        for i, r in subset.iterrows():
+            curstate = r['name']
+            nelem += 1
+            if i == (prevind + 1) and prevstate == curstate:
+               nelem -= 1
+            mapelem.append(nelem - 1)
+            prevind = i
+            prevstate = curstate
+
+
+        subset['common'] = mapelem
+        print(subset.shape)
+
+        subset_merged = subset.groupby(['common', 'name']).aggregate({'chrom': 'first',
+                                        'start': 'min',
+                                        'end': 'max', 'name':'first',
+                                        'score': 'max', 'strand': 'first',
+                                        'thickStart': 'min', 'thickEnd': 'max',
+                                        'itemRbg': 'first'
+                                        })
+
+        print(subset_merged.shape)
+
+        return subset_merged
+
 
     def get_subdata(self, data, query_states, collapse_neighbors=True, state_prob_threshold=0.99):
 
