@@ -22,35 +22,31 @@ def test_loglikelihood():
     np.testing.assert_allclose(r1, r3)
     np.testing.assert_allclose(r1, r4)
 
-#def test_loglikelihood2():
-#    #10 regions, 3 cells, 4 states
-#    x = csr_matrix(np.random.choice(5,(1000,300)))
-#    alpha = np.random.rand(4,300)
-#    r1 = dirmul_loglikeli_sp(x,alpha)
-#    r2 = fast_dirmul_loglikeli_sp(x, alpha)
-#
-#    np.testing.assert_allclose(r1, r2)
-#
-#def test_loglikelihood3():
-#    #10 regions, 3 cells, 4 states
-#    x = csr_matrix(np.random.choice(5,(1000,300)))
-#    maxcount = 3
-#    x.data[x.data>=maxcount] = maxcount -1
-#    alpha = np.random.rand(4,300)
-#    r1 = dirmul_loglikeli_sp(x,alpha)
-#    r2 = fast_dirmul_loglikeli_sp(x, alpha)
-#
-#    np.testing.assert_allclose(r1, r2)
-#
-#def test_loglikelihood4():
-#    #10 regions, 3 cells, 4 states
-#    x = csr_matrix(np.random.choice(5,(1000,300)))
-#    alpha = np.random.rand(4,300)
-#    r1 = dirmul_loglikeli_sp(x,alpha)
-#    r3 = fast_dirmul_loglikeli_sp(x, alpha)
-#    maxcount = 3
-#    x.data[x.data>=maxcount] = maxcount -1
-#    r2 = dirmul_loglikeli_sp(x, alpha)
-#
-#    np.testing.assert_allclose(r2, r3)
-#    np.testing.assert_allclose(r1, r2)
+def test_loglikelihood2():
+    #10 regions, 3 cells, 4 states
+    x = csr_matrix(np.random.choice(5,(1000,300)))
+    alpha = np.random.rand(4,300)
+    r1 = dirmul_loglikeli_sp(x,alpha)
+    r2 = fast_dirmul_loglikeli_sp(x, alpha)
+
+    np.testing.assert_allclose(r1, r2)
+
+def test_loglikelihood3():
+    #10 regions, 3 cells, 4 states
+    x = csr_matrix(np.random.choice(5,(1000,300)))
+    maxcount = 3
+    x.data[x.data>=maxcount] = maxcount -1
+    alpha = np.random.rand(4,300)
+    r1 = dirmul_loglikeli_sp(x,alpha)
+    r2 = fast_dirmul_loglikeli_sp(x, alpha)
+
+    np.testing.assert_allclose(r1, r2)
+
+def test_loglikelihood4():
+    #10 regions, 3 cells, 4 states
+    x = csr_matrix(np.random.choice(5,(1000,300)))
+    alpha = np.random.rand(4,300)
+    r1 = dirmul_loglikeli_sp(x,alpha)
+    r3 = fast_dirmul_loglikeli_sp(x, alpha)
+
+    np.testing.assert_allclose(r1, r3)
