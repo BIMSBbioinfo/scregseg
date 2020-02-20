@@ -65,7 +65,7 @@ def dirmul_loglikeli(x, alpha, maxcounts=3):
     return res
 
 
-def dirmul_loglikeli_sp(x, alpha, maxcounts=3):
+def dirmul_loglikeli_sp(x, alpha):
     """
     x : np.array
       regions x cell count matrix
@@ -78,15 +78,17 @@ def dirmul_loglikeli_sp(x, alpha, maxcounts=3):
     # x = 1, 2, 3 .. number of counts
     # n states
     # n cells
+    maxcounts = x.max() + 1
     precomp = gammaln(alpha[None,:,:] + np.arange(1, maxcounts)[:,None, None]) - gammaln(alpha)[None,:,:]
     for idx in range(x.shape[0]):
         if issparse(x):
             ids = x.indices[x.indptr[idx]:x.indptr[idx+1]]
-            cnts = np.where(x.data[x.indptr[idx]:x.indptr[idx+1]].astype(np.int64) >= maxcounts, maxcounts-1, x.data[x.indptr[idx]:x.indptr[idx+1]].astype(np.int64))
+            #cnts = np.where(x.data[x.indptr[idx]:x.indptr[idx+1]].astype(np.int64) >= maxcounts, maxcounts-1, x.data[x.indptr[idx]:x.indptr[idx+1]].astype(np.int64))
+            cnts = x.data[x.indptr[idx]:x.indptr[idx+1]].astype(np.int64)
         else:
             ids = np.nonzero(x[idx, :])[0]
             cnts = x[idx, ids]
-            cnts = np.where(cnts >= maxcounts, maxcounts - 1, cnts)
+            #cnts = (cnts >= maxcounts, maxcounts - 1, cnts)
         res[idx] += precomp[cnts-1, :, ids].sum(0)
     return res
 
@@ -114,36 +116,13 @@ def dirmul_loglikeli_sp_mincov(x, alpha, maxcounts=3, mincov = 100):
             res[idx] = 0.
     return res
 
-def fast_dirmul_loglikeli_sp(x, alpha, maxcount=3):
+def fast_dirmul_loglikeli_sp(x, alpha):
     result = np.zeros((x.shape[0], alpha.shape[0]))
-    #x.data[x.data>=maxcount] = maxcount -1
+    
     _fast_dirmul_loglikeli_sp(x.indices, x.indptr, x.data.astype('int'),
                              alpha, x.shape[0], result)
     return result
     
-def test():
-    #10 regions, 3 cells, 4 states
-    x = csr_matrix(np.random.choice(3,(1000,300)))
-    alpha = np.random.rand(4,300)
-    start = time.time()
-    r = dirmul_loglikeli_naive(x,alpha)
-    print('naiv', time.time() - start, r[:2,:2])
-    start = time.time()
-    r = dirmul_loglikeli(x,alpha)
-    print('likeli',time.time() - start, r[:2,:2])
-    start = time.time()
-    r = dirmul_loglikeli_sp(x,alpha)
-    print('likelisp', time.time() - start, r[:2,:2])
-    start = time.time()
-#    r = fast_dirmul_loglikeli_sp_(x.indices, x.indptr, x.data.astype('int'),
-#                             alpha, x.max()+1, x.shape[0])
-#    print('cython',time.time() - start, r[:2,:2])
-#    start = time.time()
-    r = fast_dirmul_loglikeli_sp(x, alpha)
-    print('cython',time.time() - start, r[:2,:2])
-    start = time.time()
-    # the batched version
-
 def get_region_cnts(dat):
     return pd.Series(np.asarray(dat.sum(1)).flatten())
 
@@ -373,7 +352,7 @@ class CntDirMulHMM(_BaseHMM):
         # loop over datasets each represented via a multinomial
         for ep, es, br, cb, x in zip(self.emission_prior_, self.emission_suffstats_, self.breaks_, self.cntbin_probs_, X):
             # compute the marginal likelihood with the current posterior parameters
-            res += fast_dirmul_loglikeli_sp(x, ep+es, self._maxcounts)
+            res += fast_dirmul_loglikeli_sp(x, ep+es)
             res += cntbin_loglikelihood(cnts2bins(get_region_cnts(x), br), cb)
 
         return res
@@ -829,7 +808,7 @@ class DirMulHMM(_BaseHMM):
         # loop over datasets each represented via a multinomial
         for ep, es, x in zip(self.emission_prior_, self.emission_suffstats_, X):
             # compute the marginal likelihood with the current posterior parameters
-            res += fast_dirmul_loglikeli_sp(x, ep+es, self._maxcounts) / self.temperature_
+            res += fast_dirmul_loglikeli_sp(x, ep+es) / self.temperature_
 
         return res
 
