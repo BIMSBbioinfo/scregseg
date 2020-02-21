@@ -291,7 +291,7 @@ class CountMatrix:
 
         if binarize:
             self.cmat.data[self.cmat.data > 0] = 1
-        if maxcount is not None:
+        if maxcount is not None and maxcount > 0:
             self.cmat.data[self.cmat.data > maxcount] = maxcount 
 
         cellcounts = self.cmat.sum(axis=0)
