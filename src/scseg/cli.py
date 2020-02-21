@@ -63,6 +63,7 @@ filtering.add_argument('--regions', dest='regions', type=str, help="Location of 
 filtering.add_argument('--outcounts', dest='outcounts', type=str, help="Location of output count matrix", required=True)
 filtering.add_argument('--mincount', dest='mincounts', type=int, default=0, help='Minimum number of counts per cell')
 filtering.add_argument('--maxcount', dest='maxcounts', type=int, default=6000000000, help='Maximum number of counts per cell')
+filtering.add_argument('--trimcount', dest='trimcounts', type=int, default=2, help='Maximum number of counts per matrix element. For instance, trimcount 1 amounts to binarization.')
 
 merge = subparsers.add_parser('merge', help='Merge matrices')
 merge.add_argument('--incounts', dest='incounts', type=str, nargs='+', help="Location of count matrix or matrices", required=True)
@@ -81,10 +82,11 @@ segment.add_argument('--counts', dest='counts', nargs='+', type=str, help="Locat
 segment.add_argument('--labels', dest='labels', nargs='*', type=str, help="Name of the countmatrix")
 segment.add_argument('--mincount', dest='mincounts', type=int, default=0, help='Minimum number of counts per cell')
 segment.add_argument('--maxcount', dest='maxcounts', type=int, default=6000000000, help='Maximum number of counts per cell')
+segment.add_argument('--trimcount', dest='trimcounts', type=int, default=2, help='Maximum number of counts per matrix element. For instance, trimcount 1 amounts to binarization.')
 segment.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
 segment.add_argument('--storage', dest='storage', type=str, help="Location for storing output")
 segment.add_argument('--nstates', dest='nstates', type=int, default=20)
-segment.add_argument('--randomseed', dest='randomseed', type=int, default=32, help='Random seed')
+segment.add_argument('--randomseed', dest='randomseed', nargs='+', type=int, default=32, help='Random seed or list of seeds. If a list is specified, the best scoring model is kept.')
 segment.add_argument('--niter', dest='niter', type=int, default=100, help='Number of EM iterations')
 segment.add_argument('--n_jobs', dest='n_jobs', type=int, default=1, help='Number Jobs')
 segment.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
@@ -93,10 +95,20 @@ stats = subparsers.add_parser('make_stats', help='Obtain segmentation stats')
 stats.add_argument('--counts', dest='counts', nargs='+', type=str, help="Location of one or several count matrices")
 stats.add_argument('--mincount', dest='mincounts', type=int, default=0, help='Minimum number of counts per cell')
 stats.add_argument('--maxcount', dest='maxcounts', type=int, default=6000000000, help='Maximum number of counts per cell')
+stats.add_argument('--trimcount', dest='trimcounts', type=int, default=2, help='Maximum number of counts per matrix element. For instance, trimcount 1 amounts to binarization.')
 stats.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
 stats.add_argument('--storage', dest='storage', type=str, help="Location for storing output")
 stats.add_argument('--labels', dest='labels', nargs='*', type=str, help="Name of the countmatrix")
 stats.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
+
+llscore = subparsers.add_parser('score', help='Print log-likelihood score')
+llscore.add_argument('--counts', dest='counts', nargs='+', type=str, help="Location of one or several count matrices")
+llscore.add_argument('--mincount', dest='mincounts', type=int, default=0, help='Minimum number of counts per cell')
+llscore.add_argument('--maxcount', dest='maxcounts', type=int, default=6000000000, help='Maximum number of counts per cell')
+llscore.add_argument('--trimcount', dest='trimcounts', type=int, default=2, help='Maximum number of counts per matrix element. For instance, trimcount 1 amounts to binarization.')
+llscore.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
+llscore.add_argument('--storage', dest='storage', type=str, help="Location for storing output")
+llscore.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
 
 seg2bed = subparsers.add_parser('seg_to_bed', help='Export segmentation to bed-file or files')
 seg2bed.add_argument('--storage', dest='storage', type=str, help="Location for storing output")
@@ -121,19 +133,19 @@ annotate.add_argument('--plot', dest='plot', help="Flag indicating whether to pl
 annotate.add_argument('--storage', dest='storage', type=str, help="Location for containing the pre-trained segmentation and for storing the annotated segmentation results")
 annotate.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
 
-statecorrelation = subparsers.add_parser('inspect_state', help='Inspect state correlation structure')
-statecorrelation.add_argument('--stateid', dest='stateid', type=int, help="State ID to explore")
-statecorrelation.add_argument('--counts', dest='counts', nargs='+', type=str, help="Location of one or several count matrices")
-statecorrelation.add_argument('--mincount', dest='mincounts', type=int, default=0, help='Minimum number of counts per cell')
-statecorrelation.add_argument('--maxcount', dest='maxcounts', type=int, default=6000000000, help='Maximum number of counts per cell')
-statecorrelation.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
-statecorrelation.add_argument('--n_cells', dest='n_cells', default=1000, type=int, help="Number of top variable cells to consider")
-statecorrelation.add_argument('--threshold', dest='threshold', type=float, default=0.9, help="Threshold on posterior decoding probability. "
-                                                                                     "Only export results that exceed the posterior decoding threshold. "
-                                                                                     "This allows to adjust the stringency of state calls for down-stream analysis steps.")
-statecorrelation.add_argument('--output', dest='output', help="Output figure path.", type=str, default='statecorrelationstructure.png')
-statecorrelation.add_argument('--storage', dest='storage', type=str, help="Location for containing the pre-trained segmentation and for storing the annotated segmentation results")
-statecorrelation.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
+#statecorrelation = subparsers.add_parser('inspect_state', help='Inspect state correlation structure')
+#statecorrelation.add_argument('--stateid', dest='stateid', type=int, help="State ID to explore")
+#statecorrelation.add_argument('--counts', dest='counts', nargs='+', type=str, help="Location of one or several count matrices")
+#statecorrelation.add_argument('--mincount', dest='mincounts', type=int, default=0, help='Minimum number of counts per cell')
+#statecorrelation.add_argument('--maxcount', dest='maxcounts', type=int, default=6000000000, help='Maximum number of counts per cell')
+#statecorrelation.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
+#statecorrelation.add_argument('--n_cells', dest='n_cells', default=1000, type=int, help="Number of top variable cells to consider")
+#statecorrelation.add_argument('--threshold', dest='threshold', type=float, default=0.9, help="Threshold on posterior decoding probability. "
+#                                                                                     "Only export results that exceed the posterior decoding threshold. "
+#                                                                                     "This allows to adjust the stringency of state calls for down-stream analysis steps.")
+#statecorrelation.add_argument('--output', dest='output', help="Output figure path.", type=str, default='statecorrelationstructure.png')
+#statecorrelation.add_argument('--storage', dest='storage', type=str, help="Location for containing the pre-trained segmentation and for storing the annotated segmentation results")
+#statecorrelation.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
 
 plotannotate = subparsers.add_parser('plot_annot', help='Plot annotation')
 plotannotate.add_argument('--labels', dest='labels', nargs='+', type=str, help="Annotation labels.")
@@ -159,6 +171,7 @@ celltyping.add_argument('--storage', dest='storage', type=str, help="Location fo
 celltyping.add_argument('--counts', dest='counts', nargs='+', type=str, help="Location of count matrix or matrices")
 celltyping.add_argument('--mincount', dest='mincounts', type=int, default=0, help='Minimum number of counts per cell')
 celltyping.add_argument('--maxcount', dest='maxcounts', type=int, default=6000000000, help='Maximum number of counts per cell')
+celltyping.add_argument('--trimcount', dest='trimcounts', type=int, default=2, help='Maximum number of counts per matrix element. For instance, trimcount 1 amounts to binarization.')
 celltyping.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
 celltyping.add_argument('--cell_annotation', dest='cell_annotation', type=str, help='Location of a cell annotation table.')
 celltyping.add_argument('--method', dest='method', type=str, default='probability', choices=['probability', 'zscore', 'logfold', 'chisqstat'])
@@ -174,23 +187,36 @@ enrichment.add_argument('--method', dest='method', type=str, default='chisqstat'
 enrichment.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
 
 
-def load_count_matrices(countfiles, bedfile, mincounts, maxcounts):
+def load_count_matrices(countfiles, bedfile, mincounts, maxcounts, trimcounts):
     data = []
     cannot = []
     for cnt in countfiles:
         cm = CountMatrix.create_from_countmatrix(cnt, bedfile)
-        cm.filter_count_matrix(mincounts, maxcounts, 0, binarize=False)
+        cm.filter_count_matrix(mincounts, maxcounts, 0, binarize=False, maxcount=trimcounts)
     
         print(cm)
         cannot.append(cm.cannot)
         data.append(cm.cmat)
     return data, cannot
 
-def run_segmentation(data, bedfile, nstates, niter, random_state, n_jobs):
-    model = DirMulHMM(n_components=nstates, n_iter=niter, random_state=random_state, verbose=True,
-                              n_jobs=n_jobs)
-    model.fit(data)
-    scmodel = Scseg(model)
+def run_segmentation(data, bedfile, nstates, niter, random_states, n_jobs):
+    best_score = -np.inf
+    scores = []
+    print('Fitting {} models'.format(len(random_states)))
+    for random_state in random_states:
+        model = DirMulHMM(n_components=nstates, n_iter=niter, random_state=random_state, verbose=True,
+                          n_jobs=n_jobs)
+        model.fit(data)
+        score = model.score(data)
+        scores.append(score)
+        if best_score < score:
+            best_score = score
+            best_model = model
+            best_seed = random_state
+
+    print('all models: seed={}, score={}'.format(random_states, scores))
+    print('best model: seed={}, score={}'.format(best_seed, best_score))
+    scmodel = Scseg(best_model)
     scmodel.segment(data, bedfile)
     return scmodel
     
@@ -254,7 +280,7 @@ def local_main(args):
         print('filter counts ...')
         cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
         print('loaded', cm)
-        cm.filter_count_matrix(args.mincounts, args.maxcounts, 0, binarize=False)
+        cm.filter_count_matrix(args.mincounts, args.maxcounts, 0, binarize=False, maxcount=None if args.trimcounts<0 else args.trimcounts)
         print('exporting', cm)
         cm.export_counts(args.outcounts)
 
@@ -269,11 +295,12 @@ def local_main(args):
     elif args.program == 'groupcells':
         print('Group cells (pseudobulk)...')
         cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
-        group2cellmap = pd.read_csv(args.cellgroup, sep='\t', names=['cells', 'groups'])
+        group2cellmap = pd.read_csv(args.cellgroup, sep='\t')
         
         cell = group2cellmap.cells.values
         groups = group2cellmap.groups.values
 
+        print(cell, groups)
         pscm = cm.pseudobulk(cell, groups)
         pscm.export_counts(args.outcounts)
 
@@ -294,7 +321,8 @@ def local_main(args):
         print('segmentation ...')
         print('loading data ...')
         data, cell_annot = load_count_matrices(args.counts, args.regions,
-                                               args.mincounts, args.maxcounts)
+                                               args.mincounts, args.maxcounts,
+                                               args.trimcounts)
 
         print('fitting the hmm ...')
         scmodel = run_segmentation(data, args.regions, args.nstates,
@@ -305,42 +333,50 @@ def local_main(args):
         print('summarize results ...')
         make_state_summary(scmodel, outputpath, args.labels)
 
-    elif args.program == 'explore_refinement':
+#    elif args.program == 'explore_refinement':
+#        outputpath = os.path.join(args.storage, args.modelname)
+#        print('inspect ...')
+#        print('loading data ...')
+#        data, cell_annot = load_count_matrices(args.counts, args.regions, args.mincounts, args.maxcounts)
+#
+#        scmodel = Scseg.load(outputpath)
+#
+#        fig = scmodel.explore_state_correlationstructure(data, args.stateid,
+#                                                         nsubclusters=4,
+#                                                         n_cells=args.n_cells,
+#                                                         decoding_prob=args.threshold)
+#        fig.savefig(args.output)
+#
+#    elif  args.program == 'refine_state':
+#        outputpath = os.path.join(args.storage, args.modelname)
+#        print('refine state {} ...'.format(args.stateid))
+#        print('loading data ...')
+#        inputpath = os.path.join(args.storage, args.modelname)
+#        outputpath = os.path.join(args.storage, args.newname)
+#
+#        data, cell_annot = load_count_matrices(args.counts, args.regions, args.mincounts, args.maxcounts)
+#
+#        scmodel = Scseg.load(outputpath)
+#
+#        newmodel = refine_state(scmodel, data, args.stateid, args.n_subclusters,
+#                                args.n_cells, args.threshold)
+#        scmodel.save(outputpath)
+#        print('summarize results ...')
+#        make_state_summary(scmodel, outputpath, args.labels)
+#
+
+    elif args.program == 'score':
         outputpath = os.path.join(args.storage, args.modelname)
-        print('inspect ...')
         print('loading data ...')
-        data, cell_annot = load_count_matrices(args.counts, args.regions, args.mincounts, args.maxcounts)
-
+        data, cell_annot = load_count_matrices(args.counts, args.regions, args.mincounts, args.maxcounts, args.trimcounts)
+        datanames = [os.path.basename(c) for c in args.counts]
         scmodel = Scseg.load(outputpath)
-
-        fig = scmodel.explore_state_correlationstructure(data, args.stateid,
-                                                         nsubclusters=4,
-                                                         n_cells=args.n_cells,
-                                                         decoding_prob=args.threshold)
-        fig.savefig(args.output)
-
-    elif  args.program == 'refine_state':
-        outputpath = os.path.join(args.storage, args.modelname)
-        print('refine state {} ...'.format(args.stateid))
-        print('loading data ...')
-        inputpath = os.path.join(args.storage, args.modelname)
-        outputpath = os.path.join(args.storage, args.newname)
-
-        data, cell_annot = load_count_matrices(args.counts, args.regions, args.mincounts, args.maxcounts)
-
-        scmodel = Scseg.load(outputpath)
-
-        newmodel = refine_state(scmodel, data, args.stateid, args.n_subclusters,
-                                args.n_cells, args.threshold)
-        scmodel.save(outputpath)
-        print('summarize results ...')
-        make_state_summary(scmodel, outputpath, args.labels)
-
+        print('score={}'.format(scmodel.model.score(data)))
 
     elif args.program == 'make_stats':
         outputpath = os.path.join(args.storage, args.modelname)
         print('loading data ...')
-        data, cell_annot = load_count_matrices(args.counts, args.regions, args.mincounts, args.maxcounts)
+        data, cell_annot = load_count_matrices(args.counts, args.regions, args.mincounts, args.maxcounts, args.trimcounts)
         datanames = [os.path.basename(c) for c in args.counts]
         scmodel = Scseg.load(outputpath)
         print('summarize results ...')
@@ -398,7 +434,7 @@ def local_main(args):
         print('celltyping ...')
         scmodel = Scseg.load(outputpath)
 
-        data, celllabels = load_count_matrices(args.counts, args.regions, args.mincounts, args.maxcounts)
+        data, celllabels = load_count_matrices(args.counts, args.regions, args.mincounts, args.maxcounts, args.trimcounts)
         datanames = [os.path.basename(c) for c in args.counts]
         #for cell in celllabels:
 

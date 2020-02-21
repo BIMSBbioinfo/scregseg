@@ -64,18 +64,3 @@ def _fast_dirmul_loglikeli_sp(const int[:] x_indices,
                 for s in range(n_states):
                     result[r, s] += precomp[m-1, ci, s]
     return result    
-#    # x = 1, 2, 3 .. number of counts
-#    # n states
-#    # n cells
-#    precomp = gammaln(alpha[None,:,:] + np.arange(1, maxcounts)[:,None, None]) - gammaln(alpha)[None,:,:]
-#    for idx in range(x.shape[0]):
-#        if issparse(x):
-#            ids = x.indices[x.indptr[idx]:x.indptr[idx+1]]
-#            cnts = np.where(x.data[x.indptr[idx]:x.indptr[idx+1]].astype(np.int64) >= maxcounts, maxcounts-1, x.data[x.indptr[idx]:x.indptr[idx+1]].astype(np.int64))
-#        else:
-#            ids = np.nonzero(x[idx, :])[0]
-#            cnts = x[idx, ids]
-#            cnts = np.where(cnts >= maxcounts, maxcounts - 1, cnts)
-#        res[idx] += precomp[cnts-1, :, ids].sum(0)
-#    return res
-

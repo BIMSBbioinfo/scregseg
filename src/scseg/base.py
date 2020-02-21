@@ -26,18 +26,8 @@ def compute_posterior(self, X):
     stats = self._initialize_sufficient_statistics()
     framelogprob = self._compute_log_likelihood(X)
     logprob, fwdlattice = self._do_forward_pass(framelogprob)
-#    curr_logprob += logprob
     bwdlattice = self._do_backward_pass(framelogprob)
     posteriors = self._compute_posteriors(fwdlattice, bwdlattice)
-    if self.stochastic_update:
-        ids = (posteriors.cumsum(1) <= self.random_state.rand(posteriors.shape[0],1)).sum(1)
- 
-        spost=np.zeros_like(posteriors)
-        i = np.arange(posteriors.shape[0])
-        spost[i, ids[i]] = 1
-
-        posteriors = spost
-
     self._accumulate_sufficient_statistics(
         stats, X, framelogprob, posteriors, fwdlattice,
         bwdlattice)
@@ -119,12 +109,8 @@ class _BaseHMM(BaseEstimator):
                  n_iter=10, tol=1e-2, verbose=False,
                  params=string.ascii_letters,
                  init_params=string.ascii_letters,
-                 batch_size=10000,
-                 minibatchlearning=False,
-                 learningrate=0.05,
                  n_jobs=1,
-                 momentum=0.85, decay=0.1,
-                 schedule_steps=10):
+                 ):
         self.n_components = n_components
         self.params = params
         self.init_params = init_params
@@ -133,20 +119,10 @@ class _BaseHMM(BaseEstimator):
         self.algorithm = algorithm
         self.random_state = random_state
         self.n_iter = n_iter
-        self.n_mini_iter = 5
         self.tol = tol
         self.verbose = verbose
-        self.batch_size=batch_size
-        self.minibatchlearning=minibatchlearning
-        self.learningrate = learningrate
-        self.momentum = momentum
-        self.decay = decay
-        self.schedule_steps = schedule_steps
         self.n_jobs = n_jobs
-        if minibatchlearning:
-            self.monitor_ = MinibatchMonitor(self.tol, self.n_iter, self.verbose)
-        else:
-            self.monitor_ = ConvergenceMonitor(self.tol, self.n_iter, self.verbose)
+        self.monitor_ = ConvergenceMonitor(self.tol, self.n_iter, self.verbose)
         self.check_fitted = "transmat_"
 
     def get_stationary_distribution(self):
@@ -420,40 +396,6 @@ class _BaseHMM(BaseEstimator):
         self._check()
 
         self.monitor_._reset()
-        if self.minibatchlearning:
-            print("pretrain with minibatches")
-            for iter in range(self.n_mini_iter):
-                # needed for learning rate scheduling
-                self.i_iter = iter
-                for i, j in iter_from_X_lengths(X, self.batch_size,
-                                                state=self.random_state):
-                    stats = self._initialize_sufficient_statistics()
-                    curr_logprob = 0
-
-                    framelogprob = self._compute_log_likelihood(get_batch(X, i, j))
-                    logprob, fwdlattice = self._do_forward_pass(framelogprob)
-                    curr_logprob += logprob
-                    bwdlattice = self._do_backward_pass(framelogprob)
-                    posteriors = self._compute_posteriors(fwdlattice, bwdlattice)
-
-                    self._accumulate_sufficient_statistics(
-                        stats, get_batch(X, i, j), framelogprob, posteriors, fwdlattice,
-                        bwdlattice)
-
-                    # XXX must be before convergence check, because otherwise
-                    #     there won't be any updates for the case ``n_iter=1``.
-                    self._do_mstep_minibatch(stats)
-
-                curr_logprob = 0
-
-                framelogprob = self._compute_log_likelihood(get_batch(X, 0, X[0].shape[0]))
-                logprob, fwdlattice = self._do_forward_pass(framelogprob)
-                curr_logprob += logprob
-                self.monitor_.report(curr_logprob)
-                if self.monitor_.converged:
-                    print('got into the convergence check')
-                    break
-
         if True:
             n_jobs = effective_n_jobs(self.n_jobs)
             parallel = Parallel(n_jobs=n_jobs, verbose=max(0,
@@ -702,42 +644,3 @@ class _BaseHMM(BaseEstimator):
             normalize(self.transmat_, axis=1)
 
 
-    def _do_mstep_minibatch(self, stats):
-        """Performs the M-step of EM algorithm.
-
-        Parameters
-        ----------
-        stats : dict
-            Sufficient statistics updated from all available samples.
-        """
-        # The ``np.where`` calls guard against updating forbidden states
-        # or transitions in e.g. a left-right HMM.
-        if 's' in self.params:
-            startprob_ = self.startprob_prior - 1.0 + stats['start']
-            startprob_ = np.where(self.startprob_ == 0.0,
-                                       self.startprob_, startprob_)
-
-            normalize(startprob_)
-            self.startprob_ = self.delta_weight(self.startprob_, startprob_, 'startvelocity')
-
-        if 't' in self.params:
-            transmat_ = self.transmat_prior - 1.0 + stats['trans']
-            transmat_ = np.where(self.transmat_ == 0.0,
-                                      self.transmat_, transmat_)
-            normalize(transmat_, axis=1)
-            self.transmat_ = self.delta_weight(self.transmat_, transmat_, 'transvelocity')
-
-    def delta_weight(self, prev_param, batch_param, name):
-        if not hasattr(self, name):
-            setattr(self, name, batch_param.copy())
-
-        alpha = self.learningrate**(1. + \
-                self.decay*(self.i_iter//self.schedule_steps))
-
-        update_param = (1-self.momentum)*batch_param + \
-                        self.momentum*getattr(self, name)
-
-        new_param = (1-alpha)*prev_param + alpha*update_param
-
-        setattr(self, name, update_param)
-        return new_param

@@ -274,14 +274,12 @@ class CountMatrix:
         newcannot = []
         for i, cm in enumerate(cms):
             ca = cm.cannot.copy()
-            print(ca)
             if samplelabel is not None:
                 ca['sample'] = samplelabel[i]
             else:
                 ca['sample'] = 'sample_{}'.format(i)
             newcannot.append(ca)
         cannot = pd.concat(newcannot, axis=0)
-        print(cannot)
         return cls(hstack([cm.cmat for cm in cms]), cms[0].regions, cannot)
 
     def filter_count_matrix(self, minreadsincells=1000, maxreadsincells=30000,

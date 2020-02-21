@@ -99,7 +99,9 @@ setup(
                 'numpy',
                 'hmmlearn',
                 'janggu',
-                'pandas'
+                'pandas',
+                'numba',
+                'umap',
     ],
     extras_require={
         # eg:
