@@ -22,12 +22,26 @@ DECODER_ALGORITHMS = frozenset(("viterbi", "map"))
 
 EPS = 1e-6
 
-def compute_posterior(self, X):
-    stats = self._initialize_sufficient_statistics()
+def batch_compute_loglikeli(self, X):
     framelogprob = self._compute_log_likelihood(X)
     logprob, fwdlattice = self._do_forward_pass(framelogprob)
+    return framelogprob, fwdlattice, logprob
+
+def batch_compute_posterior(self, X):
+    framelogprob, fwdlattice, logprob = batch_compute_loglikeli(self, X)
+    #framelogprob = self._compute_log_likelihood(X)
+    #logprob, fwdlattice = self._do_forward_pass(framelogprob)
     bwdlattice = self._do_backward_pass(framelogprob)
     posteriors = self._compute_posteriors(fwdlattice, bwdlattice)
+    return framelogprob, posteriors, fwdlattice, bwdlattice, logprob
+
+def batch_accumulate_suff_state(self, X):
+    stats = self._initialize_sufficient_statistics()
+    framelogprob, posteriors, fwdlattice, bwdlattice, logprob = batch_compute_posterior(self, X)
+    #framelogprob = self._compute_log_likelihood(X)
+    #logprob, fwdlattice = self._do_forward_pass(framelogprob)
+    #bwdlattice = self._do_backward_pass(framelogprob)
+    #posteriors = self._compute_posteriors(fwdlattice, bwdlattice)
     self._accumulate_sufficient_statistics(
         stats, X, framelogprob, posteriors, fwdlattice,
         bwdlattice)
@@ -176,12 +190,27 @@ class _BaseHMM(BaseEstimator):
         logprob = 0
         posteriors = np.zeros((n_samples, self.n_components))
         for i, j in iter_from_X_lengths(X, lengths):
-            framelogprob = self._compute_log_likelihood(get_batch(X, i, j))
+            framelogprob = self._compute_log_likeli(get_batch(X, i, j))
             logprobij, fwdlattice = self._do_forward_pass(framelogprob)
             logprob += logprobij
 
             bwdlattice = self._do_backward_pass(framelogprob)
             posteriors[i:j] = self._compute_posteriors(fwdlattice, bwdlattice)
+
+        n_jobs = effective_n_jobs(self.n_jobs)
+        parallel = Parallel(n_jobs=n_jobs, verbose=max(0,
+                            self.verbose - 1))
+
+       # print('using {} jobs'.format(n_jobs))
+        lengths = X[0].shape[0]//n_jobs
+
+        results = parallel(delayed(batch_compute_posterior)(self, get_batch(X, i, j))
+                           for i, j in iter_from_X_lengths(X, lengths))
+
+        _, posteriors, _, _, logprob = zip(*results)
+
+        logprob = sum(logprob_)
+        posteriors = np.vstack(posteriors)
         return logprob, posteriors
 
     def score(self, X, lengths=None):
@@ -212,12 +241,28 @@ class _BaseHMM(BaseEstimator):
         self._check()
 
         X = _check_array(X)
-        # XXX we can unroll forward pass for speed and memory efficiency.
-        logprob = 0
-        for i, j in iter_from_X_lengths(X, lengths):
-            framelogprob = self._compute_log_likelihood(get_batch(X, i, j))
-            logprobij, _fwdlattice = self._do_forward_pass(framelogprob)
-            logprob += logprobij
+
+        curr_logprob = 0
+
+        n_jobs = effective_n_jobs(self.n_jobs)
+        parallel = Parallel(n_jobs=n_jobs, verbose=max(0,
+                            self.verbose - 1))
+
+       # print('using {} jobs'.format(n_jobs))
+        lengths = X[0].shape[0]//n_jobs
+
+        results = parallel(delayed(batch_compute_loglikeli)(self, get_batch(X, i, j))
+                           for i, j in iter_from_X_lengths(X, lengths))
+
+        _, _, logprob_ = zip(*results)
+
+        logprob = sum(logprob_)
+#        # XXX we can unroll forward pass for speed and memory efficiency.
+#        logprob = 0
+#        for i, j in iter_from_X_lengths(X, lengths):
+#            framelogprob = self._compute_log_likelihood(get_batch(X, i, j))
+#            logprobij, _fwdlattice = self._do_forward_pass(framelogprob)
+#            logprob += logprobij
         return logprob
 
     def _decode_viterbi(self, X):
@@ -409,7 +454,7 @@ class _BaseHMM(BaseEstimator):
 
                 curr_logprob = 0
 
-                results = parallel(delayed(compute_posterior)(self, get_batch(X, i, j))
+                results = parallel(delayed(batch_accumulate_suff_state)(self, get_batch(X, i, j))
                                    for i, j in iter_from_X_lengths(X, lengths))
 
                 framelogprob, posteriors, fwdlattice, bwdlattice, logprob, statssub = zip(*results)
