@@ -249,22 +249,23 @@ class Scseg(object):
         return fig
 
     def plot_normalized_emissions(self, idat):
-       fig, ax = plt.subplots()
-
        em = self.model.emission_suffstats_[idat]
 
-       sem = em.sum(0, keepdims=True)/em.sum()
-
        nem = em / em.sum(1, keepdims=True)
+       tem = em.sum(0, keepdims=True)/em.sum()
+       lodds = np.log(nem) - np.log(tem)
 
-       lodds = np.log(sem) - np.log(nem)
-       sns.heatmap(lodds, cmap="RdBu_r", center=0., ax=ax)
-       ax.set_ylabel("States")
-       ax.set_xlabel("Features")
-       ax.set_xticklabels([i for i in range(1, em.shape[1]+1)])
+       g = sns.clustermap(lodds, center=0., robust=True, cmap='RdBu_r', figsize=(15,15))
+       g.ax_heatmap.set_ylabel('States')
+       g.ax_heatmap.set_xlabel('Features')
+       #sns.heatmap(lodds, cmap="RdBu_r", center=0., ax=ax, robust=True)
+       #ax.set_ylabel("States")
+       #ax.set_xlabel("Features")
+       #print('using ticks:', [i for i in range(1, em.shape[1]+1)])
+       #ax.set_xticklabels([i for i in range(1, em.shape[1]+1)])
        #ax.set_yticklabels([i for i in range(1, em.shape[0]+1)])
 
-       return fig
+       return g
 
     def plot_logfolds_dist(self, logfoldenr, query_state=None):
         """
