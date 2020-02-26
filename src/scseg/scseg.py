@@ -255,7 +255,7 @@ class Scseg(object):
        tem = em.sum(0, keepdims=True)/em.sum()
        lodds = np.log(nem) - np.log(tem)
 
-       g = sns.clustermap(lodds, center=0., robust=True, cmap='RdBu_r', figsize=(15,15))
+       g = sns.clustermap(pd.DataFrame(lodds, columns=[str(i) for i in range(1, lodds.shape[1]+1)]), center=0., robust=True, cmap='RdBu_r', figsize=(15,15))
        g.ax_heatmap.set_ylabel('States')
        g.ax_heatmap.set_xlabel('Features')
        #sns.heatmap(lodds, cmap="RdBu_r", center=0., ax=ax, robust=True)
