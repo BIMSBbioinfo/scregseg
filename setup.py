@@ -101,7 +101,7 @@ setup(
                 'janggu',
                 'pandas',
                 'numba',
-                'umap',
+                'umap-learn',
     ],
     extras_require={
         # eg:
