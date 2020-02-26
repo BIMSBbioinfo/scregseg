@@ -19,6 +19,7 @@ from scipy.special import gammaln
 from scipy.sparse import issparse
 from scipy.sparse import csc_matrix
 from scipy.sparse import csr_matrix
+from scipy.sparse import coo_matrix
 from scipy.sparse import hstack
 from scipy.stats import nbinom
 from sklearn import cluster
@@ -475,6 +476,8 @@ class DirMulHMM(_BaseHMM):
             self.emission_suffstats_ = []
             self.emission_prior_ = []
 
+            z = coo_matrix(self.random_state.multinomial(1,
+                           np.ones(self.n_components)/self.n_components, X[0].shape[0]))
             for modi in range(len(X)):
                 # random init but with read depth offset
                 _, n_features = X[modi].shape
@@ -488,11 +491,8 @@ class DirMulHMM(_BaseHMM):
 
                 self.emission_prior_.append(x)
 
-                r = self.random_state.rand(self.n_components, n_features)
-
-                r *= X[modi].sum()/r.sum()
-
-                #x = .9*x + .1*r
+                r = z.T.dot(X[modi]).toarray()
+                
                 self.emission_suffstats_.append(r)
 
     def _check(self):
