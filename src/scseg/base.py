@@ -186,28 +186,17 @@ class _BaseHMM(BaseEstimator):
         self._check()
 
         X = _check_array(X)
-        n_samples = get_nsamples(X)
-        logprob = 0
-        posteriors = np.zeros((n_samples, self.n_components))
-        for i, j in iter_from_X_lengths(X, lengths):
-            framelogprob = self._compute_log_likeli(get_batch(X, i, j))
-            logprobij, fwdlattice = self._do_forward_pass(framelogprob)
-            logprob += logprobij
-
-            bwdlattice = self._do_backward_pass(framelogprob)
-            posteriors[i:j] = self._compute_posteriors(fwdlattice, bwdlattice)
 
         n_jobs = effective_n_jobs(self.n_jobs)
         parallel = Parallel(n_jobs=n_jobs, verbose=max(0,
                             self.verbose - 1))
 
-       # print('using {} jobs'.format(n_jobs))
         lengths = X[0].shape[0]//n_jobs
 
         results = parallel(delayed(batch_compute_posterior)(self, get_batch(X, i, j))
                            for i, j in iter_from_X_lengths(X, lengths))
 
-        _, posteriors, _, _, logprob = zip(*results)
+        _, posteriors, _, _, logprob_ = zip(*results)
 
         logprob = sum(logprob_)
         posteriors = np.vstack(posteriors)
@@ -248,7 +237,6 @@ class _BaseHMM(BaseEstimator):
         parallel = Parallel(n_jobs=n_jobs, verbose=max(0,
                             self.verbose - 1))
 
-       # print('using {} jobs'.format(n_jobs))
         lengths = X[0].shape[0]//n_jobs
 
         results = parallel(delayed(batch_compute_loglikeli)(self, get_batch(X, i, j))
@@ -257,12 +245,6 @@ class _BaseHMM(BaseEstimator):
         _, _, logprob_ = zip(*results)
 
         logprob = sum(logprob_)
-#        # XXX we can unroll forward pass for speed and memory efficiency.
-#        logprob = 0
-#        for i, j in iter_from_X_lengths(X, lengths):
-#            framelogprob = self._compute_log_likelihood(get_batch(X, i, j))
-#            logprobij, _fwdlattice = self._do_forward_pass(framelogprob)
-#            logprob += logprobij
         return logprob
 
     def _decode_viterbi(self, X):
@@ -271,7 +253,7 @@ class _BaseHMM(BaseEstimator):
 
     def _decode_map(self, X):
         _, posteriors = self.score_samples(X)
-        logprob = np.max(np.log(posteriors), axis=1).sum()
+        logprob = np.log(np.max(posteriors, axis=1)).sum()
         state_sequence = np.argmax(posteriors, axis=1)
         return logprob, state_sequence
 
