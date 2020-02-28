@@ -5,7 +5,8 @@ import tempfile
 from pybedtools import BedTool
 from pybedtools import Interval
 from pybedtools.helpers import cleanup
-from .hmm import DirMulHMM
+from scseg.hmm import DirMulHMM
+from scseg.countmatrix import CountMatrix
 from scipy.stats import norm
 from scipy.sparse import csc_matrix
 from scipy.sparse import lil_matrix
@@ -64,6 +65,21 @@ def export_bed(subset, filename, individual_beds=False):
                                 'name', 'score', 'strand',
                                 'thickStart', 'thickEnd', 'itemRbg'])
 
+
+def get_labeled_data(X):
+    if not isinstance(X, list):
+        X = [X]
+    X_ = []
+    labels_ = []
+    for cm in X:
+       if isinstance(cm, CountMatrix):
+           X_.append(cm.cmat.tocsr())
+           labels_.append(cm.cannot)
+       else:
+           X_.append(cm)
+           labels_.append(None)
+    return X_, labels_
+
 class Scseg(object):
 
     _enr = None
@@ -77,8 +93,17 @@ class Scseg(object):
         self._color = {name: el for name, el in \
                        zip(self.to_statenames(np.arange(self.n_components)), sns.color_palette('bright', self.n_components))}
 
+    def score(self, X):
+        X_, labels_ = get_labeled_data(X)
+        if not hasattr(self, "labels_"):
+            setattr(self, "labels_", labels_)
+        return self.model.score(X_)
+        
     def fit(self, X):
-        self.model.fit(X)
+        X_, labels_ = get_labeled_data(X)
+        if not hasattr(self, "labels_"):
+            setattr(self, "labels_", labels_)
+        self.model.fit(X_)
 
     def save(self, path):
         """
@@ -87,7 +112,7 @@ class Scseg(object):
         self.model.save(os.path.join(path, 'modelparams'))
 
         if hasattr(self, "_segments") and self._segments is not None:
-            self.export_segmentation(os.path.join(path, 'segments',
+            self.export_segmentation(os.path.join(path, 'summary',
                                      'segmentation.tsv'), 0.0)
 
     @classmethod
@@ -103,7 +128,7 @@ class Scseg(object):
             raise ValueError("Model not available")
         scmodel = cls(model)
 
-        scmodel.load_segments(os.path.join(path, 'segments', 'segmentation.tsv'))
+        scmodel.load_segments(os.path.join(path, 'summary', 'segmentation.tsv'))
 
         return scmodel
 
@@ -130,7 +155,7 @@ class Scseg(object):
 
         return int(statename[len(self._nameprefix):])
 
-    def cell2state_counts(self, data, prob_max_threshold=0.0, post=False):
+    def cell2state_counts(self, X, prob_max_threshold=0.0, post=False):
         """ Determines whether a states is overrepresented among
         the accessible sites in a given cellself.
 
@@ -138,15 +163,16 @@ class Scseg(object):
         and the log-fold-change is determine by Obs[state proportion]/Expected[state proportion].
         """
 
-        #stateprob = self.model.get_stationary_distribution()
+        X_, labels_ = get_labeled_data(X)
+        if not hasattr(self, "labels_"):
+            setattr(self, "labels_", labels_)
 
         if post:
             # use posterior decoding
-            print('use post')
-            _, statescores = self.model.score_samples(data)
+            _, statescores = self.model.score_samples(X_)
             Z = statescores.T
         else:
-            states = self.model.predict(data)
+            states = self.model.predict(X_)
 
             values = np.ones(len(states))
             values[self._segments.Prob_max < prob_max_threshold] = 0
@@ -156,7 +182,7 @@ class Scseg(object):
 
         enrs = []
 
-        for d in data:
+        for d in X_:
             d_ = d.copy()
             d_[d_>0] = 1
 
@@ -173,7 +199,7 @@ class Scseg(object):
 
         return enrs
 
-    def cell2state(self, data, mode='logfold', prob_max_threshold=0.0, post=False):
+    def cell2state(self, X, mode='logfold', prob_max_threshold=0.0, post=False):
         """ Determines whether a states is overrepresented among
         the accessible sites in a given cellself.
 
@@ -181,7 +207,11 @@ class Scseg(object):
         and the log-fold-change is determine by Obs[state proportion]/Expected[state proportion].
         """
 
-        obs_seqfreqs = self.cell2state_counts(data, prob_max_threshold, post)
+        X_, labels_ = get_labeled_data(X)
+        if not hasattr(self, "labels_"):
+            setattr(self, "labels_", labels_)
+
+        obs_seqfreqs = self.cell2state_counts(X_, prob_max_threshold, post)
 
         enrs = []
 
@@ -255,7 +285,12 @@ class Scseg(object):
        tem = em.sum(0, keepdims=True)/em.sum()
        lodds = np.log(nem) - np.log(tem)
 
-       g = sns.clustermap(pd.DataFrame(lodds, columns=[str(i) for i in range(1, lodds.shape[1]+1)]), center=0., robust=True, cmap='RdBu_r', figsize=(15,15))
+       if hasattr(self, "labels_"):
+           l = ax.set_xticklabels(self.labels_[idat])
+       else:
+           l = [str(i) for i in range(lodds.shape[1])]
+
+       g = sns.clustermap(pd.DataFrame(lodds, columns=l), center=0., robust=True, cmap='RdBu_r', figsize=(15,15))
        g.ax_heatmap.set_ylabel('States')
        g.ax_heatmap.set_xlabel('Features')
        #sns.heatmap(lodds, cmap="RdBu_r", center=0., ax=ax, robust=True)
@@ -294,25 +329,28 @@ class Scseg(object):
     def color(self):
         return self._color
 
-    def segment(self, data, regions):
+    def segment(self, X, regions):
         """
         performs segmentation.
 
         Parameters
         ----------
-        data : list(np.array) or list(scipy.sparse.csc_matrix)
+        X : list(np.array) or list(scipy.sparse.csc_matrix)
             List of count matrices
         regions : pd.DataFrame
             Dataframe containing the genomic intervals (e.g. from a bed file).
         """
+        X_, labels_ = get_labeled_data(X)
+        if not hasattr(self, "labels_"):
+            setattr(self, "labels_", labels_)
 
         bed = BedTool(regions)
 
         regions_ = pd.DataFrame([[iv.chrom, iv.start, iv.end] for iv in bed],
                                 columns=['chrom', 'start', 'end'])
 
-        statenames = self.to_statenames(self.model.predict(data))
-        _, statescores = self.model.score_samples(data)
+        statenames = self.to_statenames(self.model.predict(X_))
+        _, statescores = self.model.score_samples(X_)
 
         regions_['name'] = statenames
         regions_['strand'] = '.'
@@ -329,8 +367,8 @@ class Scseg(object):
         regions_['Prob_max'] = statescores.max(1)
         regions_['score'] = 1000*regions_['Prob_max']
         regions_['score'] = regions_['score'].astype('int')
-        for i in range(len(data)):
-            regions_['readdepth_' + str(i)] = data[i].sum(1)
+        for i in range(len(X_)):
+            regions_['readdepth_' + str(i)] = X_[i].sum(1)
         self._segments = regions_
         cleanup()
 
@@ -343,7 +381,7 @@ class Scseg(object):
         os.makedirs(os.path.dirname(filename), exist_ok=True)
 
         if self._segments is None:
-            raise ValueError("No segmentation results available. Please run segment(data, regions) first.")
+            raise ValueError("No segmentation results available. Please run segment(X, regions) first.")
 
         self._segments[(self._segments.Prob_max >= prob_max_threshold)].to_csv(filename, sep='\t', index=False)
 
@@ -773,10 +811,12 @@ class Scseg(object):
         return subset_merged
 
 
-    def get_subdata(self, data, query_states, collapse_neighbors=True, state_prob_threshold=0.99):
+    def get_subdata(self, X, query_states, collapse_neighbors=True, state_prob_threshold=0.99):
 
-        if not isinstance(data, list):
-            data = [data]
+        X_, labels_ = get_labeled_data(X)
+        if not hasattr(self, "labels_"):
+            setattr(self, "labels_", labels_)
+
         if not isinstance(query_states, list):
             query_states = [query_states]
 
@@ -786,7 +826,7 @@ class Scseg(object):
         submats = []
 
         if not collapse_neighbors:
-            for datum in data:
+            for datum in X_:
 
                 sm = np.asarray(datum[subset.index].todense())
 
@@ -811,14 +851,12 @@ class Scseg(object):
 
 
         subset['common'] = mapelem
-        print(subset.shape)
 
         subset_merged = subset.groupby(['common', 'name']).aggregate({'chrom': 'first',
                                         'start': 'min',
                                         'end': 'max', 'name':'first'})
 
-        print(subset_merged.shape)
-        for datum in data:
+        for datum in X_:
 
             dat = datum.tocsr()
             submat = lil_matrix((nelem, datum.shape[1]))
