@@ -57,9 +57,9 @@ def make_counting_bins(bamfile, binsize, storage=None):
 
 
 
-def sparse_count_reads_in_regions(bamfile, regions, storage,
+def sparse_count_reads_in_regions(bamfile, regions,
                                   barcodetag, flank=0, log=None,
-                                  count_both_ends=False):
+                                  mode='midpoint'):
     """ This function obtains the counts per bins of equal size
     across the genome.
 
@@ -72,7 +72,7 @@ def sparse_count_reads_in_regions(bamfile, regions, storage,
     Paired-end reads are counted once at the mid-point between the two
     pairs while single-end reads are counted at the 5' end.
     For paired-end reads it is optionally possible to count both read ends
-    by setting count_both_ends=True.
+    by setting mode='both' or mode='eitherend'.
 
     Parameters
     ----------
@@ -88,9 +88,12 @@ def sparse_count_reads_in_regions(bamfile, regions, storage,
         Assumed template length. This is used when counting paired-end reads
         at the mid-point and the individual reads do not overlap with
         the given region, but the mid-point does.
-    count_both_ends : bool
-        Indicates whether for paired-end sequences, the ends of both mates should
-        be counted separately. Default: False.
+    mode : str
+        For paired-end sequences reads can be counted at the midpoint,
+        by counting both ends (like they came from single-ended sequencing)
+        or by counting if either 5'-end is in the bin.
+        These options are indicated by mode=['midpoint', 'countboth', 'eitherend'].
+        Default: mode='midpoint'
     """
 
     # Obtain the header information
@@ -124,7 +127,7 @@ def sparse_count_reads_in_regions(bamfile, regions, storage,
 
     template_length = 3000
 
-    if count_both_ends:
+    if mode != 'midpoint':
         # if both ends are counted, template_length is irrelevant
         tlen = 0
     else:
@@ -148,7 +151,7 @@ def sparse_count_reads_in_regions(bamfile, regions, storage,
             #if bar == 'dummy':
             #    continue
 
-            if aln.is_proper_pair and aln.is_read1 and not count_both_ends:
+            if aln.is_proper_pair and aln.is_read1 and mode == 'midpoint':
 
                 pos = min(aln.reference_start, aln.next_reference_start)
 
@@ -157,7 +160,21 @@ def sparse_count_reads_in_regions(bamfile, regions, storage,
                 if midpoint >= iv.start and midpoint < iv.end:
                    sdokmat[idx, barcodemap[bar]] += 1
 
-            if not aln.is_paired or count_both_ends:
+            if aln.is_proper_pair and mode == 'eitherend':
+
+                minpos = min(aln.reference_start + aln.template_length, aln.reference_start)
+                maxpos = max(aln.reference_start + aln.template_length, aln.reference_start)
+                #minpos = min(aln.reference_start, aln.next_reference_start)
+                #maxpos = max(aln.reference_start, aln.next_reference_start)
+
+                if minpos >= iv.start and minpos < iv.end and maxpos >= iv.start and maxpos < iv.end and aln.is_read2:
+                    pass
+                    #sdokmat[idx, barcodemap[bar]] += 1
+                else:
+                    sdokmat[idx, barcodemap[bar]] += 1
+                   
+
+            if not aln.is_paired or mode == 'countboth':
                 # count single-end reads at 5p end
                 if not aln.is_reverse:
                     if aln.reference_start >= iv.start and aln.reference_start < iv.end:
@@ -169,8 +186,9 @@ def sparse_count_reads_in_regions(bamfile, regions, storage,
 
     afile.close()
 
+    return sdokmat.tocsr(), pd.DataFrame({'cell': barcode_string.split(';')})
     # store the results in COO sparse matrix format
-    save_sparsematrix(storage, sdokmat, barcode_string.split(';'))
+    #save_sparsematrix(storage, sdokmat, barcode_string.split(';'))
 
         
 def save_sparsematrix(filename, mat, barcodes):
@@ -180,7 +198,7 @@ def save_sparsematrix(filename, mat, barcodes):
     if isinstance(barcodes, pd.DataFrame):
         df = barcodes
     else:
-        df = pd.DataFrame({'barcodes': barcodes})
+        df = pd.DataFrame({'cell': barcodes})
     df.to_csv(filename + '.bct', sep='\t', header=True, index=False)
 
 def get_count_matrix_(filename, shape, header=True, offset=0):
@@ -245,11 +263,24 @@ class CountMatrix:
             
         cannot = get_cell_annotation(countmatrixfile)
         
-        cannot['cell'] = cannot[cannot.columns[0]]
+        if 'cell' not in cannot.columns:
+            cannot['cell'] = cannot[cannot.columns[0]]
         rannot = get_regions_from_bed_(regionannotation)
         shape = rannot.shape[0], len(cannot)
         cmat = get_count_matrix_(countmatrixfile, shape, header=header, offset=index_offset)
         return cls(cmat, rannot, cannot)
+
+    @classmethod
+    def create_from_bam(cls, bamfile, regions, barcodetag='CB', binsize=1000, mode='eitherend'):
+        if not os.path.exists(regions):
+            make_counting_bins(bamfile, binsize, regions)
+        rannot = get_regions_from_bed_(regions)
+        cmat, cannot = sparse_count_reads_in_regions(bamfile, regions,
+                                  barcodetag, flank=0, log=None,
+                                  mode=mode)
+        
+        return cls(cmat.tocsr(), rannot, cannot)
+        
 
     def __init__(self, countmatrix, regionannotation, cellannotation):
 
@@ -284,15 +315,16 @@ class CountMatrix:
 
     def filter_count_matrix(self, minreadsincells=1000, maxreadsincells=30000,
                             minreadsinpeaks=20,
-                            binarize=True, maxcount=None):
+                            binarize=True, trimcount=None):
         """
         Applies filtering to the count matrix
         """
 
         if binarize:
             self.cmat.data[self.cmat.data > 0] = 1
-        if maxcount is not None and maxcount > 0:
-            self.cmat.data[self.cmat.data > maxcount] = maxcount 
+
+        if trimcount is not None and trimcount > 0:
+            self.cmat.data[self.cmat.data > trimcount] = trimcount 
 
         cellcounts = self.cmat.sum(axis=0)
         keepcells = np.where((cellcounts>=minreadsincells) & (cellcounts<maxreadsincells) & (self.cannot.cell.values!='dummy'))[1]
@@ -320,15 +352,30 @@ class CountMatrix:
         cannot = pd.DataFrame(grouplabels, columns=['cell'])
         return CountMatrix(csr_matrix(cnts), self.regions, cannot)
         
-    def __call__(self, icell=None):
-        if icell is None:
-            return self.cmat.toarray()
-        elif isinstance(icell, int):
-            return self.cmat[:, icell].toarray()
-        elif isinstance(icell, slice):
-            return self.cmat[:, icell].toarray()
-        raise ValueError("indexing not supported")
+    def subset(self, cell):
 
+        ids = self.cannot.cell.isin(cell)
+        ids = np.arange(self.cannot.shape[0])[ids]
+
+        cannot = self.cannot[self.cannot.cell.isin(cell)]
+
+        #ids = np.asarray(cannot.cell.isin(cell).index.tolist())
+        #cannot = cannot[cannot.cell.isin(cell)]
+
+        cmat = self.cmat.tocsc()
+        cnts = cmat[:, ids]
+
+        return CountMatrix(csr_matrix(cnts), self.regions, cannot)
+        
+#    def __call__(self, icell=None):
+#        if icell is None:
+#            return self.cmat.toarray()
+#        elif isinstance(icell, int):
+#            return self.cmat[:, icell].toarray()
+#        elif isinstance(icell, slice):
+#            return self.cmat[:, icell].toarray()
+#        raise ValueError("indexing not supported")
+#
     def __getitem__(self, ireg):
         return self.cmat[ireg]
 
@@ -351,10 +398,10 @@ class CountMatrix:
     def __len__(self):
         return self.n_regions
 
-    def subset(self, indices):
-        return CountMatrix(self.cmat[:, indices], copy.copy(self.regions),
-                    self.cannot.iloc[indices])
-
+#    def subset(self, indices):
+#        return CountMatrix(self.cmat[:, indices], copy.copy(self.regions),
+#                    self.cannot.iloc[indices])
+#
     def export_regions(self, filename):
         """
         Exports the associated regions to a bed file.
@@ -369,25 +416,3 @@ class CountMatrix:
         """
 
         save_sparsematrix(filename, self.cmat, self.cannot)
-        #mmwrite(filename, self.cmat.tocoo())
-
-        #df = pd.DataFrame({'barcodes': self.cannot.cell.values})
-        #df.to_csv(filename + '.bct', sep='\t', header=True, index=False)
-
-#        spcoo = self.cmat.tocoo()
-#        # sort lexicographically
-#       
-#        order_ = np.lexsort((spcoo.col, spcoo.row))
-#        indices = np.asarray([x for x in zip(spcoo.row, spcoo.col)], dtype=np.int64)[order_]
-#        values = spcoo.data.astype(np.float32)[order_]
-#        cont = {'region': indices[:,0], 'cell': indices[:, 1], 'count': values}
-#       
-#        df = pd.DataFrame(cont)
-#        with open(filename, 'w') as title:
-#            title.write('#  ' + ';'.join(self.cannot.cell.values) + '\n')
-#       
-#        df.to_csv(filename, mode = 'a', sep='\t',
-#                  header=True, index=False,
-#                  columns=['region', 'cell', 'count'])
-#
-#        write_cannot_table(filename, self.cannot)
