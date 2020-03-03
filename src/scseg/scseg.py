@@ -286,7 +286,11 @@ class Scseg(object):
        lodds = np.log(nem) - np.log(tem)
 
        if hasattr(self, "labels_"):
-           l = ax.set_xticklabels(self.labels_[idat])
+           if 'cell' in self.labels_[idat].columns:
+               l = self.labels_[idat].cell
+           elif 'barcodes' in self.labels_[idat].columns:
+               l = self.labels_[idat].barcodes
+           #l = self.labels_[idat].cell
        else:
            l = [str(i) for i in range(lodds.shape[1])]
 
