@@ -27,12 +27,12 @@ from sklearn.utils import check_random_state
 import pandas as pd
 import os
 import time
+import json
 
 from hmmlearn import _utils
 from .base import _BaseHMM, MinibatchMonitor
 from .utils import iter_from_X_lengths, _to_list, get_nsamples, get_batch
 from hmmlearn.utils import normalize, log_normalize
-#from hmmlearn.utils import normalize, log_normalize, log_mask_zero
 from ._utils import _fast_dirmul_loglikeli_sp
 
 __all__ = ["MultinomialHMM", "DirMulHMM", "DirMulMixture"]
@@ -306,6 +306,7 @@ class CntDirMulHMM(_BaseHMM):
 
     @classmethod
     def load(cls, path):
+
         npzfile = np.load(os.path.join(path, 'modelparams', 'dirmulhmm.npz'))
 
         trans = npzfile['arr_0']
@@ -315,7 +316,13 @@ class CntDirMulHMM(_BaseHMM):
         cntbins = npzfile['arr_4']
         #emissions = [npzfile[file] for file in npzfile.files[2:]]
 
-        model = cls(len(start))
+        parfile = os.path.join(path, 'modelparams', 'dirmulhmm.json')
+        if os.path.exists(parfile):
+            with open(parfile) as f:
+                params = json.loads(data)
+            model = cls(**params)
+        else:
+            model = cls(len(start))
 
         model.transmat_ = trans
         model.startprob_ = start
@@ -522,7 +529,16 @@ class DirMulHMM(_BaseHMM):
         en = len(emissions)//2
         es = emissions[:en]
         ep = emissions[en:]
-        model = cls(len(start))
+
+        parfile = os.path.join(path, 'modelparams', 'dirmulhmm.json')
+        if os.path.exists(parfile):
+            with open(parfile, 'r') as f:
+                params = json.load(f)
+            model = cls(**params)
+        else:
+            model = cls(len(start))
+
+        #model = cls(len(start))
 
         model.transmat_ = trans
         model.startprob_ = start
@@ -541,10 +557,17 @@ class DirMulHMM(_BaseHMM):
         """
         saves current model parameters
         """
-        path = os.path.join(path, 'dirmulhmm.npz')
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+        
+        os.makedirs(path, exist_ok=True)
+        #path = os.path.join(path, 'dirmulhmm.npz')
+
         savelist = [self.transmat_, self.startprob_] + self.emission_suffstats_ + self.emission_prior_
-        np.savez(path, *savelist)
+        np.savez(os.path.join(path, 'dirmulhmm.npz'), *savelist)
+
+        # save hyper parameters
+        with open(os.path.join(path, 'dirmulhmm.json'), 'w') as f:
+            json.dump(self.get_params(), f)
+        
 
     def _compute_log_likelihood(self, X):
         res = np.zeros((get_nsamples(X), self.n_components))
