@@ -429,7 +429,7 @@ def local_main(args):
                                                args.maxcounts, args.trimcounts)
         scmodel = Scseg.load(outputpath)
         print('Run state calling ...')
-        scmodel.segment(data)
+        scmodel.segment(data, args.regions)
         make_state_summary(scmodel, outputpath, args.labels)
         plot_normalized_emissions(scmodel, outputpath, args.labels)
         save_score(scmodel, data, outputpath)
