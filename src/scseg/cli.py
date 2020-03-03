@@ -324,12 +324,13 @@ def plot_state_annotation_relationship(model, storage, labels,
                           data=segdf,
                           ax=ax)
         elif plottype == 'boxplot':
-            model._segments['log_'+label] = np.log10(model._segments[label]+1)
+            segdf['log_'+label] = np.log10(segdf[label]+1)
             sns.boxplot(x='log_'+label, y='name',
                         data=segdf,
                         hue=groupby, orient='h', ax=ax)
+            
         #gr = '' if groupby is None else '_'+groupby
-        print('writing {}'.format(os.path.join(storage, 'annotation', '{}.png'.format(title))))
+    print('writing {}'.format(os.path.join(storage, 'annotation', '{}.png'.format(title))))
     fig.tight_layout()
     fig.savefig(os.path.join(storage, 'annotation', '{}.png'.format(title)))
 
@@ -450,7 +451,6 @@ def local_main(args):
     elif args.program == 'seg_to_bed':
         outputpath = os.path.join(args.storage, args.modelname)
 
-        print("export segmentation as bed")
         scmodel = Scseg.load(outputpath)
 
         # select query states
@@ -460,6 +460,7 @@ def local_main(args):
         if args.exclude_states is not None:
             query_states = list(set(query_states).difference(set(args.exclude_states)))
 
+        print("exporting {} states".format(len(query_states)))
         # subset and merge the state calls
         subset = scmodel.get_statecalls(query_states, collapse_neighbors=args.merge_neighbors,
                                         state_prob_threshold=args.threshold)

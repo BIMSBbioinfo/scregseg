@@ -258,7 +258,7 @@ class CntDirMulHMM(_BaseHMM):
     def _init(self, X, lengths=None):
 
         super(CntDirMulHMM, self)._init(X, lengths=lengths)
-        self.random_state = check_random_state(self.random_state)
+        self.random_state_ = check_random_state(self.random_state)
 
         X = _to_list(X)
 
@@ -282,7 +282,7 @@ class CntDirMulHMM(_BaseHMM):
 
                 self.emission_prior_.append(x)
 
-                r = self.random_state.rand(self.n_components, n_features)
+                r = self.random_state_.rand(self.n_components, n_features)
 
                 r *= X[modi].sum()/r.sum()
 
@@ -474,7 +474,7 @@ class DirMulHMM(_BaseHMM):
     def _init(self, X, lengths=None):
 
         super(DirMulHMM, self)._init(X, lengths=lengths)
-        self.random_state = check_random_state(self.random_state)
+        self.random_state_ = check_random_state(self.random_state)
 
         X = _to_list(X)
 
@@ -483,7 +483,7 @@ class DirMulHMM(_BaseHMM):
             self.emission_suffstats_ = []
             self.emission_prior_ = []
 
-            z = coo_matrix(self.random_state.multinomial(1,
+            z = coo_matrix(self.random_state_.multinomial(1,
                            np.ones(self.n_components)/self.n_components, X[0].shape[0]))
             for modi in range(len(X)):
                 # random init but with read depth offset
@@ -587,7 +587,7 @@ class DirMulHMM(_BaseHMM):
             ma = logsumexp(res, -1, keepdims=True)
             res -= ma
             res = logsumexp(res, 0)
-            #res += ma.sum(0)
+            res += ma.sum(0)
         else:
             raise ValueError('Unknown argument for replicate')
 
@@ -697,7 +697,7 @@ class MultinomialHMM(_BaseHMM):
     def _init(self, X, lengths=None):
 
         super(MultinomialHMM, self)._init(X, lengths=lengths)
-        self.random_state = check_random_state(self.random_state)
+        self.random_state_ = check_random_state(self.random_state)
 
         X = _to_list(X)
 
@@ -712,7 +712,7 @@ class MultinomialHMM(_BaseHMM):
 
                 x = np.array(X[modi].sum(0))
                 normalize(x)
-                r = self.random_state.rand(self.n_components, n_features)
+                r = self.random_state_.rand(self.n_components, n_features)
 
                 normalize(r, axis=1)
                 x = .9*x + .1*r
