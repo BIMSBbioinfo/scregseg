@@ -117,7 +117,8 @@ class _BaseHMM(BaseEstimator):
                  n_iter=10, tol=1e-2, verbose=False,
                  params=string.ascii_letters,
                  init_params=string.ascii_letters,
-                 n_jobs=1,
+                 n_jobs=1, emission_prior=1,
+                 replicate='sum'
                  ):
         self.n_components = n_components
         self.params = params
@@ -132,6 +133,8 @@ class _BaseHMM(BaseEstimator):
         self.n_jobs = n_jobs
         self.monitor_ = MinibatchMonitor(self.tol, self.n_iter, self.verbose)
         self.check_fitted = "transmat_"
+        self.prior_obs = emission_prior
+        self.replicate = replicate
 
     def get_stationary_distribution(self):
         """Compute the stationary distribution of states.
