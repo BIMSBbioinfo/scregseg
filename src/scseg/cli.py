@@ -102,6 +102,7 @@ fsegment.add_argument('--randomseed', dest='randomseed', nargs='+', type=int, de
 fsegment.add_argument('--niter', dest='niter', type=int, default=100, help='Number of EM iterations')
 fsegment.add_argument('--n_jobs', dest='n_jobs', type=int, default=1, help='Number Jobs')
 fsegment.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
+fsegment.add_argument('--replicate', dest='replicate', type=str, default='sum', choices=['sum', 'geometric_mean', 'arithmetic_mean'], help='Model name')
 
 # fitting a model from scratch
 segment = subparsers.add_parser('segment', help='Segment genome with existing model.')
@@ -228,14 +229,14 @@ def load_count_matrices(countfiles, bedfile, mincounts, maxcounts, trimcounts):
         #data.append(cm.cmat)
     return data
 
-def run_segmentation(data, bedfile, nstates, niter, random_states, n_jobs):
+def run_segmentation(data, bedfile, nstates, niter, random_states, n_jobs, mode):
     best_score = -np.inf
     scores = []
     print('Fitting {} models'.format(len(random_states)))
     for random_state in random_states:
         print("Starting {}".format(random_state))
         model = Scseg(DirMulHMM(n_components=nstates, n_iter=niter, random_state=random_state, verbose=True,
-                          n_jobs=n_jobs))
+                          n_jobs=n_jobs, replicate=mode))
         model.fit(data)
         score = model.score(data)
         scores.append(score)
@@ -404,7 +405,7 @@ def local_main(args):
         print('fitting the hmm ...')
         scmodel = run_segmentation(data, args.regions, args.nstates,
                                    args.niter, args.randomseed,
-                                   args.n_jobs)
+                                   args.n_jobs, args.replicate)
         scmodel.save(outputpath)
 
         print('summarize results ...')
@@ -572,9 +573,9 @@ def local_main(args):
         enr = scmodel.broadregion_enrichment(obs, lens, featurenames, mode=args.method)
 
         if args.method == 'logfold':
-            g = sns.clustermap(enr, cmap="RdBu_r", figsize=(10,20), robust=True, **{'center':0.0, 'vmin':-1.5, 'vmax':1.5})
+            g = sns.clustermap(enr, cmap="RdBu_r", figsize=(20,30), robust=True, **{'center':0.0, 'vmin':-1.5, 'vmax':1.5})
         elif args.method == 'chisqstat':
-            g = sns.clustermap(enr, cmap="Reds", figsize=(10,20), robust=True)
+            g = sns.clustermap(enr, cmap="Reds", figsize=(20,30), robust=True)
         g.savefig(os.path.join(outputenr, "state_enrichment_{}_{}.png".format(args.method, args.title)))
 
 #    elif args.program == 'feature_correspondence':

@@ -454,9 +454,8 @@ class DirMulHMM(_BaseHMM):
                  algorithm="viterbi", random_state=None,
                  n_iter=10, tol=1e-2, verbose=False,
                  params="ste", init_params="ste",
-                 n_jobs=1,
+                 n_jobs=1, replicate='sum',
                  ):
-        self.prior_obs = emission_prior
         
         _BaseHMM.__init__(self, n_components,
                           startprob_prior=startprob_prior,
@@ -465,7 +464,8 @@ class DirMulHMM(_BaseHMM):
                           random_state=random_state,
                           n_iter=n_iter, tol=tol, verbose=verbose,
                           params=params, init_params=init_params,
-                          n_jobs=n_jobs,
+                          n_jobs=n_jobs, emission_prior=emission_prior,
+                          replicate=replicate
                           )
 
     def _trim_array(self, X):
@@ -551,7 +551,7 @@ class DirMulHMM(_BaseHMM):
     def print_progress(self):
         if not self.verbose:
             return
-        #print(str(datetime.now()) + ' stateprob:', self.get_stationary_distribution())
+        print(str(datetime.now()) + ' stateprob:', self.get_stationary_distribution())
 
     def save(self, path):
         """
@@ -570,11 +570,26 @@ class DirMulHMM(_BaseHMM):
         
 
     def _compute_log_likelihood(self, X):
-        res = np.zeros((get_nsamples(X), self.n_components))
+        res = np.zeros((len(X), get_nsamples(X), self.n_components))
         # loop over datasets each represented via a multinomial
-        for ep, es, x in zip(self.emission_prior_, self.emission_suffstats_, X):
+        for i, (ep, es, x) in enumerate(zip(self.emission_prior_, self.emission_suffstats_, X)):
             # compute the marginal likelihood with the current posterior parameters
-            res += fast_dirmul_loglikeli_sp(x, ep+es)
+            res[i] += fast_dirmul_loglikeli_sp(x, ep+es)
+
+        if self.replicate == 'sum':
+            # add independent replicates
+            res = res.sum(0)
+        elif self.replicate == 'geometric_mean':
+            # geometric mean of samples
+            res = res.mean(0)
+        elif self.replicate == 'arithmetic_mean':
+            #ma = res.max(-1, keepdims=True)
+            ma = logsumexp(res, -1, keepdims=True)
+            res -= ma
+            res = logsumexp(res, 0)
+            #res += ma.sum(0)
+        else:
+            raise ValueError('Unknown argument for replicate')
 
         return res
 
