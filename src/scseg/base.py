@@ -29,8 +29,6 @@ def batch_compute_loglikeli(self, X):
 
 def batch_compute_posterior(self, X):
     framelogprob, fwdlattice, logprob = batch_compute_loglikeli(self, X)
-    #framelogprob = self._compute_log_likelihood(X)
-    #logprob, fwdlattice = self._do_forward_pass(framelogprob)
     bwdlattice = self._do_backward_pass(framelogprob)
     posteriors = self._compute_posteriors(fwdlattice, bwdlattice)
     return framelogprob, posteriors, fwdlattice, bwdlattice, logprob
@@ -38,10 +36,6 @@ def batch_compute_posterior(self, X):
 def batch_accumulate_suff_state(self, X):
     stats = self._initialize_sufficient_statistics()
     framelogprob, posteriors, fwdlattice, bwdlattice, logprob = batch_compute_posterior(self, X)
-    #framelogprob = self._compute_log_likelihood(X)
-    #logprob, fwdlattice = self._do_forward_pass(framelogprob)
-    #bwdlattice = self._do_backward_pass(framelogprob)
-    #posteriors = self._compute_posteriors(fwdlattice, bwdlattice)
     self._accumulate_sufficient_statistics(
         stats, X, framelogprob, posteriors, fwdlattice,
         bwdlattice)
@@ -136,7 +130,7 @@ class _BaseHMM(BaseEstimator):
         self.tol = tol
         self.verbose = verbose
         self.n_jobs = n_jobs
-        self.monitor_ = ConvergenceMonitor(self.tol, self.n_iter, self.verbose)
+        self.monitor_ = MinibatchMonitor(self.tol, self.n_iter, self.verbose)
         self.check_fitted = "transmat_"
 
     def get_stationary_distribution(self):
@@ -439,7 +433,7 @@ class _BaseHMM(BaseEstimator):
                 results = parallel(delayed(batch_accumulate_suff_state)(self, get_batch(X, i, j))
                                    for i, j in iter_from_X_lengths(X, lengths))
 
-                framelogprob, posteriors, fwdlattice, bwdlattice, logprob, statssub = zip(*results)
+                _, _, _, _, logprob, statssub = zip(*results)
                 n = 0
                 stats = self._initialize_sufficient_statistics()
                 for i, j in iter_from_X_lengths(X, lengths):
