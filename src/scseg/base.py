@@ -18,7 +18,7 @@ from .utils import _check_array, get_nsamples, get_batch
 from sklearn.utils._joblib import Parallel, delayed, effective_n_jobs
 
 #: Supported decoder algorithms.
-DECODER_ALGORITHMS = frozenset(("viterbi", "map"))
+DECODER_ALGORITHMS = frozenset(("viterbi", "map", "robust_map"))
 
 EPS = 1e-6
 
@@ -26,6 +26,16 @@ def batch_compute_loglikeli(self, X):
     framelogprob = self._compute_log_likelihood(X)
     logprob, fwdlattice = self._do_forward_pass(framelogprob)
     return framelogprob, fwdlattice, logprob
+
+def batch_compute_posterior_robust(self, X):
+    posteriors = np.zeros((len(X), get_nsamples(X), self.n_components))
+    for i in range(get_nsamples(X)):
+        framelogprob, fwdlattice, logprob = batch_compute_loglikeli(self, X)
+        bwdlattice = self._do_backward_pass(framelogprob)
+        posteriors[i] = self._compute_posteriors(fwdlattice, bwdlattice)
+    posteriors_mean = posteriors.mean(0)
+    posteriors_sd = posteriors.std(0)
+    return posteriors_mean, posteriors_sd
 
 def batch_compute_posterior(self, X):
     framelogprob, fwdlattice, logprob = batch_compute_loglikeli(self, X)
@@ -69,7 +79,7 @@ class _BaseHMM(BaseEstimator):
         of the transition probabilities :attr:`transmat_`.
 
     algorithm : string, optional
-        Decoder algorithm. Must be one of "viterbi" or "map".
+        Decoder algorithm. Must be one of "viterbi", "map" or "robust_map".
         Defaults to "viterbi".
 
     random_state: RandomState or an int seed, optional
@@ -152,6 +162,49 @@ class _BaseHMM(BaseEstimator):
 
     def print_progress(self):
         pass
+
+    def robust_predict_proba(self, X):
+        """Compute the robust posteriors across replicates.
+
+        Parameters
+        ----------
+        X : array-like, shape (n_samples, n_features)
+            Feature matrix of individual samples.
+
+        Returns
+        -------
+
+        posteriors_mean : array, shape (n_samples, n_components)
+            Average State-membership probabilities for each sample in ``X`` across replicates.
+
+        posteriors_std : array, shape (n_samples, n_components)
+            Std. dev. State-membership probabilities for each sample in ``X`` across replicates.
+
+        See Also
+        --------
+        score : Compute the log probability under the model.
+        decode : Find most likely state sequence corresponding to ``X``.
+        """
+        X = self._trim_array(X)
+        check_is_fitted(self, self.check_fitted)
+        self._check()
+
+        X = _check_array(X)
+
+        n_jobs = effective_n_jobs(self.n_jobs)
+        parallel = Parallel(n_jobs=n_jobs, verbose=max(0,
+                            self.verbose - 1))
+
+        lengths = X[0].shape[0]//n_jobs
+
+        results = parallel(delayed(batch_compute_posterior_robust)(self, get_batch(X, i, j))
+                           for i, j in iter_from_X_lengths(X, lengths))
+
+        posteriors_means, posteriors_stds = zip(*results)
+
+        posteriors_means = np.vstack(posteriors_means)
+        posteriors_stds = np.vstack(posteriors_stds)
+        return posteriors_means, posteriors_stds
 
     def score_samples(self, X, lengths=None):
         """Compute the log probability under the model and compute posteriors.
@@ -254,6 +307,12 @@ class _BaseHMM(BaseEstimator):
         state_sequence = np.argmax(posteriors, axis=1)
         return logprob, state_sequence
 
+    def _robust_decode_map(self, X):
+        posteriors, _ = self.robust_predict_proba(X)
+        logprob = np.log(np.max(posteriors, axis=1)).sum()
+        state_sequence = np.argmax(posteriors, axis=1)
+        return logprob, state_sequence
+
     def decode(self, X, lengths=None, algorithm=None):
         """Find most likely state sequence corresponding to ``X``.
 
@@ -295,7 +354,8 @@ class _BaseHMM(BaseEstimator):
 
         decoder = {
             "viterbi": self._decode_viterbi,
-            "map": self._decode_map
+            "map": self._decode_map,
+            "robust_map": self._robust_decode_map
         }[algorithm]
 
         X = _check_array(X)
@@ -310,7 +370,7 @@ class _BaseHMM(BaseEstimator):
 
         return logprob, state_sequence
 
-    def predict(self, X, lengths=None):
+    def predict(self, X, lengths=None, algorithm=None):
         """Find most likely state sequence corresponding to ``X``.
 
         Parameters
@@ -327,10 +387,10 @@ class _BaseHMM(BaseEstimator):
         state_sequence : array, shape (n_samples, )
             Labels for each sample from ``X``.
         """
-        _, state_sequence = self.decode(X, lengths)
+        _, state_sequence = self.decode(X, lengths, algorithm)
         return state_sequence
 
-    def predict_proba(self, X, lengths=None):
+    def predict_proba(self, X, lengths=None,  algorithm=None):
         """Compute the posterior probability for each state in the model.
 
         X : array-like, shape (n_samples, n_features)
@@ -345,7 +405,13 @@ class _BaseHMM(BaseEstimator):
         posteriors : array, shape (n_samples, n_components)
             State-membership probabilities for each sample from ``X``.
         """
-        _, posteriors = self.score_samples(X, lengths)
+        
+        algorithm = algorithm or self.algorithm
+
+        if algorithm == 'robust_map':
+            posteriors, _ = self.robust_predict_proba(X, lengths)
+        else:
+            _, posteriors = self.score_samples(X, lengths)
         return posteriors
 
     def sample(self, n_samples=1, random_state=None):

@@ -569,12 +569,21 @@ class DirMulHMM(_BaseHMM):
             json.dump(self.get_params(), f)
         
 
+    def _compute_log_likelihood_one(self, X, i):
+        
+        # loop over datasets each represented via a multinomial
+        #for i, (ep, es, x) in enumerate(zip(self.emission_prior_, self.emission_suffstats_, X)):
+            # compute the marginal likelihood with the current posterior parameters
+        return fast_dirmul_loglikeli_sp(X[i], self.emission_prior_[i] + self.emission_suffstats_[i])
+
     def _compute_log_likelihood(self, X):
         res = np.zeros((len(X), get_nsamples(X), self.n_components))
         # loop over datasets each represented via a multinomial
-        for i, (ep, es, x) in enumerate(zip(self.emission_prior_, self.emission_suffstats_, X)):
-            # compute the marginal likelihood with the current posterior parameters
-            res[i] += fast_dirmul_loglikeli_sp(x, ep+es)
+        for i in range(len(X)):
+            res[i] += self._compute_log_likelihood_one(X, i)
+#        for i, (ep, es, x) in enumerate(zip(self.emission_prior_, self.emission_suffstats_, X)):
+#            # compute the marginal likelihood with the current posterior parameters
+#            res[i] += fast_dirmul_loglikeli_sp(x, ep+es)
 
         if self.replicate == 'sum':
             # add independent replicates

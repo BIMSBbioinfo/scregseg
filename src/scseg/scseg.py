@@ -169,7 +169,7 @@ class Scseg(object):
 
         if post:
             # use posterior decoding
-            _, statescores = self.model.score_samples(X_)
+            statescores = self.model.predict_proba(X_)
             Z = statescores.T
         else:
             states = self.model.predict(X_)
@@ -333,7 +333,7 @@ class Scseg(object):
     def color(self):
         return self._color
 
-    def segment(self, X, regions):
+    def segment(self, X, regions, algorithm=None):
         """
         performs segmentation.
 
@@ -353,8 +353,8 @@ class Scseg(object):
         regions_ = pd.DataFrame([[iv.chrom, iv.start, iv.end] for iv in bed],
                                 columns=['chrom', 'start', 'end'])
 
-        statenames = self.to_statenames(self.model.predict(X_))
-        _, statescores = self.model.score_samples(X_)
+        statenames = self.to_statenames(self.model.predict(X_, algorithm))
+        statescores = self.model.predict_proba(X_, algorithm)
 
         regions_['name'] = statenames
         regions_['strand'] = '.'
