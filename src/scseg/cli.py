@@ -301,7 +301,7 @@ def plot_state_annotation_relationship_heatmap(model, storage, labels,
 
     segdf = segdf[labels].apply(zscore)
 
-    segdf.groupby(name).agg('mean')
+    segdf.groupby("name").agg('mean')
 
     sns.heatmap(segdf, cmap="RdBu_r",
                 figsize=(10,20), robust=True, center=0.0, ax=ax)
