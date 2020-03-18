@@ -279,7 +279,8 @@ class Scseg(object):
         return fig
 
     def plot_normalized_emissions(self, idat):
-       em = self.model.emission_suffstats_[idat]
+       em = self.model.emission_suffstats_[idat] + self.model.emission_prior_[idat]
+       #emprior = self.model.emission_prior_[idat]
 
        nem = em / em.sum(1, keepdims=True)
        tem = em.sum(0, keepdims=True)/em.sum()
@@ -333,6 +334,15 @@ class Scseg(object):
     def color(self):
         return self._color
 
+#    def use_robust(self):
+#        regions_ = self._segments
+#        regions_['name'] = regions_['name_robust']
+#        for istate, statename in enumerate(self.to_statenames(np.arange(self.n_components))):
+#            regions_['Prob_' + statename] = regions_['Prob_' + statename + '_robust']
+#        regions_['Prob_max'] = regions_['Prob_max_robust']
+#        self._segments = regions_
+     
+
     def segment(self, X, regions, algorithm=None):
         """
         performs segmentation.
@@ -371,8 +381,21 @@ class Scseg(object):
         regions_['Prob_max'] = statescores.max(1)
         regions_['score'] = 1000*regions_['Prob_max']
         regions_['score'] = regions_['score'].astype('int')
+
+#        # robust predictions
+#        statenames = self.to_statenames(self.model.predict(X_, algorithm='robust_map'))
+#        statescores, statescores_std = self.model.robust_predict_proba(X_)
+#
+#        regions_['name_robust'] = statenames
+#        for istate, statename in enumerate(self.to_statenames(np.arange(self.n_components))):
+#            regions_['Prob_' + statename + '_robust'] = statescores[:, istate]
+#        for istate, statename in enumerate(self.to_statenames(np.arange(self.n_components))):
+#            regions_['sd_Prob_' + statename + '_robust'] = statescores_std[:, istate]
+#        regions_['Prob_max_robust'] = statescores.max(1)
+     
         for i in range(len(X_)):
             regions_['readdepth_' + str(i)] = X_[i].sum(1)
+
         self._segments = regions_
         cleanup()
 
@@ -776,7 +799,9 @@ class Scseg(object):
 
         return model
 
-    def get_statecalls(self, query_states, collapse_neighbors=True, state_prob_threshold=0.99):
+    def get_statecalls(self, query_states,
+                       collapse_neighbors=True,
+                       state_prob_threshold=0.99):
 
         if not isinstance(query_states, list):
             query_states = [query_states]
