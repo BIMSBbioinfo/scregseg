@@ -437,27 +437,13 @@ def local_main(args):
         make_state_summary(scmodel, outputpath, args.labels)
         plot_normalized_emissions(scmodel, outputpath, args.labels)
         save_score(scmodel, data, outputpath)
-
-#    elif args.program == 'make_stats':
-#        outputpath = os.path.join(args.storage, args.modelname)
-##        print('loading data ...')
-##        data = load_count_matrices(args.counts,
-##                                               args.regions,
-##                                               args.mincounts,
-##                                               args.maxcounts, args.trimcounts)
-#        #datanames = [os.path.basename(c) for c in args.counts]
-#        scmodel = Scseg.load(outputpath)
-#        print('summarize results ...')
-#        make_state_summary(scmodel, outputpath, args.labels)
+        
 
     elif args.program == 'seg_to_bed':
         outputpath = os.path.join(args.storage, args.modelname)
 
         scmodel = Scseg.load(outputpath)
 
-        #if args.robust:
-        #    scmodel.use_robust()
-        
         # select query states
         query_states = ['state_{}'.format(i) for i, p in enumerate(scmodel.model.get_stationary_distribution()) \
                         if p<=args.max_state_abundance]
@@ -474,6 +460,7 @@ def local_main(args):
             output = outputpath = os.path.join(args.storage, args.modelname, 'summary', 'segments.bed')
         else:
             output = args.output
+
         # export the state calls as a bed file
         export_bed(subset, output,
                    individual_beds=args.individualbeds)
@@ -584,32 +571,6 @@ def local_main(args):
             g = sns.clustermap(enr, cmap="Reds", figsize=(20,30), robust=True)
         g.savefig(os.path.join(outputenr, "state_enrichment_{}_{}.png".format(args.method, args.title)))
 
-#    elif args.program == 'feature_correspondence':
-#        outputpath = os.path.join(args.storage, args.modelname)
-#        print('correspondence analysis')
-#        scmodel = Scseg.load(outputpath)
-#        make_folders(os.path.join(outputpath, 'annotation'))
-#        
-#        beds = glob.glob(os.path.join(args.inputdir, '*.bed'))
-#        bnames = [os.path.basename(bed) for bed in beds]
-#        x = np.zeros((scmodel.n_components, len(beds)))
-#
-#        for i in range(scmodel.n_components):
-#            state = scmodel.to_statename(i)
-#            segments = scmodel._segments[(scmodel._segments.name == state) & (scmodel._segments.Prob_max >= args.threshold)]
-#            a = BedTool([Interval(row.chrom, row.start, row.end) for _, row in segments.iterrows()]).sort().merge()
-#            for j, bed in enumerate(beds):
-#                b = BedTool(bed).sort()
-#                x[i,j] = a.jaccard(b)['jaccard']
-#
-#        df = pd.DataFrame(x, index=['state_{}'.format(i) for i in range(scmodel.n_components)],
-#                          columns=bnames)
-#
-#        fig, ax = plt.subplots(figsize=(10,10))
-#        sns.heatmap(df, cmap="Blues") 
-#        fig.tight_layout()
-#        fig.savefig(os.path.join(outputpath,  'annotation', args.title + '_state_heatmap.png'))
-#
 def main():
     args = parser.parse_args()
     local_main(args)
