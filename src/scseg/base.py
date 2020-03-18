@@ -29,8 +29,8 @@ def batch_compute_loglikeli(self, X):
 
 def batch_compute_posterior_robust(self, X):
     posteriors = np.zeros((len(X), get_nsamples(X), self.n_components))
-    for i in range(get_nsamples(X)):
-        framelogprob, fwdlattice, logprob = batch_compute_loglikeli(self, X)
+    for i in range(len(X)):
+        framelogprob, fwdlattice, logprob = batch_compute_loglikeli(self, [X[i]])
         bwdlattice = self._do_backward_pass(framelogprob)
         posteriors[i] = self._compute_posteriors(fwdlattice, bwdlattice)
     posteriors_mean = posteriors.mean(0)
@@ -355,7 +355,7 @@ class _BaseHMM(BaseEstimator):
         decoder = {
             "viterbi": self._decode_viterbi,
             "map": self._decode_map,
-            "robust_map": self._robust_decode_map
+            #"robust_map": self._robust_decode_map
         }[algorithm]
 
         X = _check_array(X)
@@ -409,7 +409,7 @@ class _BaseHMM(BaseEstimator):
         algorithm = algorithm or self.algorithm
 
         if algorithm == 'robust_map':
-            posteriors, _ = self.robust_predict_proba(X, lengths)
+            posteriors, _ = self.robust_predict_proba(X)
         else:
             _, posteriors = self.score_samples(X, lengths)
         return posteriors
