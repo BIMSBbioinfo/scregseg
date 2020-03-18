@@ -145,6 +145,7 @@ seg2bed.add_argument('--threshold', dest='threshold', type=float, default=0.0, h
                                                                                      "Only export state calls that exceed the posterior decoding threshold. "
                                                                                      "This allows to adjust the stringency of state calls for down-stream analysis steps.")
 seg2bed.add_argument('--merge_neighbors', dest='merge_neighbors', action='store_true', default=False, help='Whether to merge neighboring bins representing the same state. Default=False.')
+#seg2bed.add_argument('--robust', dest='robust', action='store_true', default=False, help='Whether use robust posterior probabilities (average across replicates). Default=False.')
 seg2bed.add_argument('--exclude_states', dest='exclude_states', nargs='*', type=str, help='List of state names which should be exclued.')
 seg2bed.add_argument('--max_state_abundance', dest='max_state_abundance', type=float, default=1., help='Max. state abundance across the genome. '
          'This parameters allows to report only rarely occurring states. '
@@ -295,16 +296,17 @@ def plot_state_annotation_relationship_heatmap(model, storage, labels,
 
     make_folders(os.path.join(storage, 'annotation'))
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(10, 20))
 
     segdf = model._segments[model._segments.Prob_max>=threshold].copy()
 
-    segdf = segdf[labels].apply(zscore)
+    segdf_ = segdf[labels].apply(zscore)
+    segdf_['name'] = segdf.name
 
-    segdf.groupby("name").agg('mean')
+    segdf = segdf_.groupby("name").agg('mean')
 
     sns.heatmap(segdf, cmap="RdBu_r",
-                figsize=(10,20), robust=True, center=0.0, ax=ax)
+                robust=True, center=0.0, ax=ax)
     print('writing {}'.format(os.path.join(storage, 'annotation', '{}.png'.format(title))))
     fig.tight_layout()
     fig.savefig(os.path.join(storage, 'annotation', '{}.png'.format(title)))
@@ -353,10 +355,8 @@ def local_main(args):
     elif args.program == 'filter_counts':
         print('Filter counts ...')
         cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
-#        print('loaded', cm)
         cm.filter_count_matrix(args.mincounts, args.maxcounts,
                                0, binarize=False, maxcount=args.trimcounts)
-#        print('exporting', cm)
         cm.export_counts(args.outcounts)
 
     elif args.program == 'batchannot':
@@ -396,6 +396,7 @@ def local_main(args):
         merged_cm.export_counts(args.outcounts)
 
     elif args.program == 'fit_segment':
+        print(args)
 
         outputpath = os.path.join(args.storage, args.modelname)
         print('Segmentation ...')
@@ -432,6 +433,7 @@ def local_main(args):
         scmodel = Scseg.load(outputpath)
         print('Run state calling ...')
         scmodel.segment(data, args.regions)
+        scmodel.save(outputpath)
         make_state_summary(scmodel, outputpath, args.labels)
         plot_normalized_emissions(scmodel, outputpath, args.labels)
         save_score(scmodel, data, outputpath)
@@ -453,6 +455,9 @@ def local_main(args):
 
         scmodel = Scseg.load(outputpath)
 
+        #if args.robust:
+        #    scmodel.use_robust()
+        
         # select query states
         query_states = ['state_{}'.format(i) for i, p in enumerate(scmodel.model.get_stationary_distribution()) \
                         if p<=args.max_state_abundance]
