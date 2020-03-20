@@ -451,7 +451,7 @@ class DirMulHMM(_BaseHMM):
     def __init__(self, n_components=1,
                  startprob_prior=1.0, transmat_prior=1.0,
                  emission_prior=1,
-                 algorithm="viterbi", random_state=None,
+                 algorithm="map", random_state=None,
                  n_iter=10, tol=1e-2, verbose=False,
                  params="ste", init_params="ste",
                  n_jobs=1, replicate='sum',
