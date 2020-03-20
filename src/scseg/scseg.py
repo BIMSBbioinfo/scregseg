@@ -7,15 +7,12 @@ from pybedtools import Interval
 from pybedtools.helpers import cleanup
 from scseg.hmm import DirMulHMM
 from scseg.countmatrix import CountMatrix
-from scipy.stats import norm
 from scipy.sparse import csc_matrix
 from scipy.sparse import lil_matrix
 from scipy.stats import zscore
 from scipy.sparse import issparse as is_sparse
 import os
 import matplotlib.pyplot as plt
-from itertools import product
-from scipy.stats import hypergeom
 from sklearn.utils import check_random_state
 
 from numba import jit, njit
@@ -46,9 +43,6 @@ def export_segmentation(segments, filename, prob_max_threshold=0.99):
     """
 
     os.makedirs(os.path.dirname(filename), exist_ok=True)
-
-#     if self._segments is None:
-#         raise ValueError("No segmentation results available. Please run segment(X, regions) first.")
 
     segments[(segments.Prob_max >= prob_max_threshold)].to_csv(filename, sep='\t', index=False)
 
@@ -136,8 +130,6 @@ class Scseg(object):
         """
         loads model parameters from path
         """
-        #if os.path.exists(os.path.join(path, 'modelparams', 'hmm.npz')):
-        #    model = MultinomialHMM.load(path)
         if os.path.exists(os.path.join(path, 'modelparams', 'dirmulhmm.npz')):
             model = DirMulHMM.load(path)
         else:
@@ -254,13 +246,6 @@ class Scseg(object):
 
         return enrs
 
-    def cell2state_umap(self, cell2states):
-        x = UMAP().fit_transform(cell2states)
-        return pd.DataFrame(x, columns=['dim1', 'dim2'])
-
-    def plot_umap(self, cellstates):
-        return sns.scatterplot(x='dim1', y='dim2', data=cellstates)
-
     def get_state_stats(self):
         if self._segments is None:
             raise ValueError("No segmentation results available. Please run segment(data, regions) first.")
@@ -302,7 +287,6 @@ class Scseg(object):
 
     def plot_normalized_emissions(self, idat):
        em = self.model.emission_suffstats_[idat] + self.model.emission_prior_[idat]
-       #emprior = self.model.emission_prior_[idat]
 
        nem = em / em.sum(1, keepdims=True)
        tem = em.sum(0, keepdims=True)/em.sum()
@@ -313,57 +297,19 @@ class Scseg(object):
                l = self.labels_[idat].cell
            elif 'barcodes' in self.labels_[idat].columns:
                l = self.labels_[idat].barcodes
-           #l = self.labels_[idat].cell
        else:
            l = [str(i) for i in range(lodds.shape[1])]
 
        g = sns.clustermap(pd.DataFrame(lodds, columns=l), center=0., robust=True, cmap='RdBu_r', figsize=(15,15))
        g.ax_heatmap.set_ylabel('States')
        g.ax_heatmap.set_xlabel('Features')
-       #sns.heatmap(lodds, cmap="RdBu_r", center=0., ax=ax, robust=True)
-       #ax.set_ylabel("States")
-       #ax.set_xlabel("Features")
-       #print('using ticks:', [i for i in range(1, em.shape[1]+1)])
-       #ax.set_xticklabels([i for i in range(1, em.shape[1]+1)])
-       #ax.set_yticklabels([i for i in range(1, em.shape[0]+1)])
 
        return g
-
-    def plot_logfolds_dist(self, logfoldenr, query_state=None):
-        """
-        plots log fold distribution
-        """
-        fig, axes = plt.subplots(len(logfoldenr))
-        if not isinstance(axes, np.ndarray):
-            axes = np.array([axes])
-        for ax, fold in zip(axes, logfoldenr):
-
-            if query_state is not None:
-                #istate = self.to_stateid(query_state)
-                #fold = fold[istate]
-                fold = fold[query_state]
-
-            ff = fold.values.flatten()
-            sns.distplot(ff, ax=ax)
-
-            x = np.linspace(-1.5, 2.5)
-            scale = np.sqrt(np.mean(np.square(ff[ff<0.0])))
-            ax.plot(x, norm(0, scale).pdf(x), 'R')
-
-        return fig
 
     @property
     def color(self):
         return self._color
 
-#    def use_robust(self):
-#        regions_ = self._segments
-#        regions_['name'] = regions_['name_robust']
-#        for istate, statename in enumerate(self.to_statenames(np.arange(self.n_components))):
-#            regions_['Prob_' + statename] = regions_['Prob_' + statename + '_robust']
-#        regions_['Prob_max'] = regions_['Prob_max_robust']
-#        self._segments = regions_
-     
 
     def segment(self, X, regions, algorithm=None):
         """
@@ -535,81 +481,6 @@ class Scseg(object):
                 observed_segmentcounts[iregion, istate] = len(subregs[subregs.name == self.to_statename(istate)])
         return observed_segmentcounts, region_length, regionnames
 
-    def geneset_enrichment(self, genesets, genes, prob_max_threshold=0.99):
-        """Runs hypergeometric test for gene set enrichment."""
-
-        if isinstance(genes, str) and os.path.exists(genes):
-            genes = BedTool(genes)
-
-        _segments = self._segments
-
-        states = _segments.name.unique()
-        nstates = len(states)
-
-        ngsets = len(genesets)
-
-        gen2loc = {}
-        loc2idx = {}
-        ngene = 0
-        for iv in genes:
-            tup = (iv.chrom, iv.end if iv.strand=='-' else iv.start, (iv.end if iv.strand=='-' else iv.start) + 1)
-            if iv.name not in gen2loc:
-                gen2loc[iv.name] = tup
-            if tup not in loc2idx:
-                loc2idx[tup] = ngene
-                ngene += 1
-
-        # obtain tss's for genes
-        tss = BedTool([Interval(iv.chrom, iv.end if iv.strand=='-' else iv.start,
-                                (iv.end if iv.strand=='-' else iv.start) + 1,
-                                name=iv.name) for iv in genes]).sort() #.moveto('tmp_tss.bed')
-
-        tss_ = tss.sort().merge()
-
-        # build a gene to segment matrix
-        seg2gene = np.zeros((nstates, ngene))
-        for istate, state in enumerate(states):
-
-            subset = _segments[(_segments.name == state) & (_segments.Prob_max >= .99)]
-
-            # find closest tss per segment
-            topic_to_closest_tss = BedTool([Interval(row.chrom, row.start, row.end) for _, row in subset.iterrows()]).sort().merge().closest(tss)
-            for tiv in topic_to_closest_tss:
-                seg2gene[istate, loc2idx[gen2loc[tiv.fields[6]]]] = 1
-
-        gene2annot = np.zeros((ngene, ngsets))
-        for igeneset, geneset in enumerate(genesets):
-
-                if isinstance(geneset, str) and os.path.exists(geneset):
-                    if geneset.endswith('.bed'):
-                        genenames =[iv.name for iv in BedTool(geneset)]
-                    else:
-                        genenames = pd.read_csv(geneset).values.flatten()
-                else:
-                    genenames = geneset
-
-                for genename in genenames:
-                    if genename in gen2loc:
-                        gene2annot[loc2idx[gen2loc[genename]], igeneset] = 1
-
-        overlap = seg2gene.dot(gene2annot)
-        enr = np.zeros_like(overlap)
-
-        ns = seg2gene.sum(1)
-        Ns = gene2annot.sum(0)
-
-        for istate, _ in enumerate(states):
-            for igeneset, _ in enumerate(genesets):
-
-                enr[istate, igeneset] = -hypergeom.logsf(overlap[istate, igeneset]-1, ngene, ns[istate], Ns[igeneset])
-
-        cleanup()
-        enr = pd.DataFrame(enr, index=states,
-                           columns=[os.path.basename(x) for x in genesets]).T
-
-        return enr
-
-
     def broadregion_enrichment(self, state_counts, regionlengths, regionnames=None, mode='logfold'):
 
         stateprob = self.model.get_stationary_distribution()
@@ -746,56 +617,9 @@ class Scseg(object):
 
         self._finalize_broadregion_null_distribution(keep_lengths)
 
-    def _make_broadregion_null_distribution_slow(self, keep_lengths):
-
-        length = int(keep_lengths.max())
-        cnt_dist = np.zeros((2, self.n_components, self.n_components))
-
-        stationary = self.model.get_stationary_distribution()
-
-        # initialize array
-        for dostate_i in range(self.n_components):
-            for curr_i in range(self.n_components):
-                shift = 1 if dostate_i == curr_i else 0
-
-                cnt_dist[shift, dostate_i, curr_i] += stationary[curr_i]
-        if 1 in keep_lengths and 1 not in self._cnt_storage:
-            self._cnt_storage[1] = cnt_dist.sum(-1)
-
-        for icnt in range(length-1):
-            if (icnt % 1000) == 0:
-                print("iter {}/{}".format(icnt, length))
-            joint_cnt_dist = np.zeros((icnt + 3, self.n_components, self.n_components))
-            for dostate_i in range(self.n_components):
-                for prev_i in range(self.n_components):
-                    for curr_i in range(self.n_components):
-                        shift = 1 if dostate_i == curr_i else 0
-                        if dostate_i == curr_i:
-                            joint_cnt_dist[1:(icnt+3), dostate_i, curr_i] += cnt_dist[:(icnt+2), dostate_i, prev_i] * self.model.transmat_[prev_i, curr_i]
-                        else:
-                            joint_cnt_dist[:(icnt+2), dostate_i, curr_i] += cnt_dist[:(icnt+2), dostate_i, prev_i] * self.model.transmat_[prev_i, curr_i]
-            cnt_dist = joint_cnt_dist
-            if (icnt+2) in keep_lengths and (icnt+2) not in self._cnt_storage:
-                self._cnt_storage[icnt+2] = cnt_dist.sum(-1)
-
-        for k in self._cnt_storage:
-            np.testing.assert_allclose(self._cnt_storage[k].sum(), self.n_components)
-
     def _get_broadregion_null_distribution(self, length):
         return self._cnt_storage[length], \
                self._cnt_storage[length].T.dot(np.arange(self._cnt_storage[length].shape[0]))
-
-    def newModel(self, new_seeds, n_iter=100, n_jobs=1, verbose=True):
-        model = DirMulHMM(new_seeds[0].shape[0], 
-                                    n_iter=n_iter,
-                                    n_jobs=n_jobs, verbose=verbose)
-        model.init_params = 'st'
-
-        model.emission_suffstats_ = new_seeds
-        model.emission_prior_ = self.model.emission_prior_
-        model.n_features = self.model.n_features
-
-        return model
 
     def get_statecalls(self, query_states,
                        collapse_neighbors=True,
@@ -848,7 +672,7 @@ class Scseg(object):
 
 
     def get_subdata(self, X, query_states, collapse_neighbors=True, state_prob_threshold=0.99):
-
+        """ function deprecated: use get_statecalls() """
         X_, labels_ = get_labeled_data(X)
         if not hasattr(self, "labels_"):
             setattr(self, "labels_", labels_)
