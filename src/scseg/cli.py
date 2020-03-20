@@ -312,11 +312,15 @@ def plot_state_annotation_relationship_heatmap(model, storage, labels,
     fig.savefig(os.path.join(storage, 'annotation', '{}.png'.format(title)))
 
 def plot_state_annotation_relationship(model, storage, labels,
-                                       title, plottype='boxplot', threshold=0.0, groupby=None):
+                                       title, plottype='boxplot',
+                                       threshold=0.0, groupby=None):
 
     make_folders(os.path.join(storage, 'annotation'))
 
     fig, axes = plt.subplots(len(labels))
+
+    if len(labels) == 1:
+        axes = [axes]
 
     segdf = model._segments[model._segments.Prob_max>=threshold].copy()
 
@@ -339,6 +343,7 @@ def plot_state_annotation_relationship(model, storage, labels,
 
 
 def local_main(args):
+    print(args)
     if args.program == 'bam_to_counts':
 
         print('Make countmatrix ...')
@@ -396,7 +401,6 @@ def local_main(args):
         merged_cm.export_counts(args.outcounts)
 
     elif args.program == 'fit_segment':
-        print(args)
 
         outputpath = os.path.join(args.storage, args.modelname)
         print('Segmentation ...')
