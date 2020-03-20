@@ -40,6 +40,19 @@ def faster_fft(c1, c2, ncomp, maxlen):
                 fft_cnt_dist[ic, do_i, prev_i, curr_i] += c1[ic, do_i, prev_i, middle_i] * c2[ic, do_i, middle_i, curr_i]
     return fft_cnt_dist
 
+def export_segmentation(segments, filename, prob_max_threshold=0.99):
+    """
+    Exports the segmentation results table.
+    """
+
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+
+#     if self._segments is None:
+#         raise ValueError("No segmentation results available. Please run segment(X, regions) first.")
+
+    segments[(segments.Prob_max >= prob_max_threshold)].to_csv(filename, sep='\t', index=False)
+
+
 def export_bed(subset, filename, individual_beds=False):
     """
     Exports the segmentation results in bed format.
@@ -112,8 +125,11 @@ class Scseg(object):
         self.model.save(os.path.join(path, 'modelparams'))
 
         if hasattr(self, "_segments") and self._segments is not None:
-            self.export_segmentation(os.path.join(path, 'summary',
+            export_segmentation(self._segments, os.path.join(path, 'summary',
                                      'segmentation.tsv'), 0.0)
+            merged_segment = self.get_statecalls(self.all_statenames(),  state_prob_threshold=0.0)
+            export_segmentation(merged_segment, os.path.join(path, 'summary',
+                                     'merged_segmentation.tsv'), 0.0)
 
     @classmethod
     def load(cls, path):
@@ -135,6 +151,12 @@ class Scseg(object):
     def load_segments(self, path):
         if os.path.exists(path):
             self._segments = pd.read_csv(path, sep='\t')
+
+    def all_statenames(self):
+        """
+        converts list of state ids (integer) to list of state names (str)
+        """
+        return [self.to_statename(state) for state in range(self.n_components)]
 
     def to_statenames(self, states):
         """
@@ -382,35 +404,12 @@ class Scseg(object):
         regions_['score'] = 1000*regions_['Prob_max']
         regions_['score'] = regions_['score'].astype('int')
 
-#        # robust predictions
-#        statenames = self.to_statenames(self.model.predict(X_, algorithm='robust_map'))
-#        statescores, statescores_std = self.model.robust_predict_proba(X_)
-#
-#        regions_['name_robust'] = statenames
-#        for istate, statename in enumerate(self.to_statenames(np.arange(self.n_components))):
-#            regions_['Prob_' + statename + '_robust'] = statescores[:, istate]
-#        for istate, statename in enumerate(self.to_statenames(np.arange(self.n_components))):
-#            regions_['sd_Prob_' + statename + '_robust'] = statescores_std[:, istate]
-#        regions_['Prob_max_robust'] = statescores.max(1)
-     
         for i in range(len(X_)):
             regions_['readdepth_' + str(i)] = X_[i].sum(1)
 
         self._segments = regions_
         cleanup()
 
-
-    def export_segmentation(self, filename, prob_max_threshold=0.99):
-        """
-        Exports the segmentation results table.
-        """
-
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-
-        if self._segments is None:
-            raise ValueError("No segmentation results available. Please run segment(X, regions) first.")
-
-        self._segments[(self._segments.Prob_max >= prob_max_threshold)].to_csv(filename, sep='\t', index=False)
 
 
 
@@ -423,7 +422,6 @@ class Scseg(object):
         filename = 'dummyexport'
         tmpfilename = os.path.join(tmpdir, filename)
         self._segments.to_csv(tmpfilename, sep='\t', header=False, index=False, columns=['chrom', 'start', 'end'])
-        #self.export_bed(tmpfilename)
 
         if not isinstance(annotations, (list, dict)):
             annotations = [annotations]
@@ -829,13 +827,22 @@ class Scseg(object):
 
         subset['common'] = mapelem
 
-        subset_merged = subset.groupby(['common', 'name']).aggregate({'chrom': 'first',
-                                        'start': 'min',
-                                        'end': 'max', 'name':'first',
-                                        'score': 'max', 'strand': 'first',
-                                        'thickStart': 'min', 'thickEnd': 'max',
-                                        'itemRbg': 'first'
-                                        })
+        processing = {'chrom': 'first',
+                      'start': 'min',
+                      'end': 'max', 'name':'first',
+                      'score': 'max', 'strand': 'first',
+                      'thickStart': 'min', 'thickEnd': 'max',
+                      'itemRbg': 'first',
+                      'Prob_max': 'max',
+                     }
+
+        for state in query_states:
+            processing['Prob_' + state] = 'max'
+        
+        for field in list(set(subset.columns) - set(processing.keys())):
+            processing[field] = 'mean'
+        
+        subset_merged = subset.groupby(['common', 'name']).aggregate(processing)
 
         return subset_merged
 
