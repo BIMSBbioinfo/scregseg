@@ -170,11 +170,8 @@ class Scseg(object):
         return int(statename[len(self._nameprefix):])
 
     def cell2state_counts(self, X, prob_max_threshold=0.0, post=False):
-        """ Determines whether a states is overrepresented among
-        the accessible sites in a given cellself.
+        """ Determines the state calls per cells.
 
-        The P-value is determined using the binomial test
-        and the log-fold-change is determine by Obs[state proportion]/Expected[state proportion].
         """
 
         X_, labels_ = get_labeled_data(X)
