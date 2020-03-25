@@ -404,20 +404,20 @@ class Scseg(object):
     def n_components(self):
         return self.model.n_components
 
-    def geneset_observed_state_counts(self, genesets, flanking=50000):
+    def geneset_observed_state_counts(self, genesets, flanking=50000, using_tss=True):
         """
         collect state counts around gene sets for enrichment analysis.
+        This function concatenates all gene set intervals
+        adding the given flanking window and counts the state calls in
+        observed in this set.
 
         """
 
         genesetnames = [os.path.basename(x) for x in genesets]
 
-        states = self._segments.name.unique()
-        nstates = len(states)
-
         ngsets = len(genesets)
 
-        print('Segmentation enrichment for {} states and {} sets.'.format(nstates, ngsets))
+        print('Segmentation enrichment for {} states and {} sets.'.format(self.n_components, ngsets))
         tmpdir = tempfile.mkdtemp()
         filename = 'dummyexport'
         tmpfilename = os.path.join(tmpdir, filename)
@@ -430,10 +430,13 @@ class Scseg(object):
 
         for igeneset, geneset in enumerate(genesets):
 
-            # obtain tss's for genes
-            tss = BedTool([Interval(iv.chrom, iv.end if iv.strand=='-' else iv.start,
-                                    (iv.end if iv.strand=='-' else iv.start) + 1,
-                                    name=iv.name) for iv in BedTool(geneset)]).sort()
+            if using_tss:
+                # obtain tss's for genes
+                tss = BedTool([Interval(iv.chrom, iv.end if iv.strand=='-' else iv.start,
+                                        (iv.end if iv.strand=='-' else iv.start) + 1,
+                                        name=iv.name) for iv in BedTool(geneset)]).sort()
+            else:
+                tss = BedTool(geneset).sort()
 
             #flank tss's by flanking window
             flanked_tss_ = BedTool([Interval(iv.chrom, max(0, iv.start-flanking), iv.end+flanking, name=iv.name) for iv in tss])
@@ -447,44 +450,99 @@ class Scseg(object):
             for iv in roi_segments:
                 observed_segmentcounts[igeneset, self.to_stateid(iv.name)] += 1
 
+        obscntdf = pd.DataFrame(observed_segmentcounts, columns=self.to_statenames(np.arange(self.n_components)),
+                             index=genesetnames)
         os.remove(tmpfilename)
         os.rmdir(tmpdir)
-        return observed_segmentcounts, geneset_length, genesetnames
+        return obscntdf, geneset_length, genesetnames
 
-    def observed_state_counts(self, regions, flanking=0):
+    def observed_state_counts(self, regions, flanking=50000, using_tss=True):
+        """
+        collect state counts around individual regions (e.g. genes).
+
+        """
+
         if isinstance(regions, str) and os.path.exists(regions):
             regions = BedTool(regions)
 
-        _segments = self._segments
-        regionnames = ['{}:{}-{}'.format(iv.chrom, iv.start, iv.end) for iv in regions]
+        
+        regionnames = ['{}:{}-{}:({})'.format(iv.chrom, iv.start, iv.end, iv.name) for iv in regions]
+        #regionnames = [iv.name for iv in regions]
+        reg2id = {iv.name: i for i, iv in enumerate(regions)}
 
-        states = _segments.name.unique()
-        nstates = len(states)
+        nregions = len(regionnames)
 
-        nregions = len(regions)
+        print('Segmentation enrichment for {} states and {} regions.'.format(self.n_components, nregions))
 
-        print('Segmentation enrichment for {} states and {} regions.'.format(nstates, nregions))
+        tmpdir = tempfile.mkdtemp()
+        filename = 'dummyexport'
+        tmpfilename = os.path.join(tmpdir, filename)
+        self._segments.to_csv(tmpfilename, sep='\t', header=False, index=False, columns=['chrom', 'start', 'end', 'name'])
+        segment_bedtool = BedTool(tmpfilename)
 
         observed_segmentcounts = np.zeros((nregions, self.n_components))
         region_length = np.zeros(nregions)
 
-        for iregion, region in enumerate(regions):
+        if using_tss:
+            tss = BedTool([Interval(iv.chrom, iv.end if iv.strand=='-' else iv.start,
+                                    (iv.end if iv.strand=='-' else iv.start) + 1,
+                                    name=iv.name) for iv in regions])
+        else:
+            tss = regions
 
-            subregs = _segments[(_segments.chrom == region.chrom) & (_segments.start >= region.start) &  (_segments.end <= region.end)]
-            region_length[iregion] = len(subregs)
+        #flank tss's by flanking window
+        flanked_tss_ = BedTool([Interval(iv.chrom, max(0, iv.start-flanking), iv.end+flanking, name=iv.name) for iv in tss])
 
-            for istate in range(self.n_components):
+        # collect segments in the surounding region
+        roi_segments = flanked_tss_.intersect(segment_bedtool, wa=True, wb=True)
 
-                observed_segmentcounts[iregion, istate] = len(subregs[subregs.name == self.to_statename(istate)])
-        return observed_segmentcounts, region_length, regionnames
+        for iv in roi_segments:
+#            print(iv.name, iv.fields)
+            observed_segmentcounts[reg2id[iv.name], self.to_stateid(iv.fields[-1])] += 1
+
+        region_length = observed_segmentcounts.sum(-1)
+#            # obtain segment counts
+#
+#            for iv in roi_segments:
+#                observed_segmentcounts[iregion, self.to_stateid(iv.name)] += 1
+#        for iregion, region in enumerate(regions):
+#
+#            iv = region
+#
+#            # obtain tss's for genes
+#            tss = BedTool([Interval(iv.chrom, iv.end if iv.strand=='-' else iv.start,
+#                                    (iv.end if iv.strand=='-' else iv.start) + 1,
+#                                    name=iv.name)])
+#
+#            #flank tss's by flanking window
+#            flanked_tss_ = BedTool([Interval(iv.chrom, max(0, iv.start-flanking), iv.end+flanking, name=iv.name) for iv in tss])
+#
+#            # collect segments in the surounding region
+#            roi_segments = segment_bedtool.intersect(flanked_tss_, wa=True, u=True)
+#
+#            region_length[iregion] = len(roi_segments)
+#            # obtain segment counts
+#
+#            for iv in roi_segments:
+#                observed_segmentcounts[iregion, self.to_stateid(iv.name)] += 1
+
+        
+        obscntdf = pd.DataFrame(observed_segmentcounts, columns=self.to_statenames(np.arange(self.n_components)),
+                             index=regionnames)
+        os.remove(tmpfilename)
+        os.rmdir(tmpdir)
+        return obscntdf, region_length, regionnames
 
     def broadregion_enrichment(self, state_counts, regionlengths, regionnames=None, mode='logfold'):
 
         stateprob = self.model.get_stationary_distribution()
+        if isinstance(state_counts, pd.DataFrame):
+            state_counts = state_counts.values
 
         enr = np.zeros_like(state_counts)
 
         e = np.outer(regionlengths, stateprob)
+        print('e:', e.shape)
 
         if mode == 'logfold':
             enr = np.log10(np.where(state_counts==0, 1, state_counts)) - np.log10(np.where(state_counts==0, 1, e))
@@ -494,10 +552,13 @@ class Scseg(object):
             stat = np.where((state_counts - e) >= 0.0, (state_counts - e), 0.0)
 
             enr = stat**2 / e**2
-        elif mode == 'pvalue':
+        elif mode in ['pvalue', 'log10pvalue']:
+            self._reset_broadregion_null_distribution()
+            self._make_broadregion_null_distribution(state_counts.sum(1))
             for ireg, scnt in enumerate(state_counts.sum(1)):
+                if scnt < 1:
+                    continue
 
-                self._make_broadregion_null_distribution(np.array([int(scnt)]))
                 null_dist, _ = self._get_broadregion_null_distribution(int(scnt))
 
                 for istate in range(self.n_components):
@@ -510,27 +571,33 @@ class Scseg(object):
         return enrdf
 
 
+    def _reset_broadregion_null_distribution(self):
+        self._cnt_storage = {}
+        self._cnt_conditional = {}
+        #self._fft_init_cnt_dist = {}
+
     def _init_broadregion_null_distribution(self, max_len):
         max_len = int(max_len)
         cnt_dist = np.zeros((max_len+1, self.n_components, self.n_components))
-
+        #print(max_len, cnt_dist.shape)
+        
         stationary = self.model.get_stationary_distribution()
 
-        # initialize array
+        # initialize array with stationary distribution
         for dostate_i in range(self.n_components):
             for curr_i in range(self.n_components):
                 shift = 1 if dostate_i == curr_i else 0
 
                 cnt_dist[shift, dostate_i, curr_i] += stationary[curr_i]
 
+        # FFT of stationary distribution
         fft_cnt_dist = np.empty((max_len+1, self.n_components, self.n_components), dtype='complex128')
         for dostate_i in range(self.n_components):
             for curr_i in range(self.n_components):
                fft_cnt_dist[:, dostate_i, curr_i] = np.fft.fft(cnt_dist[:, dostate_i, curr_i])
 
+        # P(cnt, associated_state, observed_state)
         self._fft_init_cnt_dist = fft_cnt_dist
-        self._cnt_storage = {}
-        self._cnt_conditional = {}
 
 
     def _make_broadregion_conditional_null_distribution(self, length, max_length):
@@ -585,10 +652,15 @@ class Scseg(object):
 
         max_length = int(keep_lengths.max())
 
+        #make conditional distribution for the remained of the sequence length
         for length in keep_lengths:
             self._make_broadregion_conditional_null_distribution(length - 1, max_length)
 
         for length in keep_lengths:
+            if length in self._cnt_storage:
+                continue
+            if length < 1:
+                continue
             length = int(length)
             if length == 1:
                 fft_tmp_cnt = self._fft_init_cnt_dist
@@ -609,9 +681,11 @@ class Scseg(object):
 
 
     def _make_broadregion_null_distribution(self, keep_lengths):
+#        if keep_lengths.max() in self._cnt_storage:
+#            # already computed, use cache
+#            return
 
         self._init_broadregion_null_distribution(keep_lengths.max())
-
         self._finalize_broadregion_null_distribution(keep_lengths)
 
     def _get_broadregion_null_distribution(self, length):

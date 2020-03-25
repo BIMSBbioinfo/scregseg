@@ -216,6 +216,9 @@ enrichment.add_argument('--features', dest='features', type=str, help='Path to a
 enrichment.add_argument('--flanking', dest='flanking', type=int, default=30000, help='Flanking window.')
 enrichment.add_argument('--method', dest='method', type=str, default='chisqstat', choices=['pvalue', 'logfold', 'chisqstat'])
 enrichment.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
+enrichment.add_argument('--noplot', dest='noplot', action='store_true', default=False, help='Whether to skip plotting the heatmap.')
+enrichment.add_argument('--ntop', dest='ntop', type=int, default=5, help='Report n top enriched features per state.')
+enrichment.add_argument('--using_genebody', dest='using_genebody', action='store_true', default=False, help='Using gene body.')
 
 
 def load_count_matrices(countfiles, bedfile, mincounts, maxcounts, trimcounts):
@@ -563,17 +566,38 @@ def local_main(args):
         scmodel = Scseg.load(outputpath)
         make_folders(outputenr)
  
-        featuresets = glob.glob(os.path.join(args.features, '*.bed'))
-        featurenames = [os.path.basename(name)[:-4] for name in featuresets]
-        obs, lens, _ = scmodel.geneset_observed_state_counts(featuresets, flanking=args.flanking)
+        if os.path.isdir(args.features):
+            featuresets = glob.glob(os.path.join(args.features, '*.bed'))
+            featurenames = [os.path.basename(name)[:-4] for name in featuresets]
+            obs, lens, _ = scmodel.geneset_observed_state_counts(featuresets, flanking=args.flanking)
+        else:
+            #featuresets = glob.glob(os.path.join(args.features, '*.bed'))
+            #featurenames = [os.path.basename(name)[:-4] for name in featuresets]
+            obs, lens, featurenames = scmodel.observed_state_counts(args.features, flanking=args.flanking, using_tss = not args.using_genebody)
+            #print(obs.shape, obs.head())
+            obs.to_csv(os.path.join(outputenr, 'state_counts_{}.tsv'.format(args.title)), sep='\t')
 
         enr = scmodel.broadregion_enrichment(obs, lens, featurenames, mode=args.method)
 
-        if args.method == 'logfold':
-            g = sns.clustermap(enr, cmap="RdBu_r", figsize=(20,30), robust=True, **{'center':0.0, 'vmin':-1.5, 'vmax':1.5})
-        elif args.method == 'chisqstat':
-            g = sns.clustermap(enr, cmap="Reds", figsize=(20,30), robust=True)
-        g.savefig(os.path.join(outputenr, "state_enrichment_{}_{}.png".format(args.method, args.title)))
+        if not args.noplot:
+            if args.method == 'logfold':
+                g = sns.clustermap(enr, cmap="RdBu_r", figsize=(20,30), robust=True, **{'center':0.0, 'vmin':-1.5, 'vmax':1.5})
+
+            elif args.method == 'chisqstat':
+                g = sns.clustermap(enr, cmap="Reds", figsize=(20,30), robust=True)
+
+            elif args.method == 'pvalue':
+                g = sns.clustermap(enr, cmap="Reds", figsize=(20,30), robust=True)
+            g.savefig(os.path.join(outputenr, "state_enrichment_{}_{}.png".format(args.method, args.title)))
+
+        enr.to_csv(os.path.join(outputenr, 'state_enrichment_{}_{}.tsv'.format(args.method, args.title)), sep='\t')
+        ntop = args.ntop
+        with open(os.path.join(outputenr, 'state_enrichment_top{}_{}_{}.tsv'.format(ntop, args.method, args.title)), 'w') as f:
+            for state in enr.columns:
+                x = enr.nlargest(ntop, state)
+                for i, row in x.iterrows():
+                    f.write('{}\t{}\t{}\n'.format(state, i, row[state]))
+      # enr.nlargest(ntop, enr.columns).to_csv(os.path.join(outputenr, 'state_enrichment_top{}_{}_{}.tsv'.format(ntop, args.method, args.title)), sep='\t')
 
 def main():
     args = parser.parse_args()
