@@ -1,3 +1,5 @@
+""" Scseg main module
+"""
 import pandas as pd
 import numpy as np
 import seaborn as sns
@@ -74,6 +76,21 @@ def export_bed(subset, filename, individual_beds=False):
 
 
 def get_labeled_data(X):
+    """ Returns countmatrices and cell labels
+
+    If the input is a sparse matrix, labels will be None.
+    Otherwise, the labels are extracted from the CountMatrix
+    object.
+
+    Parameters
+    ----------
+    X : list(CountMatrix) or list(sparse matrix)
+        Input count matrix.
+
+    Returns
+    -------
+    tuple(sparse count matrix, cell labels)
+    """
     if not isinstance(X, list):
         X = [X]
     X_ = []
@@ -88,6 +105,13 @@ def get_labeled_data(X):
     return X_, labels_
 
 class Scseg(object):
+    """Scseg class: Single-cell segmentation
+
+    Parameters
+    ----------
+    model : DirMulHMM
+        HMM model to maintain and perform the analysis with.
+    """
 
     _enr = None
     _cnt_storage = {}
@@ -101,20 +125,45 @@ class Scseg(object):
                        zip(self.to_statenames(np.arange(self.n_components)), sns.color_palette('bright', self.n_components))}
 
     def score(self, X):
+        """ Log-likelihood score for X given the HMM. 
+
+        Parameters
+        ----------
+        X : list(CountMatrix) or list(sparse matrix)
+           Count matrix.
+
+        Returns
+        -------
+        float : 
+            Log-likelihood score for X given the model.
+        """
         X_, labels_ = get_labeled_data(X)
         if not hasattr(self, "labels_"):
             setattr(self, "labels_", labels_)
         return self.model.score(X_)
         
     def fit(self, X):
+        """ Model fitting given X.
+
+        Parameters
+        ----------
+        X : list(CountMatrix) or list(sparse matrix)
+            Count matrix.
+
+        """
         X_, labels_ = get_labeled_data(X)
         if not hasattr(self, "labels_"):
             setattr(self, "labels_", labels_)
         self.model.fit(X_)
 
     def save(self, path):
-        """
-        saves current model parameters
+        """ saves current model parameters
+
+        Parameters
+        ----------
+        path : str
+            Path to output root directory. In the subfolder 'modelparams', the model is stored.
+            If segmentation was performed, the results are stored in the subfolder 'summary'.
         """
         self.model.save(os.path.join(path, 'modelparams'))
 
@@ -127,9 +176,21 @@ class Scseg(object):
 
     @classmethod
     def load(cls, path):
+        """ Load model parameters from file.
+
+        Parameters
+        ----------
+        path : str
+            path to result root folder. This folder in turn
+            is expected to contain the model parameters in '{path}/modelparams/dirmulhmm.npz'.
+            Moreover, the segmentation results are obtained from '{path}/summary/segmentation.tsv'
+            if available.
+
+        Returns
+        -------
+        Scseg object
         """
-        loads model parameters from path
-        """
+
         if os.path.exists(os.path.join(path, 'modelparams', 'dirmulhmm.npz')):
             model = DirMulHMM.load(path)
         else:
@@ -141,6 +202,13 @@ class Scseg(object):
         return scmodel
 
     def load_segments(self, path):
+        """ Load segmentation from file if available.
+
+        Parameters
+        ----------
+        path : str
+            path to segmentation results.
+        """
         if os.path.exists(path):
             self._segments = pd.read_csv(path, sep='\t')
 
@@ -212,10 +280,22 @@ class Scseg(object):
 
     def cell2state(self, X, mode='logfold', prob_max_threshold=0.0, post=False):
         """ Determines whether a states is overrepresented among
-        the accessible sites in a given cellself.
+        the accessible sites in each cell.
 
-        The P-value is determined using the binomial test
-        and the log-fold-change is determine by Obs[state proportion]/Expected[state proportion].
+        Similar to the enrichment test which is used for defined features sets,
+        here the enrichment is considered across all accessible sites in the cell.
+
+        Parameters
+        ----------
+        X : list of count matrices
+            Input count matrices
+        mode : str
+            Type of test to perform (see broadregion_enrichment).
+        prob_max_threshold : float
+            Consider state calls with a minimum posterior probability.
+        post : bool
+            Whether to use posterior decoding probability (soft-decision) or categorical state calls (hard-decision).
+            Default: False. categorical state calls are used.
         """
 
         X_, labels_ = get_labeled_data(X)
@@ -283,6 +363,18 @@ class Scseg(object):
         return fig
 
     def plot_normalized_emissions(self, idat):
+       """ Plot background normalized emission probabilities.
+
+       Parameters
+       ----------
+       idat : int
+           index of the idat's countmatrix
+
+       Returns
+       -------
+       fig :
+           sns.clustermap figure object
+       """
        em = self.model.emission_suffstats_[idat] + self.model.emission_prior_[idat]
 
        nem = em / em.sum(1, keepdims=True)
@@ -308,16 +400,20 @@ class Scseg(object):
         return self._color
 
 
-    def segment(self, X, regions, algorithm=None):
+    def segment(self, X, regions):
         """
-        performs segmentation.
+        Performs segmentation.
+
+        The result of this method is the _segments results
+        pd.DataFrame.
 
         Parameters
         ----------
         X : list(np.array) or list(scipy.sparse.csc_matrix)
-            List of count matrices
+            List of count matrices for which state calling is performed
         regions : pd.DataFrame
             Dataframe containing the genomic intervals (e.g. from a bed file).
+
         """
         X_, labels_ = get_labeled_data(X)
         if not hasattr(self, "labels_"):
@@ -328,8 +424,8 @@ class Scseg(object):
         regions_ = pd.DataFrame([[iv.chrom, iv.start, iv.end] for iv in bed],
                                 columns=['chrom', 'start', 'end'])
 
-        statenames = self.to_statenames(self.model.predict(X_, algorithm))
-        statescores = self.model.predict_proba(X_, algorithm)
+        statenames = self.to_statenames(self.model.predict(X_))
+        statescores = self.model.predict_proba(X_)
 
         regions_['name'] = statenames
         regions_['strand'] = '.'
@@ -357,7 +453,18 @@ class Scseg(object):
 
 
     def annotate(self, annotations):
-        """Annotate the bins with BED, BAM or BIGWIG files."""
+        """Annotate the bins with BED, BAM or BIGWIG files.
+
+        For each feature file, the feature coverage scores are computed
+        for the genome-wide bins.
+        The resulting signals are added as new columns to the _segments
+        DataFrame that is maintained by the object.
+
+        Parameters
+        ----------
+        annotations : dict(featurename: filename)
+            Dictionary of annotations name:file pairs.
+        """
         from janggu.data import Cover
         from janggu.data import LogTransform
 
@@ -405,11 +512,25 @@ class Scseg(object):
         return self.model.n_components
 
     def geneset_observed_state_counts(self, genesets, flanking=50000, using_tss=True):
-        """
-        collect state counts around gene sets for enrichment analysis.
-        This function concatenates all gene set intervals
-        adding the given flanking window and counts the state calls in
-        observed in this set.
+        """ Collect observed states for a set of gene sets.
+
+        Parameters
+        ----------
+        regions : path to a directory
+            regions represents a directory containing a set of bed files
+            In case it is a directory containing, each bed file represents a gene/features set
+            for which a test is performed for each state.
+        flanking : int
+            determines the flanking window by which each feature is extended up- and down-stream.
+            Default: 50000
+        using_tss : bool
+            Determines whether to restrict attention to the surrounding of the TSS.
+            In this case, the flanking extends the 5' ends of the genes/features.
+            Alternatively, the entire feature/gene length is considered. Default: True.
+
+        Returns
+        -------
+        tuple(pd.DataFrame[n_features, n_states], list(feature length for each feature), list(feature names))
 
         """
 
@@ -457,9 +578,24 @@ class Scseg(object):
         return obscntdf, geneset_length, genesetnames
 
     def observed_state_counts(self, regions, flanking=50000, using_tss=True):
-        """
-        collect state counts around individual regions (e.g. genes).
+        """ Collect observed states for a set of regions individually.
 
+        Parameters
+        ----------
+        regions : bed file
+            regions represents a single bed files.
+            An enrichment test is performed for each interval individually.
+        flanking : int
+            determines the flanking window by which each feature is extended up- and down-stream.
+            Default: 50000
+        using_tss : bool
+            Determines whether to restrict attention to the surrounding of the TSS.
+            In this case, the flanking extends the 5' ends of the genes/features.
+            Alternatively, the entire feature/gene length is considered. Default: True.
+
+        Returns
+        -------
+        tuple(pd.DataFrame[n_features, n_states], list(feature length for each feature), list(feature names))
         """
 
         if isinstance(regions, str) and os.path.exists(regions):
@@ -534,7 +670,36 @@ class Scseg(object):
         return obscntdf, region_length, regionnames
 
     def broadregion_enrichment(self, state_counts, regionlengths, regionnames=None, mode='logfold'):
+        """ Broad region enrichment test.
 
+        The enrichment test  determines whether a given region exhibits an excesss of calls for a
+        particular state.
+
+        Parameters
+        ----------
+        state_counts : np.array[n_features, n_states] or pd.DataFrame
+            Observed state counts in a region or a set of regions.
+        regionslengths : 
+            Total number of bins representing the regions.
+        regionnames : list(str) or None
+            Feature or region names.
+        mode : str
+            Type of enrichment test: 'logfold', 'fold', 'chisqstat', 'log10pvalue'.
+            logfold determines logarithm of the observed state counts over the expected state counts.
+            fold determines the observed state counts over the expected state counts.
+            chisqstat determines (observed state counts - expected state counts ) **2 / (expected state counts) **2
+            pvalue or log10pvalue computes the negative log10 pvalue for for a given state. This achieved
+            by computing the null distribution of state counts over a window of the same size
+            using dynamic programming and by making use of the models transition probabilities.
+            The pvalue method is well suited for testing enrichment in short stretches, because its runtime
+            depends on the number of bins. On the other hand, the remaining options are suited for long
+            sequence stretches.
+         
+        Returns
+        -------
+        pd.DataFrame[n_features, n_states] :
+           Table of enrichment test results
+        """ 
         stateprob = self.model.get_stationary_distribution()
         if isinstance(state_counts, pd.DataFrame):
             state_counts = state_counts.values
@@ -695,6 +860,27 @@ class Scseg(object):
     def get_statecalls(self, query_states,
                        collapse_neighbors=True,
                        state_prob_threshold=0.99):
+        """ obtain state calls from segmentation.
+
+        This function allows to filter state calls in various ways
+        and optionally to collapse bookended bins of the same state.
+
+        Parameters
+        ----------
+        query_states : list(str)
+            List of query state names to report
+        collapse_neighbors : bool
+            Whether to merged bookended bins if they represent the same state.
+            Default: True
+        state_prob_threshold : float
+            Minimum posterior decoding probability to select high confidence state calls.
+            Default: 0.99
+        
+        Returns
+        -------
+        pandas.DataFrame :
+            Filtered segmentation results
+        """
 
         if not isinstance(query_states, list):
             query_states = [query_states]

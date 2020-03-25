@@ -1,4 +1,4 @@
-
+""" Fast implementation of the Dirichlet-Multinomial log likelihood """
 from cython.parallel import prange
 import numpy as np
 cimport numpy as np

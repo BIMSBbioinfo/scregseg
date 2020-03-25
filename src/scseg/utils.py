@@ -1,3 +1,7 @@
+# These functions were introduced or adapted from the hmmlearn python package
+# in order to enable sparse matrix support.
+""" Helper Functions
+"""
 import numpy as np
 from scipy.special import logsumexp
 from sklearn.utils import check_array

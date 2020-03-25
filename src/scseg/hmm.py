@@ -5,7 +5,11 @@
 # API changes: Jaques Grobler <jaquesgrobler@gmail.com>
 # Modifications to create of the HMMLearn module: Gael Varoquaux
 # More API changes: Sergei Lebedev <superbobry@gmail.com>
-# Modified to support lists of datasets: Wolfgang Kopp <wolfgang.kopp@
+# Modified to support lists of datasets: Wolfgang Kopp <wolfgang.kopp@mdc-berlin.de>
+#
+#
+# This module implements the Dirichlet-Multinomial HMM based on the hmmlearn python package.
+
 
 """
 The :mod:`hmmlearn.hmm` module implements hidden Markov models.
@@ -39,6 +43,10 @@ __all__ = ["MultinomialHMM", "DirMulHMM", "DirMulMixture"]
 
 
 def dirmul_loglikeli_naive(x, alpha):
+    """ Dirichlet-Multinomial loglikelihood
+
+    Slow implementation. Only for testing. 
+    """
     alpha0 = alpha.sum(1)[None,:] # state x cell
     n = np.asarray(x.sum(1)) # region x cell
     res = gammaln(alpha0) - gammaln(n+alpha0)

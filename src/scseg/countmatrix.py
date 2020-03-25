@@ -13,12 +13,25 @@ from collections import Counter
 from scipy.sparse import dok_matrix
 
 class Barcoder:
+    """ Class for extracting barcode from specific field
+
+    Parameters
+    ----------
+    tag : str or callable
+        Specifies which alignment tag should be considered as barcode.
+        Alternatively, a callable can be supplied that extracts custom
+        barcode encoding from the alignment.
+
+    """
+
     def __init__(self, tag):
         print('Barcodes determined from {} tag'.format(tag))
         self.tag = tag
 
     def __call__(self, aln):
-        if aln.has_tag(self.tag):
+        if callable(self.tag):
+            rg = self.tag(aln)
+        elif aln.has_tag(self.tag):
             rg = aln.get_tag(self.tag)
         else:
             rg = 'dummy'
@@ -27,8 +40,23 @@ class Barcoder:
 def make_counting_bins(bamfile, binsize, storage=None):
     """ Genome intervals for binsize.
 
-    For a given genome and binsize,
+    For a given bam-file and binsize,
     this function creates a bed-file containing all intervals.
+    The genome size is extracted from the bam header.
+
+    Parameters
+    ----------
+    bamfile : str
+       Path to bamfile
+    binsize : int
+       Bin size
+    storage : path or None
+       Output path of the BED file.
+
+    Returns
+    -------
+    BedTool object:
+       Output BED file is returned as BedTool object.
     """
     # Obtain the header information
     afile = AlignmentFile(bamfile, 'rb')
@@ -192,6 +220,19 @@ def sparse_count_reads_in_regions(bamfile, regions,
 
         
 def save_sparsematrix(filename, mat, barcodes):
+    """ Save sparse count matrix and annotation 
+
+    Parameters
+    ----------
+    filename : str
+        Filename of the matrix market output file.
+        The associated cell annotation is stored with the additional prefix '.bct'.
+    mat : sparse matrix
+        Matrix to store.
+    barcodes: list(str) or pandas.DataFrame
+        Cell annotation to store in the '.bct' file.
+
+    """
     spcoo = mat.tocoo()
     mmwrite(filename, spcoo)
 
@@ -201,41 +242,61 @@ def save_sparsematrix(filename, mat, barcodes):
         df = pd.DataFrame({'cell': barcodes})
     df.to_csv(filename + '.bct', sep='\t', header=True, index=False)
 
-def get_count_matrix_(filename, shape, header=True, offset=0):
-    """
-    read count matrix in sparse format
+def get_count_matrix_(filename):
+    """ Read count matrix in sparse format
+
+    This function also loads the associated cell/barcode information from
+    the .bct file.
+
+    Parameters
+    ----------
+    filename : str
+       Path to input matrix in matrix market format.
+    shape : tuple(int)
+       (Obsolete parameter) Target shape. Was used in an earlier version, before matrix market format was supported.
+    header : bool
+       (Obsolete parameter) header information
+    offset : int
+       (Obsolete parameter) offset
     """
     if filename.endswith(".mtx"):
         return mmread(filename).tocsr()
+#
+#    if header:
+#        spdf = pd.read_csv(filename, sep='\t', skiprows=1)
+#    else:
+#        spdf = pd.read_csv(filename, sep='\t', skiprows=1, header=None, names=['region','cell','count'])
+#    if offset > 0:
+#        spdf.region -= offset
+#        spdf.cell -= offset
+#    smat = csr_matrix((spdf['count'], (spdf.region, spdf.cell)),
+#                      shape=shape, dtype='float')
+#    return smat
 
-    if header:
-        spdf = pd.read_csv(filename, sep='\t', skiprows=1)
-    else:
-        spdf = pd.read_csv(filename, sep='\t', skiprows=1, header=None, names=['region','cell','count'])
-    if offset > 0:
-        spdf.region -= offset
-        spdf.cell -= offset
-    smat = csr_matrix((spdf['count'], (spdf.region, spdf.cell)),
-                      shape=shape, dtype='float')
-    return smat
-
-def get_cell_annotation_first_row_(filename):
-    """
-    extract cell ids from the comment line in the count matrix csv
-    """
-
-    open_ = gzip.open if filename.endswith('.gz') else open
-    with open_(filename, 'r') as f:
-        line = f.readline()
-        if hasattr(line, 'decode'):
-            line = line.decode('utf-8')
-        line = line.split('\n')[0]
-        line = line.split(' ')[-1]
-        line = line.split('\t')[-1]
-        annot = line.split(';')
-    return pd.DataFrame(annot, columns=['cell'])
+#def get_cell_annotation_first_row_(filename):
+#    """
+#    extract cell ids from the comment line in the count matrix csv
+#    """
+#
+#    open_ = gzip.open if filename.endswith('.gz') else open
+#    with open_(filename, 'r') as f:
+#        line = f.readline()
+#        if hasattr(line, 'decode'):
+#            line = line.decode('utf-8')
+#        line = line.split('\n')[0]
+#        line = line.split(' ')[-1]
+#        line = line.split('\t')[-1]
+#        annot = line.split(';')
+#    return pd.DataFrame(annot, columns=['cell'])
 
 def get_cell_annotation(filename):
+    """ Load Cell/barcode information from '.bct' file 
+
+    Parameter
+    ---------
+    filename : str
+       Filename prefix (without the .bct file ending)
+    """
     if os.path.exists(filename + '.bct'):
         return pd.read_csv(filename + '.bct', sep='\t')
     #if os.path.exists(filename + '.cannot.tsv'):
@@ -256,9 +317,19 @@ def write_cannot_table(filename, table):
 class CountMatrix:
 
     @classmethod
-    def create_from_countmatrix(cls, countmatrixfile, regionannotation, header=True, index_offset=0):
-        """
-        constructor for loading a count matrix with associated regions
+    def create_from_countmatrix(cls, countmatrixfile, regionannotation):
+        """ Load Countmatrix from matrix market format file.
+
+        Parameters
+        ----------
+        countmatrixfile : str
+            Matrix market file
+        regionannotation : str
+            Region anntation in bed format
+
+        Returns
+        -------
+        CountMatrix object
         """
             
         cannot = get_cell_annotation(countmatrixfile)
@@ -266,12 +337,37 @@ class CountMatrix:
         if 'cell' not in cannot.columns:
             cannot['cell'] = cannot[cannot.columns[0]]
         rannot = get_regions_from_bed_(regionannotation)
-        shape = rannot.shape[0], len(cannot)
-        cmat = get_count_matrix_(countmatrixfile, shape, header=header, offset=index_offset)
+        #shape = rannot.shape[0], len(cannot)
+        cmat = get_count_matrix_(countmatrixfile)
         return cls(cmat, rannot, cannot)
 
     @classmethod
     def create_from_bam(cls, bamfile, regions, barcodetag='CB', binsize=1000, mode='eitherend'):
+        """ Creates a countmatrix from a given bam file and pre-specified target regions.
+
+        Parameters
+        ----------
+        bamfile : str
+            Path to the input bam file.
+        regions : str
+            Path to the input bed files with the target regions.
+        barcodetags : str or callable
+            Barcode tag or callable for extracting the barcode from the alignment.
+            Default: 'CB'
+        binsize : int
+            Bin size in bp. Default: 1000
+        mode : str
+            Specifies the counting mode for paired end data.
+            'bothends' counts each 5' end, 'midpoint' counts the fragment once at the midpoint
+            and 'eitherend' counts once if either end is present in the interval, but if 
+            both ends are inside of the interval, it is counted only once to mitigate double counting.
+            Default: 'eitherend'
+
+        Returns
+        -------
+        CountMatrix object
+
+        """
         if not os.path.exists(regions):
             make_counting_bins(bamfile, binsize, regions)
         rannot = get_regions_from_bed_(regions)
@@ -302,6 +398,21 @@ class CountMatrix:
 
     @classmethod
     def merge(cls, cms, samplelabel=None):
+        """ Merge several countmatices.
+
+        Matrices must have the same row dimensionality
+
+        Parameters
+        ----------
+        cms : list(CountMatrix objects)
+            List of count matrices
+        samplelabel : list(str) or None
+            Associated sample labels. If None, a default sample name is used 'sample_x'.
+        
+        Returns
+        -------
+        CountMatrix object
+        """
         newcannot = []
         for i, cm in enumerate(cms):
             ca = cm.cannot.copy()
@@ -317,7 +428,26 @@ class CountMatrix:
                             minreadsinpeaks=20,
                             binarize=True, trimcount=None):
         """
-        Applies filtering to the count matrix
+        Applies quality filtering to the count matrix.
+
+        Parameters
+        ----------
+        minreadsincells : int
+            Minimum counts in cells to remove poor quality cells with too few reads.
+            Default: 1000
+        maxreadsincells : int
+            Maximum counts in cells to remove poor quality cells with too many reads.
+            Default: 30000
+        minreadsinpeaks : int
+            Minimum counts in region to remove low coverage regions.
+            Default: 20
+        binarize : bool
+            Whether to binarize the count matrix. Default: True
+        trimcounts : int or None
+            Whether to trim the maximum number of reads per cell and region.
+            This is a generalization to the binarize option.
+            Default: None (No trimming performed)
+
         """
 
         if binarize:
@@ -339,7 +469,22 @@ class CountMatrix:
         self.regions = self.regions.iloc[keepregions]
 
     def pseudobulk(self, cell, group):
+        """ Compute pseudobulk counts.
 
+        Given a matchin list of cells and a list of group association (of the same length)
+        The pseudobulk is computed across cells in each group.
+
+        Parameters
+        ----------
+        cell : list of cells
+            List of cell names. These must match with the cell names in the countmatrix
+        group : list of groups
+            List of group names. Defines which cells correspond to which group.
+
+        Returns
+        -------
+        CountMatrix object
+        """
         grouplabels = list(set(group))
 
         cnts = np.zeros((self.n_regions, len(grouplabels)))
@@ -353,7 +498,19 @@ class CountMatrix:
         return CountMatrix(csr_matrix(cnts), self.regions, cannot)
         
     def subset(self, cell):
+        """ Subset countmatrix
 
+        Returns a new count matrix containing only the given cell names.
+
+        Parameters
+        ----------
+        cell : list(str)
+            List of cell names
+
+        Returns
+        -------
+        CountMatrix object
+        """
         ids = self.cannot.cell.isin(cell)
         ids = np.arange(self.cannot.shape[0])[ids]
 
@@ -405,6 +562,11 @@ class CountMatrix:
     def export_regions(self, filename):
         """
         Exports the associated regions to a bed file.
+
+        Parameters
+        ----------
+        filename : str
+            Output bed file.
         """
         self.regions.to_csv(filename,
                             columns=['chrom', 'start', 'end'],
@@ -412,7 +574,12 @@ class CountMatrix:
 
     def export_counts(self, filename):
         """
-        Exports the countmatrix in sparse format to a csv file
+        Exports the countmatrix in matrix market format
+
+        Parameters
+        ----------
+        filename : str
+            Output file name.
         """
 
         save_sparsematrix(filename, self.cmat, self.cannot)

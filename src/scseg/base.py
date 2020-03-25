@@ -1,3 +1,7 @@
+# This file was adopted from the original hmmlearn implementation.
+# We have modified the original implemention primarily to enable parallel
+# processing for the training and inference procedures.
+
 from __future__ import print_function
 
 import string
