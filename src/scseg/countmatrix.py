@@ -87,7 +87,7 @@ def make_counting_bins(bamfile, binsize, storage=None):
 
 def sparse_count_reads_in_regions(bamfile, regions,
                                   barcodetag, flank=0, log=None,
-                                  mode='midpoint'):
+                                  mode='midpoint', only_with_barcode=True):
     """ This function obtains the counts per bins of equal size
     across the genome.
 
@@ -122,6 +122,10 @@ def sparse_count_reads_in_regions(bamfile, regions,
         or by counting if either 5'-end is in the bin.
         These options are indicated by mode=['midpoint', 'countboth', 'eitherend'].
         Default: mode='midpoint'
+    only_with_barcode : bool
+        This indicates that reads without barcodes should be skipped.
+        Use False for bulk or pseudobulk aggregation.
+        Default: True.
     """
 
     # Obtain the header information
@@ -140,8 +144,8 @@ def sparse_count_reads_in_regions(bamfile, regions,
     barcodecounter = Counter()
     for aln in afile.fetch():
         bar = barcoder(aln)
-        #if bar == 'dummy':
-       #    continue
+        if only_with_barcode and bar == 'dummy':
+            continue
         barcodecounter[bar] += 1
 
     barcodemap = {key: i for i, key in enumerate(barcodecounter)}
@@ -176,6 +180,8 @@ def sparse_count_reads_in_regions(bamfile, regions,
 
         for aln in afile.fetch(iv.chrom, fetchstart, fetchend):
             bar = barcoder(aln)
+            if only_with_barcode and bar == 'dummy':
+                continue
             #if bar == 'dummy':
             #    continue
 
@@ -342,7 +348,7 @@ class CountMatrix:
         return cls(cmat, rannot, cannot)
 
     @classmethod
-    def create_from_bam(cls, bamfile, regions, barcodetag='CB', binsize=1000, mode='eitherend'):
+    def create_from_bam(cls, bamfile, regions, barcodetag='CB', mode='eitherend'):
         """ Creates a countmatrix from a given bam file and pre-specified target regions.
 
         Parameters
@@ -355,8 +361,6 @@ class CountMatrix:
         barcodetag : str or callable
             Barcode tag or callable for extracting the barcode from the alignment.
             Default: 'CB'
-        binsize : int
-            Bin size in bp. Default: 1000
         mode : str
             Specifies the counting mode for paired end data.
             'bothends' counts each 5' end, 'midpoint' counts the fragment once at the midpoint
@@ -369,8 +373,8 @@ class CountMatrix:
         CountMatrix object
 
         """
-        if not os.path.exists(regions):
-            make_counting_bins(bamfile, binsize, regions)
+        #if not os.path.exists(regions):
+        #    make_counting_bins(bamfile, binsize, regions)
         rannot = get_regions_from_bed_(regions)
         cmat, cannot = sparse_count_reads_in_regions(bamfile, regions,
                                   barcodetag, flank=0, log=None,
