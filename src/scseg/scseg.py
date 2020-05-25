@@ -516,10 +516,9 @@ class Scseg(object):
 
         Parameters
         ----------
-        regions : path to a directory
-            regions represents a directory containing a set of bed files
-            In case it is a directory containing, each bed file represents a gene/features set
-            for which a test is performed for each state.
+        genesets : dict(str)
+            genesets represents a directory containing a set of bed files.
+            The keys represent the respective labels.
         flanking : int
             determines the flanking window by which each feature is extended up- and down-stream.
             Default: 50000
@@ -533,8 +532,16 @@ class Scseg(object):
         tuple(pd.DataFrame[n_features, n_states], list(feature length for each feature), list(feature names))
 
         """
-
-        genesetnames = [os.path.basename(x) for x in genesets]
+        if isinstance(genesets, dict):
+            
+            genesetnames = []
+            genesetfile =[]
+            for k in genesets:
+                genesetnames.append(k)
+                genesetfile.append(genesets[k])
+            genesets = genesetfile
+        else:
+            genesetnames = [os.path.basename(x) for x in genesets]
 
         ngsets = len(genesets)
 
@@ -669,7 +676,7 @@ class Scseg(object):
         os.rmdir(tmpdir)
         return obscntdf, region_length, regionnames
 
-    def broadregion_enrichment(self, state_counts, regionlengths, regionnames=None, mode='logfold'):
+    def broadregion_enrichment(self, state_counts, featurenames=None, mode='logfold'):
         """ Broad region enrichment test.
 
         The enrichment test  determines whether a given region exhibits an excesss of calls for a
@@ -681,7 +688,7 @@ class Scseg(object):
             Observed state counts in a region or a set of regions.
         regionslengths : 
             Total number of bins representing the regions.
-        regionnames : list(str) or None
+        featurenames : list(str) or None
             Feature or region names.
         mode : str
             Type of enrichment test: 'logfold', 'fold', 'chisqstat', 'log10pvalue'.
@@ -702,12 +709,13 @@ class Scseg(object):
         """ 
         stateprob = self.model.get_stationary_distribution()
         if isinstance(state_counts, pd.DataFrame):
+            featurenames = state_counts.index
             state_counts = state_counts.values
 
+        regionlengths = state_counts.sum(1)
         enr = np.zeros_like(state_counts)
 
         e = np.outer(regionlengths, stateprob)
-        print('e:', e.shape)
 
         if mode == 'logfold':
             enr = np.log10(np.where(state_counts==0, 1, state_counts)) - np.log10(np.where(state_counts==0, 1, e))
@@ -731,7 +739,7 @@ class Scseg(object):
                     enr[ireg, istate] = -min(np.log10(max(0.0, null_dist[n_obs:, istate].sum())), 15)
 
         enrdf = pd.DataFrame(enr, columns=self.to_statenames(np.arange(self.n_components)),
-                             index=regionnames)
+                             index=featurenames)
 
         return enrdf
 

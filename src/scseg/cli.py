@@ -586,7 +586,7 @@ def local_main(args):
             #print(obs.shape, obs.head())
             obs.to_csv(os.path.join(outputenr, 'state_counts_{}.tsv'.format(args.title)), sep='\t')
 
-        enr = scmodel.broadregion_enrichment(obs, lens, featurenames, mode=args.method)
+        enr = scmodel.broadregion_enrichment(obs, mode=args.method)
 
         if not args.noplot:
             if args.method == 'logfold':
