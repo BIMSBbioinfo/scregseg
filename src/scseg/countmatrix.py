@@ -377,6 +377,12 @@ class CountMatrix:
         assert self.cmat.shape[0] == len(self.regions)
         assert self.cmat.shape[1] == len(self.cannot)
 
+    def remove_chroms(self, chroms):
+        """Remove chromsomes."""
+        idx = self.regions.chrom[~self.regions.chrom.isin(chroms)].index
+        self.regions = self.regions[~self.regions.chrom.isin(chroms)]
+        self.cmat = self.cmat[idx]
+
     @property
     def counts(self):
         """
