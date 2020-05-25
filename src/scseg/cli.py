@@ -220,6 +220,15 @@ enrichment.add_argument('--noplot', dest='noplot', action='store_true', default=
 enrichment.add_argument('--ntop', dest='ntop', type=int, default=5, help='Report n top enriched features per state.')
 enrichment.add_argument('--using_genebody', dest='using_genebody', action='store_true', default=False, help='Using gene body.')
 
+motifextraction = subparsers.add_parser('extract_motifs', help='Extract motifs associated with states')
+motifextraction.add_argument('--storage', dest='storage', type=str, help="Location for containing the pre-trained segmentation and for storing the annotated segmentation results")
+motifextraction.add_argument('--refgenome', dest='refgenome', type=str, help="Reference genome.")
+motifextraction.add_argument('--ntop', dest='ntop', type=int, help="Positive set size. Default: 15000", default=15000)
+motifextraction.add_argument('--ngap', dest='ngap', type=int, help="Gap size between positive and negative set. Default: 70000", default=70000)
+motifextraction.add_argument('--nbottom', dest='nbottom', type=int, help="Negative set size. Default: 15000", default=15000)
+motifextraction.add_argument('--flank', dest='flank', type=int, help="Flank size added to each interval. Default: 250 bp", default=250)
+motifextraction.add_argument('--nmotifs', dest='nmotifs', type=int, help="Number of motifs to report. Default: 10", default=10)
+
 
 def load_count_matrices(countfiles, bedfile, mincounts, maxcounts, trimcounts):
     data = []
@@ -598,6 +607,19 @@ def local_main(args):
                 for i, row in x.iterrows():
                     f.write('{}\t{}\t{}\n'.format(state, i, row[state]))
       # enr.nlargest(ntop, enr.columns).to_csv(os.path.join(outputenr, 'state_enrichment_top{}_{}_{}.tsv'.format(ntop, args.method, args.title)), sep='\t')
+    elif args.program == 'extract_motifs':
+        outputpath = os.path.join(args.storage, args.modelname)
+
+
+        scmodel = Scseg.load(outputpath)
+        motifextractor = MotifExtractor(scmodel, args.refgenome, ntop=args.ntop,
+                                        nbottom=args.nbottom, ngap=args.ngap,
+                                        nmotifs=args.nmotifs, flank=self.args.flank)
+        motifoutput = os.path.join(rootdir, 'motifs')
+
+        os.environ['JANGGU_OUTPUT'] = motifoutput
+        motifextractor._extract_motifs(motifoutput)
+        motifextractor.save_motifs(motifoutput)
 
 def main():
     args = parser.parse_args()
