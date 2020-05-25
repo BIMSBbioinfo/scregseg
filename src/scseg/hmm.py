@@ -344,7 +344,6 @@ class CntDirMulHMM(_BaseHMM):
     def print_progress(self):
         if not self.verbose:
             return
-        #print(str(datetime.now()) + ' stateprob:', self.get_stationary_distribution())
 
     def save(self, path):
         """
@@ -559,7 +558,7 @@ class DirMulHMM(_BaseHMM):
     def print_progress(self):
         if not self.verbose:
             return
-        print(str(datetime.now()) + ' stateprob:', self.get_stationary_distribution())
+        #print(str(datetime.now()) + ' stateprob:', self.get_stationary_distribution())
 
     def save(self, path):
         """

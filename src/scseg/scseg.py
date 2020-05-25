@@ -494,25 +494,68 @@ class Scseg(object):
         binsize = BedTool(tmpfilename)[0].length
 
         """Annotate the individual regions."""
-        for key, file in annotationdict.items():
-            if isinstance(file, list):
-                self._segments[key] = file
-                continue
-            if file.endswith('.bed') or file.endswith('.bed.gz') or file.endswith('.narrowPeak') or \
-               file.endswith('.bedgraph'):
-                cov = Cover.create_from_bed(key, bedfiles=file, roi=tmpfilename,
-                                            binsize=binsize, resolution=binsize, store_whole_genome=False,
-                                            cache=True)
-            elif file.endswith('.bam'):
-                cov = Cover.create_from_bam(key, bamfiles=file, roi=tmpfilename,
-                                            stranded=False, normalizer=[LogTransform()],
-                                            store_whole_genome=False, binsize=binsize, resolution=binsize,
-                                            cache=True)
-            elif file.endswith('.bw') or file.endswith('.bigwig'):
-                cov = Cover.create_from_bigwig(key, bigwigfiles=file, roi=tmpfilename,
-                                               binsize=binsize, resolution=binsize, store_whole_genome=False,
-                                               cache=True)
-            self._segments[key] = cov.garray.handle['data'][:, 0, 0, 0]
+        # load bed or bedgraph
+        fpairs = [(key, file) for key, file in annotationdict.items() if (file.endswith('.bed') or \
+                                                              file.endswith('.bed.gz') or file.endswith('.narrowPeak') or \
+                                                              file.endswith('.bedgraph'))]
+        files = [f[1] for f in fpairs]
+        labels = [f[0] for f in fpairs]
+
+        if len(files) > 0:
+            cov = Cover.create_from_bed('bedfiles', bedfiles=files, roi=tmpfilename, conditions=labels,
+                                        binsize=binsize, resolution=binsize, store_whole_genome=False,
+                                        cache=True)
+            for i, label in enumerate(labels):
+                self._segments[label] = cov.garray.handle['data'][:, 0, 0, i]
+
+        # load bam file coverage
+        fpairs = [(key, file) for key, file in annotationdict.items() if file.endswith('.bam')]
+        files = [f[1] for f in fpairs]
+        labels = [f[0] for f in fpairs]
+
+        if len(files) > 0:
+            cov = Cover.create_from_bam('bamfiles', bamfiles=files, roi=tmpfilename, conditions=labels,
+                                        stranded=False, normalizer=[LogTransform()],
+                                        store_whole_genome=False, binsize=binsize, resolution=binsize,
+                                        cache=True)
+            for i, label in enumerate(labels):
+                self._segments[label] = cov.garray.handle['data'][:, 0, 0, i]
+
+        # load bigwig file coverage
+        fpairs = [(key, file) for key, file in annotationdict.items() if (file.endswith('.bw') or file.endswith('.bigwig'))]
+        files = [f[1] for f in fpairs]
+        labels = [f[0] for f in fpairs]
+
+        if len(files) > 0:
+            cov = Cover.create_from_bigwig('bigwigfiles',
+                                           bigwigfiles=files,
+                                           roi=tmpfilename, conditions=labels,
+                                           binsize=binsize, resolution=binsize,
+                                           store_whole_genome=False,
+                                           cache=True)
+            for i, label in enumerate(labels):
+                self._segments[label] = cov.garray.handle['data'][:, 0, 0, i]
+
+#        for key, file in annotationdict.items():
+#            print(key)
+#            if isinstance(file, list):
+#                self._segments[key] = file
+#                continue
+#            if file.endswith('.bed') or file.endswith('.bed.gz') or file.endswith('.narrowPeak') or \
+#               file.endswith('.bedgraph'):
+#                cov = Cover.create_from_bed(key, bedfiles=file, roi=tmpfilename,
+#                                            binsize=binsize, resolution=binsize, store_whole_genome=False,
+#                                            cache=True)
+#            elif file.endswith('.bam'):
+#                cov = Cover.create_from_bam(key, bamfiles=file, roi=tmpfilename,
+#                                            stranded=False, normalizer=[LogTransform()],
+#                                            store_whole_genome=False, binsize=binsize, resolution=binsize,
+#                                            cache=True)
+#            elif file.endswith('.bw') or file.endswith('.bigwig'):
+#                cov = Cover.create_from_bigwig(key, bigwigfiles=file, roi=tmpfilename,
+#                                               binsize=binsize, resolution=binsize, store_whole_genome=False,
+#                                               cache=True)
+#            self._segments[key] = cov.garray.handle['data'][:, 0, 0, 0]
 
         os.remove(tmpfilename)
         os.rmdir(tmpdir)
