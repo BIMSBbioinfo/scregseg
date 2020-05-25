@@ -200,8 +200,6 @@ def sparse_count_reads_in_regions(bamfile, regions,
     afile.close()
 
     return sdokmat.tocsr(), pd.DataFrame({'cell': barcode_string.split(';')})
-    # store the results in COO sparse matrix format
-    #save_sparsematrix(storage, sdokmat, barcode_string.split(';'))
 
         
 def save_sparsematrix(filename, mat, barcodes):
@@ -246,33 +244,6 @@ def get_count_matrix_(filename):
     """
     if filename.endswith(".mtx"):
         return mmread(filename).tocsr()
-#
-#    if header:
-#        spdf = pd.read_csv(filename, sep='\t', skiprows=1)
-#    else:
-#        spdf = pd.read_csv(filename, sep='\t', skiprows=1, header=None, names=['region','cell','count'])
-#    if offset > 0:
-#        spdf.region -= offset
-#        spdf.cell -= offset
-#    smat = csr_matrix((spdf['count'], (spdf.region, spdf.cell)),
-#                      shape=shape, dtype='float')
-#    return smat
-
-#def get_cell_annotation_first_row_(filename):
-#    """
-#    extract cell ids from the comment line in the count matrix csv
-#    """
-#
-#    open_ = gzip.open if filename.endswith('.gz') else open
-#    with open_(filename, 'r') as f:
-#        line = f.readline()
-#        if hasattr(line, 'decode'):
-#            line = line.decode('utf-8')
-#        line = line.split('\n')[0]
-#        line = line.split(' ')[-1]
-#        line = line.split('\t')[-1]
-#        annot = line.split(';')
-#    return pd.DataFrame(annot, columns=['cell'])
 
 def get_cell_annotation(filename):
     """ Load Cell/barcode information from '.bct' file 

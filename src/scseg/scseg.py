@@ -172,9 +172,6 @@ class Scseg(object):
         if hasattr(self, "_segments") and self._segments is not None:
             export_segmentation(self._segments, os.path.join(path, 'summary',
                                      'segmentation.tsv'), 0.0)
-            merged_segment = self.get_statecalls(self.all_statenames(),  state_prob_threshold=0.0)
-            export_segmentation(merged_segment, os.path.join(path, 'summary',
-                                     'merged_segmentation.tsv'), 0.0)
 
     @classmethod
     def load(cls, path):
