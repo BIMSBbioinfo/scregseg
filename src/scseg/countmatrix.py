@@ -86,7 +86,7 @@ def make_counting_bins(bamfile, binsize, storage=None):
 
 
 def sparse_count_reads_in_regions(bamfile, regions,
-                                  barcodetag, flank=0, log=None,
+                                  barcodetag, flank=0, log=None, mapq=30,
                                   mode='midpoint', only_with_barcode=True):
     """ This function obtains the counts per bins of equal size
     across the genome.
@@ -116,6 +116,8 @@ def sparse_count_reads_in_regions(bamfile, regions,
         Assumed template length. This is used when counting paired-end reads
         at the mid-point and the individual reads do not overlap with
         the given region, but the mid-point does.
+    mapq : int
+        Minimum mapping quality
     mode : str
         For paired-end sequences reads can be counted at the midpoint,
         by counting both ends (like they came from single-ended sequencing)
@@ -182,8 +184,8 @@ def sparse_count_reads_in_regions(bamfile, regions,
             bar = barcoder(aln)
             if only_with_barcode and bar == 'dummy':
                 continue
-            #if bar == 'dummy':
-            #    continue
+            if aln.mapping_quality < mapq:
+                continue
 
             if aln.is_proper_pair and aln.is_read1 and mode == 'midpoint':
 
@@ -337,18 +339,16 @@ class CountMatrix:
         -------
         CountMatrix object
         """
-            
         cannot = get_cell_annotation(countmatrixfile)
         
         if 'cell' not in cannot.columns:
             cannot['cell'] = cannot[cannot.columns[0]]
         rannot = get_regions_from_bed_(regionannotation)
-        #shape = rannot.shape[0], len(cannot)
         cmat = get_count_matrix_(countmatrixfile)
         return cls(cmat, rannot, cannot)
 
     @classmethod
-    def create_from_bam(cls, bamfile, regions, barcodetag='CB', mode='eitherend'):
+    def create_from_bam(cls, bamfile, regions, barcodetag='CB', mode='eitherend', mapq=30, no_barcode=False):
         """ Creates a countmatrix from a given bam file and pre-specified target regions.
 
         Parameters
@@ -367,6 +367,10 @@ class CountMatrix:
             and 'eitherend' counts once if either end is present in the interval, but if 
             both ends are inside of the interval, it is counted only once to mitigate double counting.
             Default: 'eitherend'
+        mapq : int
+            Only consider reads with a minimum mapping quality. Default: 30
+        no_barcode : bool
+            Whether the file contains barcodes or whether it contains a bulk sample. Default: False.
 
         Returns
         -------
@@ -378,7 +382,9 @@ class CountMatrix:
         rannot = get_regions_from_bed_(regions)
         cmat, cannot = sparse_count_reads_in_regions(bamfile, regions,
                                   barcodetag, flank=0, log=None,
-                                  mode=mode)
+                                  mapq=mapq,
+                                  mode=mode,
+                                  only_with_barcode=not no_barcode)
         
         return cls(cmat.tocsr(), rannot, cannot)
         
