@@ -333,8 +333,7 @@ class CountMatrix:
         bamfile : str
             Path to the input bam file.
         regions : str
-            Path to the input bed files with the target regions. If the file does not exist,
-            a new one will be created and stored at the given location.
+            Path to the input bed files with the target regions.
         barcodetag : str or callable
             Barcode tag or callable for extracting the barcode from the alignment.
             Default: 'CB'

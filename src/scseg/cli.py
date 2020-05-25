@@ -48,13 +48,10 @@ subparsers = parser.add_subparsers(dest='program')
 # dataset preprocessing and rearrangements
 counts = subparsers.add_parser('bam_to_counts', help='Make countmatrix')
 counts.add_argument('--bamfile', dest='bamfile', type=str, help="Location of a bamfile", required=True)
-counts.add_argument('--binsize', dest='binsize', type=int, help="Binsize", default=1000)
 counts.add_argument('--barcodetag', dest='barcodetag', type=str, help="Barcode readtag", default='CB')
 counts.add_argument('--counts', dest='counts', type=str, help="Location of count matrix or matrices", required=True)
 counts.add_argument('--cellgroup', dest='cellgroup', type=str, help="Location of table defining cell to group mapping.")
-counts.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format. If regions bed file exists, "
-                                              "it will be used to construct the count matrix. In this case, binsize is ignored. "
-                                              "Otherwise, a regions file is created using the specified binsize.", required=True)
+counts.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format. ")
 counts.add_argument('--mode', dest='mode', type=str, default='eitherend', help='Indicates whether to count mid-points, both ends '
                                               'independently or once if either end is located in the interval. Options are midpoint, countboth and eitherend. '
                                               ' Default: mode=eitherend')
@@ -361,7 +358,7 @@ def local_main(args):
         print('Make countmatrix ...')
         cm = CountMatrix.create_from_bam(args.bamfile,
                                     args.regions, barcodetag=args.barcodetag,
-                                    binsize=args.binsize, mode=args.mode)
+                                    mode=args.mode)
 
         if args.cellgroup is not None:
             cells,  groups = get_cell_grouping(args.cellgroup)
