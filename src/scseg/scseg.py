@@ -330,6 +330,21 @@ class Scseg(object):
         state_counts = pd.Series(self._segments.name).value_counts()
         return state_counts
 
+    def plot_state_abundance(self):
+        """
+        plot state statistics
+        """
+
+        fig, ax = plt.subplots()
+        state_counts = self.get_state_stats()
+
+        sns.barplot(y=[l for l in state_counts.index],
+                    x=state_counts,
+                    ax=ax,
+                    palette=[self.color[i] for i in state_counts.index])
+
+        return fig
+
     def plot_state_statistics(self):
         """
         plot state statistics
@@ -347,22 +362,18 @@ class Scseg(object):
 
         return fig
 
-    def plot_readdepth(self, labels):
+    def plot_readdepth(self):
         """
         plots read depths associated with states
         """
-        fig, axes = plt.subplots(1,len(self.model.n_features))
-        if not isinstance(axes, np.ndarray):
-            axes = np.array([axes])
+        fig, axes = plt.subplots()
         segs = self._segments.copy()
-        for i, ax in enumerate(axes):
-            segs['log_readdepth_{}'.format(labels[i])] = np.log10(segs['readdepth_'+str(i)] + 1)
-        for i, ax in enumerate(axes):
-            sns.boxplot(x="log_readdepth_{}".format(labels[i]), y='name', data=segs, orient='h', ax=ax)
+        segs['log_readdepth'] = np.log10(segs['readdepth'] + 1)
+        sns.boxplot(x="log_readdepth", y='name', data=segs, orient='h', ax=axes)
         fig.tight_layout()
         return fig
 
-    def plot_normalized_emissions(self, idat):
+    def plot_normalized_emissions(self, idat=0):
        """ Plot background normalized emission probabilities.
 
        Parameters
@@ -382,10 +393,11 @@ class Scseg(object):
        lodds = np.log(nem) - np.log(tem)
 
        if hasattr(self, "labels_"):
-           if 'cell' in self.labels_[idat].columns:
-               l = self.labels_[idat].cell
-           elif 'barcodes' in self.labels_[idat].columns:
-               l = self.labels_[idat].barcodes
+           l = self.labels_[self.labels_.matrixid == idat].label
+#           if 'cell' in self.labels_[idat].columns:
+#               l = self.labels_[idat].cell
+#           elif 'barcodes' in self.labels_[idat].columns:
+#               l = self.labels_[idat].barcodes
        else:
            l = [str(i) for i in range(lodds.shape[1])]
 
@@ -445,6 +457,7 @@ class Scseg(object):
 
         for i in range(len(X_)):
             regions_['readdepth_' + str(i)] = X_[i].sum(1)
+            regions_['readdepth'] = X_[i].sum(1)
 
         self._segments = regions_
         cleanup()
