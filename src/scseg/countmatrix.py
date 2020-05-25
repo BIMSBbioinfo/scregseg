@@ -12,31 +12,8 @@ from pysam import AlignmentFile
 from collections import Counter
 from scipy.sparse import dok_matrix
 
-class Barcoder:
-    """ Class for extracting barcode from specific field
+from scseg.bam_utils import Barcoder
 
-    Parameters
-    ----------
-    tag : str or callable
-        Specifies which alignment tag should be considered as barcode.
-        Alternatively, a callable can be supplied that extracts custom
-        barcode encoding from the alignment.
-
-    """
-
-    def __init__(self, tag):
-        print('Barcodes determined from {} tag'.format(tag))
-        self.tag = tag
-
-    def __call__(self, aln):
-        if callable(self.tag):
-            rg = self.tag(aln)
-        elif aln.has_tag(self.tag):
-            rg = aln.get_tag(self.tag)
-        else:
-            rg = 'dummy'
-        return rg
-        
 def make_counting_bins(bamfile, binsize, storage=None):
     """ Genome intervals for binsize.
 
