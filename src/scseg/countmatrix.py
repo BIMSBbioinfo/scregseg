@@ -172,17 +172,13 @@ def sparse_count_reads_in_regions(bamfile, regions,
                 midpoint = pos + abs(aln.template_length)//2
                 if midpoint >= iv.start and midpoint < iv.end:
                    sdokmat[idx, barcodemap[bar]] += 1
-
             if aln.is_proper_pair and mode == 'eitherend':
 
                 minpos = min(aln.reference_start + aln.template_length, aln.reference_start)
                 maxpos = max(aln.reference_start + aln.template_length, aln.reference_start)
-                #minpos = min(aln.reference_start, aln.next_reference_start)
-                #maxpos = max(aln.reference_start, aln.next_reference_start)
 
                 if minpos >= iv.start and minpos < iv.end and maxpos >= iv.start and maxpos < iv.end and aln.is_read2:
                     pass
-                    #sdokmat[idx, barcodemap[bar]] += 1
                 else:
                     sdokmat[idx, barcodemap[bar]] += 1
                    
@@ -253,11 +249,7 @@ def get_cell_annotation(filename):
     filename : str
        Filename prefix (without the .bct file ending)
     """
-    if os.path.exists(filename + '.bct'):
-        return pd.read_csv(filename + '.bct', sep='\t')
-    #if os.path.exists(filename + '.cannot.tsv'):
-    #    return pd.read_csv(filename + '.cannot.tsv', sep='\t')
-    #return get_cell_annotation_first_row_(filename)
+    return pd.read_csv(filename + '.bct', sep='\t')
 
 def get_regions_from_bed_(filename):
     """
@@ -480,23 +472,11 @@ class CountMatrix:
 
         cannot = self.cannot[self.cannot.cell.isin(cell)]
 
-        #ids = np.asarray(cannot.cell.isin(cell).index.tolist())
-        #cannot = cannot[cannot.cell.isin(cell)]
-
         cmat = self.cmat.tocsc()
         cnts = cmat[:, ids]
 
         return CountMatrix(csr_matrix(cnts), self.regions, cannot)
         
-#    def __call__(self, icell=None):
-#        if icell is None:
-#            return self.cmat.toarray()
-#        elif isinstance(icell, int):
-#            return self.cmat[:, icell].toarray()
-#        elif isinstance(icell, slice):
-#            return self.cmat[:, icell].toarray()
-#        raise ValueError("indexing not supported")
-#
     def __getitem__(self, ireg):
         return self.cmat[ireg]
 
@@ -519,10 +499,6 @@ class CountMatrix:
     def __len__(self):
         return self.n_regions
 
-#    def subset(self, indices):
-#        return CountMatrix(self.cmat[:, indices], copy.copy(self.regions),
-#                    self.cannot.iloc[indices])
-#
     def export_regions(self, filename):
         """
         Exports the associated regions to a bed file.
