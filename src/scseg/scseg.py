@@ -96,13 +96,16 @@ def get_labeled_data(X):
         X = [X]
     X_ = []
     labels_ = []
-    for cm in X:
+    for i, cm in enumerate(X):
        if isinstance(cm, CountMatrix):
            X_.append(cm.cmat.tocsr())
-           labels_.append(cm.cannot)
+           labels_.append(pd.DataFrame({'label': cm.cannot.cell,
+                                        'matrixid': i}))
        else:
            X_.append(cm)
            labels_.append(None)
+    if isinstance(labels_[0], pd.DataFrame):
+        labels_ = pd.concat(labels_, ignore_index=True)
     return X_, labels_
 
 class Scseg(object):
@@ -138,9 +141,7 @@ class Scseg(object):
         float : 
             Log-likelihood score for X given the model.
         """
-        X_, labels_ = get_labeled_data(X)
-        if not hasattr(self, "labels_"):
-            setattr(self, "labels_", labels_)
+        X_, _ = get_labeled_data(X)
         return self.model.score(X_)
         
     def fit(self, X):
@@ -153,8 +154,7 @@ class Scseg(object):
 
         """
         X_, labels_ = get_labeled_data(X)
-        if not hasattr(self, "labels_"):
-            setattr(self, "labels_", labels_)
+        setattr(self, "labels_", labels_)
         self.model.fit(X_)
 
     def save(self, path):
@@ -167,6 +167,7 @@ class Scseg(object):
             If segmentation was performed, the results are stored in the subfolder 'summary'.
         """
         self.model.save(os.path.join(path, 'modelparams'))
+        self.labels_.to_csv(os.path.join(path, 'modelparams', 'labels.csv'), index=False)
 
         if hasattr(self, "_segments") and self._segments is not None:
             export_segmentation(self._segments, os.path.join(path, 'summary',
@@ -196,7 +197,11 @@ class Scseg(object):
             model = DirMulHMM.load(path)
         else:
             raise ValueError("Model not available")
+
         scmodel = cls(model)
+
+        if os.path.exists(os.path.join(path, 'modelparams',  'labels.csv')):
+            scmodel.labels_ = pd.read_csv(os.path.join(path, 'modelparams', 'labels.csv'))
 
         scmodel.load_segments(os.path.join(path, 'summary', 'segmentation.tsv'))
 
@@ -243,9 +248,7 @@ class Scseg(object):
 
         """
 
-        X_, labels_ = get_labeled_data(X)
-        if not hasattr(self, "labels_"):
-            setattr(self, "labels_", labels_)
+        X_, _ = get_labeled_data(X)
 
         if post:
             # use posterior decoding
@@ -299,9 +302,7 @@ class Scseg(object):
             Default: False. categorical state calls are used.
         """
 
-        X_, labels_ = get_labeled_data(X)
-        if not hasattr(self, "labels_"):
-            setattr(self, "labels_", labels_)
+        X_, _ = get_labeled_data(X)
 
         obs_seqfreqs = self.cell2state_counts(X_, prob_max_threshold, post)
 
@@ -428,9 +429,7 @@ class Scseg(object):
             Dataframe containing the genomic intervals (e.g. from a bed file).
 
         """
-        X_, labels_ = get_labeled_data(X)
-        if not hasattr(self, "labels_"):
-            setattr(self, "labels_", labels_)
+        X_, _ = get_labeled_data(X)
 
         bed = BedTool(regions)
 
@@ -952,9 +951,7 @@ class Scseg(object):
 
     def get_subdata(self, X, query_states, collapse_neighbors=True, state_prob_threshold=0.99):
         """ function deprecated: use get_statecalls() """
-        X_, labels_ = get_labeled_data(X)
-        if not hasattr(self, "labels_"):
-            setattr(self, "labels_", labels_)
+        X_, _ = get_labeled_data(X)
 
         if not isinstance(query_states, list):
             query_states = [query_states]
