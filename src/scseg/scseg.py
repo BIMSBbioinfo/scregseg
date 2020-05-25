@@ -15,6 +15,7 @@ from scipy.stats import zscore
 from scipy.sparse import issparse as is_sparse
 import os
 import matplotlib.pyplot as plt
+from matplotlib import cm
 from sklearn.utils import check_random_state
 
 from numba import jit, njit
@@ -122,7 +123,7 @@ class Scseg(object):
         self._nameprefix = 'state_'
         self.model = model
         self._color = {name: el for name, el in \
-                       zip(self.to_statenames(np.arange(self.n_components)), sns.color_palette('bright', self.n_components))}
+                       zip(self.to_statenames(np.arange(self.n_components)), cm.get_cmap('gist_rainbow')(np.linspace(0.0, 1.0, self.n_components))[:, :3].tolist())}
 
     def score(self, X):
         """ Log-likelihood score for X given the HMM. 
