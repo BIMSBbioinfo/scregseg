@@ -2,6 +2,9 @@ import os
 from copy import copy
 import pysam
 from pysam import AlignmentFile
+from pybedtools import BedTool
+import numpy as np
+import pandas as pd
 
 
 class Barcoder:
@@ -170,3 +173,26 @@ def make_pseudobulk_bam(inbamfile, outputdir, cells, grouplabels, tag='CB'):
     for b in bam_writer:
         bam_writer[b].close()
 
+def fragmentlength_in_regions(bamfile, regions, mapq, maxlen, resolution):
+
+    bed = BedTool(regions)
+    binsize = bed[0].end - bed[0].start
+    fragments = np.zeros((len(bed), maxlen//resolution))
+    m = {(iv.chrom, iv.start): i for i, iv in enumerate(bed)}
+    
+    afile = AlignmentFile(bamfile, "rb")
+    
+    for aln in afile.fetch():
+        if aln.is_proper_pair and aln.is_read1:
+
+            pos = (min(aln.reference_start, aln.next_reference_start) // binsize) * binsize
+
+            tl = abs(aln.tlen)//resolution
+            if tl < maxlen // resolution:
+                fragments[m[(aln.reference_name, pos)], tl] += 1
+    
+    afile.close()
+    cmat = fragments
+    cannot = pd.DataFrame({'cell': ['{}bp'.format(bp*resolution) for bp in range(maxlen// resolution)]})
+
+    return cmat, cannot

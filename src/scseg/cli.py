@@ -617,6 +617,30 @@ def local_main(args):
         os.environ['JANGGU_OUTPUT'] = motifoutput
         motifextractor._extract_motifs(motifoutput)
         motifextractor.save_motifs(motifoutput)
+    elif args.program == 'fragmentsize':
+        print('extract fragment size distribution')
+        outputpath = os.path.join(args.storage, args.modelname)
+
+        scmodel = Scseg.load(outputpath)
+
+        bed = BedTool([Interval(row.chrom, row.start, row.end) for _, row in scmodel._segments.iterrows()])
+
+        fmat = CountMatrix.create_from_fragmentsize(args.bamfile, bed.TEMPFILES[-1], resolution=args.resolution, maxlen=args.maxfraglen)
+
+        fmat.export_counts(os.path.join(outputpath, 'summary', 'fragmentsize_per_state.mtx'))
+        df =  pd.DataFrame(fmat.cmat.toarray(), columns=fmat.cannot.cell)
+
+        df['name'] = scmodel._segments.name
+        adf = df.groupby('name').aggregate('sum')
+        adf = adf.div(adf.sum(axis=1), axis=0).rename({'cell': 'Fragment size'})
+        fig, ax =  plt.subplots(figsize=(10,10))
+        sns.heatmap(adf, ax=ax)
+        fig.savefig(os.path.join(outputpath, 'summary', 'fragmentsize_per_state.svg'))
+    
+        fig, ax =  plt.subplots(figsize=(10,10))
+        x = np.asarray(fmat.cmat.sum(0)).flatten()
+        ax.plot(np.arange(fmat.shape[1]), x)
+        fig.savefig(os.path.join(outputpath, 'summary', 'fragmentsize.svg'))
 
 def main():
     args = parser.parse_args()

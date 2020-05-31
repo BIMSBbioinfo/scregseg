@@ -13,6 +13,7 @@ from collections import Counter
 from scipy.sparse import dok_matrix
 
 from scseg.bam_utils import Barcoder
+from scseg.bam_utils import fragmentlength_in_regions
 
 def make_counting_bins(bamfile, binsize, storage=None):
     """ Genome intervals for binsize.
@@ -64,7 +65,8 @@ def make_counting_bins(bamfile, binsize, storage=None):
 
 def sparse_count_reads_in_regions(bamfile, regions,
                                   barcodetag, flank=0, log=None, mapq=30,
-                                  mode='midpoint', only_with_barcode=True):
+                                  mode='midpoint', only_with_barcode=True,
+                                  maxfraglen=2000):
     """ This function obtains the counts per bins of equal size
     across the genome.
 
@@ -105,6 +107,8 @@ def sparse_count_reads_in_regions(bamfile, regions,
         This indicates that reads without barcodes should be skipped.
         Use False for bulk or pseudobulk aggregation.
         Default: True.
+    maxfraglen : int
+        Maximum fragment length to consider. Default: 2000 [bp]
     """
 
     # Obtain the header information
@@ -159,6 +163,8 @@ def sparse_count_reads_in_regions(bamfile, regions,
 
         for aln in afile.fetch(iv.chrom, fetchstart, fetchend):
             bar = barcoder(aln)
+            if abs(aln.template_length) > maxfraglen:
+                continue
             if only_with_barcode and bar == 'dummy':
                 continue
             if aln.mapping_quality < mapq:
@@ -288,7 +294,8 @@ class CountMatrix:
         return cls(cmat, rannot, cannot)
 
     @classmethod
-    def create_from_bam(cls, bamfile, regions, barcodetag='CB', mode='eitherend', mapq=30, no_barcode=False):
+    def create_from_bam(cls, bamfile, regions, barcodetag='CB', mode='eitherend', mapq=30, no_barcode=False,
+                        maxfraglen=2000):
         """ Creates a countmatrix from a given bam file and pre-specified target regions.
 
         Parameters
@@ -310,6 +317,8 @@ class CountMatrix:
             Only consider reads with a minimum mapping quality. Default: 30
         no_barcode : bool
             Whether the file contains barcodes or whether it contains a bulk sample. Default: False.
+        maxfraglen : int
+            Maximum fragment length to consider. Default: 2000 [bp]
 
         Returns
         -------
@@ -323,9 +332,41 @@ class CountMatrix:
                                   barcodetag, flank=0, log=None,
                                   mapq=mapq,
                                   mode=mode,
-                                  only_with_barcode=not no_barcode)
+                                  only_with_barcode=not no_barcode,
+                                  maxfraglen=maxfraglen)
         
         return cls(cmat.tocsr(), rannot, cannot)
+        
+
+    @classmethod
+    def create_from_fragmentsize(cls, bamfile, regions, mapq=30, maxlen=1000, resolution=50):
+        """ Creates a countmatrix from a given bam file and pre-specified target regions.
+
+        Parameters
+        ----------
+        bamfile : str
+            Path to the input bam file.
+        regions : str
+            Path to the input bed files with the target regions.
+        mapq : int
+            Only consider reads with a minimum mapping quality. Default: 30
+        maxlen : int
+            Maximum fragment length to consider. Default: 1000 bp
+        resolution : int
+            Resolution in base-pairs to construct the matrix
+
+        Returns
+        -------
+        CountMatrix object
+
+        """
+        #if not os.path.exists(regions):
+        #    make_counting_bins(bamfile, binsize, regions)
+        rannot = get_regions_from_bed_(regions)
+        cmat, cannot = fragmentlength_in_regions(bamfile, regions,
+                                  mapq=mapq, maxlen=maxlen, resolution=resolution)
+        
+        return cls(csr_matrix(cmat), rannot, cannot)
         
 
     def __init__(self, countmatrix, regionannotation, cellannotation):
