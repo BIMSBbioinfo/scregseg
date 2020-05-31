@@ -17,6 +17,7 @@ Why does this file exist, and why not put this in __main__?
 import os
 import sys
 import glob
+import warnings
 from scseg.countmatrix import CountMatrix
 #from scseg.countmatrix import get_cell_annotation_first_row_
 from scseg.countmatrix import write_cannot_table
@@ -37,6 +38,8 @@ import numpy as np
 from pybedtools import BedTool
 from pybedtools import Interval
 import argparse
+
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 parser = argparse.ArgumentParser(description='Scseg - single-cell genome segmentation.')
 #parser.add_help()
@@ -65,6 +68,7 @@ filtering.add_argument('--incounts', dest='incounts', type=str, help="Location o
 filtering.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
 filtering.add_argument('--outcounts', dest='outcounts', type=str, help="Location of output count matrix", required=True)
 filtering.add_argument('--mincount', dest='mincounts', type=int, default=0, help='Minimum number of counts per cell')
+filtering.add_argument('--minregioncount', dest='minregioncounts', type=int, default=0, help='Minimum number of counts per region')
 filtering.add_argument('--maxcount', dest='maxcounts', type=int, default=sys.maxsize, help='Maximum number of counts per cell')
 filtering.add_argument('--trimcount', dest='trimcounts', type=int, default=sys.maxsize, help='Maximum number of counts per matrix element. For instance, trimcount 1 amounts to binarization.')
 
@@ -91,6 +95,7 @@ fsegment.add_argument('--counts', dest='counts', nargs='+', type=str, help="Loca
 fsegment.add_argument('--labels', dest='labels', nargs='*', type=str, help="Name of the countmatrix")
 fsegment.add_argument('--mincount', dest='mincounts', type=int, default=0, help='Minimum number of counts per cell')
 fsegment.add_argument('--maxcount', dest='maxcounts', type=int, default=sys.maxsize, help='Maximum number of counts per cell')
+fsegment.add_argument('--minregioncount', dest='minregioncounts', type=int, default=0, help='Minimum number of counts per region')
 fsegment.add_argument('--trimcount', dest='trimcounts', type=int, default=sys.maxsize, help='Maximum number of counts per matrix element. For instance, trimcount 1 amounts to binarization.')
 fsegment.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
 fsegment.add_argument('--storage', dest='storage', type=str, help="Location for storing output")
@@ -107,6 +112,7 @@ segment.add_argument('--counts', dest='counts', nargs='+', type=str, help="Locat
 segment.add_argument('--labels', dest='labels', nargs='*', type=str, help="Name of the countmatrix")
 segment.add_argument('--mincount', dest='mincounts', type=int, default=0, help='Minimum number of counts per cell')
 segment.add_argument('--maxcount', dest='maxcounts', type=int, default=sys.maxsize, help='Maximum number of counts per cell')
+segment.add_argument('--minregioncount', dest='minregioncounts', type=int, default=0, help='Minimum number of counts per region')
 segment.add_argument('--trimcount', dest='trimcounts', type=int, default=sys.maxsize, help='Maximum number of counts per matrix element. For instance, trimcount 1 amounts to binarization.')
 segment.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
 segment.add_argument('--storage', dest='storage', type=str, help="Location for storing output")
@@ -120,20 +126,12 @@ stats = subparsers.add_parser('make_stats', help='Obtain segmentation stats')
 stats.add_argument('--counts', dest='counts', nargs='+', type=str, help="Location of one or several count matrices")
 stats.add_argument('--mincount', dest='mincounts', type=int, default=0, help='Minimum number of counts per cell')
 stats.add_argument('--maxcount', dest='maxcounts', type=int, default=sys.maxsize, help='Maximum number of counts per cell')
+stats.add_argument('--minregioncount', dest='minregioncounts', type=int, default=0, help='Minimum number of counts per region')
 stats.add_argument('--trimcount', dest='trimcounts', type=int, default=sys.maxsize, help='Maximum number of counts per matrix element. For instance, trimcount 1 amounts to binarization.')
 stats.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
 stats.add_argument('--storage', dest='storage', type=str, help="Location for storing output")
 stats.add_argument('--labels', dest='labels', nargs='*', type=str, help="Name of the countmatrix")
 stats.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
-
-#llscore = subparsers.add_parser('score', help='Print log-likelihood score')
-#llscore.add_argument('--counts', dest='counts', nargs='+', type=str, help="Location of one or several count matrices")
-#llscore.add_argument('--mincount', dest='mincounts', type=int, default=0, help='Minimum number of counts per cell')
-#llscore.add_argument('--maxcount', dest='maxcounts', type=int, default=sys.maxsize, help='Maximum number of counts per cell')
-#llscore.add_argument('--trimcount', dest='trimcounts', type=int, default=sys.maxsize, help='Maximum number of counts per matrix element. For instance, trimcount 1 amounts to binarization.')
-#llscore.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
-#llscore.add_argument('--storage', dest='storage', type=str, help="Location for storing output")
-#llscore.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
 
 seg2bed = subparsers.add_parser('seg_to_bed', help='Export segmentation to bed-file or files')
 seg2bed.add_argument('--storage', dest='storage', type=str, help="Location for storing output")
@@ -142,7 +140,6 @@ seg2bed.add_argument('--threshold', dest='threshold', type=float, default=0.0, h
                                                                                      "Only export state calls that exceed the posterior decoding threshold. "
                                                                                      "This allows to adjust the stringency of state calls for down-stream analysis steps.")
 seg2bed.add_argument('--merge_neighbors', dest='merge_neighbors', action='store_true', default=False, help='Whether to merge neighboring bins representing the same state. Default=False.')
-#seg2bed.add_argument('--robust', dest='robust', action='store_true', default=False, help='Whether use robust posterior probabilities (average across replicates). Default=False.')
 seg2bed.add_argument('--exclude_states', dest='exclude_states', nargs='*', type=str, help='List of state names which should be exclued.')
 seg2bed.add_argument('--max_state_abundance', dest='max_state_abundance', type=float, default=1., help='Max. state abundance across the genome. '
          'This parameters allows to report only rarely occurring states. '
@@ -150,6 +147,7 @@ seg2bed.add_argument('--max_state_abundance', dest='max_state_abundance', type=f
          'A good choice for this is a value that is slightly lower than 1./n_state. Default=1.')
 seg2bed.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
 seg2bed.add_argument('--output', dest='output', type=str, help='Output BED file containing the state calls.', default='')
+seg2bed.add_argument('--nsmallest', dest='nsmallest', type=int, default=-1, help='Number of most rare states to export. Default: -1 (all states are considered).')
 
 
 annotate = subparsers.add_parser('annotate', help='Annotate states')
@@ -158,20 +156,6 @@ annotate.add_argument('--labels', dest='labels', nargs='+', type=str, help="Anno
 #annotate.add_argument('--plot', dest='plot', help="Flag indicating whether to plot the features association.", action='store_true', default=False)
 annotate.add_argument('--storage', dest='storage', type=str, help="Location for containing the pre-trained segmentation and for storing the annotated segmentation results")
 annotate.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
-
-#statecorrelation = subparsers.add_parser('inspect_state', help='Inspect state correlation structure')
-#statecorrelation.add_argument('--stateid', dest='stateid', type=int, help="State ID to explore")
-#statecorrelation.add_argument('--counts', dest='counts', nargs='+', type=str, help="Location of one or several count matrices")
-#statecorrelation.add_argument('--mincount', dest='mincounts', type=int, default=0, help='Minimum number of counts per cell')
-#statecorrelation.add_argument('--maxcount', dest='maxcounts', type=int, default=sys.maxsize, help='Maximum number of counts per cell')
-#statecorrelation.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
-#statecorrelation.add_argument('--n_cells', dest='n_cells', default=1000, type=int, help="Number of top variable cells to consider")
-#statecorrelation.add_argument('--threshold', dest='threshold', type=float, default=0.9, help="Threshold on posterior decoding probability. "
-#                                                                                     "Only export results that exceed the posterior decoding threshold. "
-#                                                                                     "This allows to adjust the stringency of state calls for down-stream analysis steps.")
-#statecorrelation.add_argument('--output', dest='output', help="Output figure path.", type=str, default='statecorrelationstructure.png')
-#statecorrelation.add_argument('--storage', dest='storage', type=str, help="Location for containing the pre-trained segmentation and for storing the annotated segmentation results")
-#statecorrelation.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
 
 plotannotate = subparsers.add_parser('plot_annot', help='Plot annotation')
 plotannotate.add_argument('--labels', dest='labels', nargs='+', type=str, help="Annotation labels.", required=True)
@@ -199,6 +183,7 @@ celltyping.add_argument('--storage', dest='storage', type=str, help="Location fo
 celltyping.add_argument('--counts', dest='counts', nargs='+', type=str, help="Location of count matrix or matrices")
 celltyping.add_argument('--mincount', dest='mincounts', type=int, default=0, help='Minimum number of counts per cell')
 celltyping.add_argument('--maxcount', dest='maxcounts', type=int, default=sys.maxsize, help='Maximum number of counts per cell')
+celltyping.add_argument('--minregioncount', dest='minregioncounts', type=int, default=0, help='Minimum number of counts per region')
 celltyping.add_argument('--trimcount', dest='trimcounts', type=int, default=sys.maxsize, help='Maximum number of counts per matrix element. For instance, trimcount 1 amounts to binarization.')
 celltyping.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
 celltyping.add_argument('--cell_annotation', dest='cell_annotation', type=str, help='Location of a cell annotation table.')
@@ -226,20 +211,26 @@ motifextraction.add_argument('--nbottom', dest='nbottom', type=int, help="Negati
 motifextraction.add_argument('--flank', dest='flank', type=int, help="Flank size added to each interval. Default: 250 bp", default=250)
 motifextraction.add_argument('--nmotifs', dest='nmotifs', type=int, help="Number of motifs to report. Default: 10", default=10)
 
+fragmentsize = subparsers.add_parser('fragmentsize', help='Inspect fragment size with state association')
+fragmentsize.add_argument('--storage', dest='storage', type=str, help="Location for containing the pre-trained segmentation and for storing the annotated segmentation results")
+fragmentsize.add_argument('--bamfile', dest='bamfile', type=str, help="Location of a file containing paired-end reads")
+fragmentsize.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
+fragmentsize.add_argument('--resolution', dest='resolution', type=int, default=1, help="Resolution in bp.")
+fragmentsize.add_argument('--maxfraglen', dest='maxfraglen', type=int, default=1000, help="Maximum fragment length in bp.")
 
-def load_count_matrices(countfiles, bedfile, mincounts, maxcounts, trimcounts):
+
+
+def load_count_matrices(countfiles, bedfile, mincounts, maxcounts, trimcounts, minregioncounts):
     data = []
     for cnt in countfiles:
         cm = CountMatrix.create_from_countmatrix(cnt, bedfile)
-        cm.filter_count_matrix(mincounts, maxcounts, 0, binarize=False, trimcount=trimcounts)
+        cm.filter_count_matrix(mincounts, maxcounts, minregioncounts, binarize=False, trimcount=trimcounts)
     
         print(cm)
         data.append(cm)
-        #cannot.append(cm.cannot)
-        #data.append(cm.cmat)
     return data
 
-def run_segmentation(data, bedfile, nstates, niter, random_states, n_jobs, mode):
+def run_segmentation(data, nstates, niter, random_states, n_jobs, mode):
     best_score = -np.inf
     scores = []
     print('Fitting {} models'.format(len(random_states)))
@@ -252,13 +243,12 @@ def run_segmentation(data, bedfile, nstates, niter, random_states, n_jobs, mode)
         scores.append(score)
         if best_score < score:
             best_score = score
-            best_model = model.model
+            best_model = model
             best_seed = random_state
 
     print('all models: seed={}, score={}'.format(random_states, scores))
     print('best model: seed={}, score={}'.format(best_seed, best_score))
-    scmodel = Scseg(best_model)
-    scmodel.segment(data, bedfile)
+    scmodel = best_model
     return scmodel
     
 
@@ -287,8 +277,8 @@ def make_state_summary(model, output, labels):
 
     make_folders(os.path.join(output, 'summary'))
     model.get_state_stats().to_csv(os.path.join(output, 'summary', 'statesummary.csv'))
-    model.plot_state_statistics().savefig(os.path.join(output, 'summary', 'statesummary.png'))
-    model.plot_readdepth(datanames).savefig(os.path.join(output, 'summary', 'state_readdepth.png'))
+    model.plot_state_abundance().savefig(os.path.join(output, 'summary', 'state_abundance.svg'))
+    model.plot_readdepth().savefig(os.path.join(output, 'summary', 'state_readdepth.svg'))
 
 def plot_normalized_emissions(model, output, labels):
     if len(labels) > 0:
@@ -370,7 +360,7 @@ def local_main(args):
         print('Filter counts ...')
         cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
         cm.filter_count_matrix(args.mincounts, args.maxcounts,
-                               0, binarize=False, maxcount=args.trimcounts)
+                               args.minregioncounts, binarize=False, maxcount=args.trimcounts)
         cm.export_counts(args.outcounts)
 
     elif args.program == 'batchannot':
@@ -415,12 +405,18 @@ def local_main(args):
         print('Segmentation ...')
         data = load_count_matrices(args.counts, args.regions,
                                                args.mincounts, args.maxcounts,
-                                               args.trimcounts)
+                                               args.trimcounts, args.minregioncounts)
 
         print('fitting the hmm ...')
-        scmodel = run_segmentation(data, args.regions, args.nstates,
+        scmodel = run_segmentation(data, args.nstates,
                                    args.niter, args.randomseed,
                                    args.n_jobs, args.replicate)
+
+        data = load_count_matrices(args.counts, args.regions,
+                                   args.mincounts, args.maxcounts,
+                                   args.trimcounts, 0)
+
+        scmodel.segment(data, args.regions)
         scmodel.save(outputpath)
 
         print('summarize results ...')
@@ -442,7 +438,8 @@ def local_main(args):
         data = load_count_matrices(args.counts,
                                                args.regions,
                                                args.mincounts,
-                                               args.maxcounts, args.trimcounts)
+                                               args.maxcounts, args.trimcounts,
+                                               0)
         scmodel = Scseg.load(outputpath)
         print('Run state calling ...')
         scmodel.segment(data, args.regions)
@@ -458,16 +455,23 @@ def local_main(args):
         scmodel = Scseg.load(outputpath)
 
         # select query states
-        query_states = ['state_{}'.format(i) for i, p in enumerate(scmodel.model.get_stationary_distribution()) \
-                        if p<=args.max_state_abundance]
+        if args.nsmallest > 1:
+            query_states = pd.Series(scmodel.model.get_stationary_distribution(), index=['state_{}'.format(i) for i in range(scmodel.n_components)])
+            query_states = query_states.nsmallest(args.nsmallest).index.tolist()
+        else:
+            query_states = ['state_{}'.format(i) for i, p in enumerate(scmodel.model.get_stationary_distribution()) \
+                            if p<=args.max_state_abundance]
 
         if args.exclude_states is not None:
             query_states = list(set(query_states).difference(set(args.exclude_states)))
 
         print("exporting {} states".format(len(query_states)))
         # subset and merge the state calls
-        subset = scmodel.get_statecalls(query_states, collapse_neighbors=args.merge_neighbors,
-                                        state_prob_threshold=args.threshold)
+        #subset = scmodel.get_statecalls(query_states, collapse_neighbors=args.merge_neighbors,
+        #                                state_prob_threshold=args.threshold)
+        subset = scmodel.get_statecalls3(query_states, ntop=5000,
+                                         state_prob_threshold=args.threshold)
+
 
         if args.output == '':
             output = outputpath = os.path.join(args.storage, args.modelname, 'summary', 'segments.bed')
@@ -611,7 +615,7 @@ def local_main(args):
         scmodel = Scseg.load(outputpath)
         motifextractor = MotifExtractor(scmodel, args.refgenome, ntop=args.ntop,
                                         nbottom=args.nbottom, ngap=args.ngap,
-                                        nmotifs=args.nmotifs, flank=self.args.flank)
+                                        nmotifs=args.nmotifs, flank=args.flank)
         motifoutput = os.path.join(rootdir, 'motifs')
 
         os.environ['JANGGU_OUTPUT'] = motifoutput

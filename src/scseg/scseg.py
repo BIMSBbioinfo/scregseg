@@ -340,27 +340,19 @@ class Scseg(object):
         sns.barplot(y=[l for l in state_counts.index],
                     x=state_counts,
                     ax=ax,
-                    palette=[self.color[i] for i in state_counts.index])
+                    color="lightblue")
+                    #palette=[self.color[i] for i in state_counts.index])
 
         return fig
 
-    def plot_state_statistics(self):
-        """
-        plot state statistics
-        """
-
-        fig, ax = plt.subplots(1, 2)
-        state_counts = self.get_state_stats()
-
-        sns.barplot(y=[l for l in state_counts.index],
-                    x=state_counts,
-                    ax=ax[0],
-                    palette=[self.color[i] for i in state_counts.index])
-
-        sns.heatmap(self.model.transmat_, ax=ax[1], cmap='Reds')
-
-        return fig
-
+    def plot_fragmentsize(self, frag):
+        df =  pd.DataFrame(frag.cmat.toarray(), columns=frag.cannot.cell)
+        df['name'] = self._segments.name
+        adf = df.groupby('name').aggregate('mean')
+        fig, ax =  plt.subplots()
+        sns.heatmap(sdf, ax=ax)
+        
+       
     def plot_readdepth(self):
         """
         plots read depths associated with states
@@ -368,7 +360,7 @@ class Scseg(object):
         fig, axes = plt.subplots()
         segs = self._segments.copy()
         segs['log_readdepth'] = np.log10(segs['readdepth'] + 1)
-        sns.boxplot(x="log_readdepth", y='name', data=segs, orient='h', ax=axes)
+        sns.violinplot(x="log_readdepth", y='name', data=segs, orient='h', ax=axes, color="lightblue")
         fig.tight_layout()
         return fig
 
@@ -393,10 +385,6 @@ class Scseg(object):
 
        if hasattr(self, "labels_"):
            l = self.labels_[self.labels_.matrixid == idat].label
-#           if 'cell' in self.labels_[idat].columns:
-#               l = self.labels_[idat].cell
-#           elif 'barcodes' in self.labels_[idat].columns:
-#               l = self.labels_[idat].barcodes
        else:
            l = [str(i) for i in range(lodds.shape[1])]
 
@@ -427,15 +415,18 @@ class Scseg(object):
 
         """
         X_, _ = get_labeled_data(X)
+        if isinstance(X, CountMatrix):
+            regions_ = X[0].regions
+        else:
+            bed = BedTool(regions)
 
-        bed = BedTool(regions)
-
-        regions_ = pd.DataFrame([[iv.chrom, iv.start, iv.end] for iv in bed],
-                                columns=['chrom', 'start', 'end'])
+            regions_ = pd.DataFrame([[iv.chrom, iv.start, iv.end] for iv in bed],
+                                    columns=['chrom', 'start', 'end'])
 
         statenames = self.to_statenames(self.model.predict(X_))
         statescores = self.model.predict_proba(X_)
 
+        print(X[0].shape, statescores.shape, len(statenames))
         regions_['name'] = statenames
         regions_['strand'] = '.'
         regions_['thickStart'] = regions_.start
@@ -535,27 +526,6 @@ class Scseg(object):
                                            cache=True)
             for i, label in enumerate(labels):
                 self._segments[label] = cov.garray.handle['data'][:, 0, 0, i]
-
-#        for key, file in annotationdict.items():
-#            print(key)
-#            if isinstance(file, list):
-#                self._segments[key] = file
-#                continue
-#            if file.endswith('.bed') or file.endswith('.bed.gz') or file.endswith('.narrowPeak') or \
-#               file.endswith('.bedgraph'):
-#                cov = Cover.create_from_bed(key, bedfiles=file, roi=tmpfilename,
-#                                            binsize=binsize, resolution=binsize, store_whole_genome=False,
-#                                            cache=True)
-#            elif file.endswith('.bam'):
-#                cov = Cover.create_from_bam(key, bamfiles=file, roi=tmpfilename,
-#                                            stranded=False, normalizer=[LogTransform()],
-#                                            store_whole_genome=False, binsize=binsize, resolution=binsize,
-#                                            cache=True)
-#            elif file.endswith('.bw') or file.endswith('.bigwig'):
-#                cov = Cover.create_from_bigwig(key, bigwigfiles=file, roi=tmpfilename,
-#                                               binsize=binsize, resolution=binsize, store_whole_genome=False,
-#                                               cache=True)
-#            self._segments[key] = cov.garray.handle['data'][:, 0, 0, 0]
 
         os.remove(tmpfilename)
         os.rmdir(tmpdir)
@@ -693,34 +663,9 @@ class Scseg(object):
         roi_segments = flanked_tss_.intersect(segment_bedtool, wa=True, wb=True)
 
         for iv in roi_segments:
-#            print(iv.name, iv.fields)
             observed_segmentcounts[reg2id[iv.name], self.to_stateid(iv.fields[-1])] += 1
 
         region_length = observed_segmentcounts.sum(-1)
-#            # obtain segment counts
-#
-#            for iv in roi_segments:
-#                observed_segmentcounts[iregion, self.to_stateid(iv.name)] += 1
-#        for iregion, region in enumerate(regions):
-#
-#            iv = region
-#
-#            # obtain tss's for genes
-#            tss = BedTool([Interval(iv.chrom, iv.end if iv.strand=='-' else iv.start,
-#                                    (iv.end if iv.strand=='-' else iv.start) + 1,
-#                                    name=iv.name)])
-#
-#            #flank tss's by flanking window
-#            flanked_tss_ = BedTool([Interval(iv.chrom, max(0, iv.start-flanking), iv.end+flanking, name=iv.name) for iv in tss])
-#
-#            # collect segments in the surounding region
-#            roi_segments = segment_bedtool.intersect(flanked_tss_, wa=True, u=True)
-#
-#            region_length[iregion] = len(roi_segments)
-#            # obtain segment counts
-#
-#            for iv in roi_segments:
-#                observed_segmentcounts[iregion, self.to_stateid(iv.name)] += 1
 
         
         obscntdf = pd.DataFrame(observed_segmentcounts, columns=self.to_statenames(np.arange(self.n_components)),
@@ -917,6 +862,76 @@ class Scseg(object):
     def _get_broadregion_null_distribution(self, length):
         return self._cnt_storage[length], \
                self._cnt_storage[length].T.dot(np.arange(self._cnt_storage[length].shape[0]))
+
+    def get_statecalls3(self, query_states,
+                        ntop=5000,
+                        state_prob_threshold=0.9):
+        """ obtain state calls from segmentation.
+
+        This function allows to filter state calls in various ways
+        and optionally to collapse bookended bins of the same state.
+
+        Parameters
+        ----------
+        query_states : list(str)
+            List of query state names to report
+        ntop : int
+            Minimum posterior decoding probability to select high confidence state calls.
+            Default: 0.99
+        
+        Returns
+        -------
+        pandas.DataFrame :
+            Filtered segmentation results
+        """
+
+        if not isinstance(query_states, list):
+            query_states = [query_states]
+
+        subset = self._segments[(self._segments.name.isin(query_states))
+                                & (self._segments.Prob_max >= state_prob_threshold)].copy()
+
+        # determine neighboring bins that can be merged together
+        prevind = -2
+        prevstate = ''
+        nelem = 0
+        mapelem = []
+        for i, r in subset.iterrows():
+            curstate = r['name']
+            nelem += 1
+            if i == (prevind + 1) and prevstate == curstate:
+               nelem -= 1
+            mapelem.append(nelem - 1)
+            prevind = i
+            prevstate = curstate
+
+
+        subset['common'] = mapelem
+
+        processing = {'chrom': 'first',
+                      'start': 'min',
+                      'end': 'max', 'name':'first',
+                      'score': 'max', 'strand': 'first',
+                      'thickStart': 'min', 'thickEnd': 'max',
+                      'itemRbg': 'first',
+                      'Prob_max': 'max',
+                     }
+
+        for state in query_states:
+            processing['Prob_' + state] = 'max'
+        
+        processing['readdepth'] = 'sum'
+        
+        subset = subset.groupby(['common', 'name']).aggregate(processing)
+
+        dfs = []
+
+        for process_state in query_states:
+            subset['pscore'] = subset['Prob_{}'.format(process_state)] * subset['readdepth']
+            dfs.append(subset.nlargest(ntop, 'pscore').copy())
+
+        subset_merged = pd.concat(dfs, axis=0)
+        return subset_merged
 
     def get_statecalls(self, query_states,
                        collapse_neighbors=True,
