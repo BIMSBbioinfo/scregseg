@@ -433,23 +433,23 @@ class CountMatrix:
         cannot = pd.concat(newcannot, axis=0)
         return cls(hstack([cm.cmat for cm in cms]), cms[0].regions, cannot)
 
-    def filter_count_matrix(self, minreadsincells=1000, maxreadsincells=30000,
-                            minreadsinpeaks=20,
+    def filter_count_matrix(self, minreadsincell=None, maxreadsincell=None,
+                            minreadsinregion=None,
                             binarize=True, trimcount=None):
         """
         Applies quality filtering to the count matrix.
 
         Parameters
         ----------
-        minreadsincells : int
+        minreadsincell : int or None
             Minimum counts in cells to remove poor quality cells with too few reads.
-            Default: 1000
-        maxreadsincells : int
+            Default: None
+        maxreadsincell : int or None
             Maximum counts in cells to remove poor quality cells with too many reads.
-            Default: 30000
-        minreadsinpeaks : int
+            Default: None
+        minreadsinregion : int or None
             Minimum counts in region to remove low coverage regions.
-            Default: 20
+            Default: None
         binarize : bool
             Whether to binarize the count matrix. Default: True
         trimcounts : int or None
@@ -465,14 +465,23 @@ class CountMatrix:
         if trimcount is not None and trimcount > 0:
             self.cmat.data[self.cmat.data > trimcount] = trimcount 
 
+        if minreadsincell is None:
+            minreadsincell = 0
+
         cellcounts = self.cmat.sum(axis=0)
-        keepcells = np.where((cellcounts>=minreadsincells) & (cellcounts<maxreadsincells) & (self.cannot.cell.values!='dummy'))[1]
+        
+        if maxreadsincell is None:
+            maxreadsincell = cellcounts.max()
+
+        keepcells = np.where((cellcounts>=minreadsincell) & (cellcounts<maxreadsincell) & (self.cannot.cell.values!='dummy'))[1]
 
         self.cmat = self.cmat[:, keepcells]
         self.cannot = self.cannot.iloc[keepcells]
 
+        if minreadsinregion is None:
+            minreadsinregion = 0
         regioncounts = self.cmat.sum(axis=1)
-        keepregions = np.where(regioncounts>=minreadsinpeaks)[0]
+        keepregions = np.where(regioncounts>=minreadsinregion)[0]
 
         self.cmat = self.cmat[keepregions, :]
         self.regions = self.regions.iloc[keepregions]
