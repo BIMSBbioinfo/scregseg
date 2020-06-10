@@ -1,5 +1,7 @@
 """ Scseg main module
 """
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
 import numpy as np
 import seaborn as sns
@@ -108,6 +110,27 @@ def get_labeled_data(X):
         labels_ = pd.concat(labels_, ignore_index=True)
     return X_, labels_
 
+def run_segmentation(data, nstates, niter, random_states, n_jobs):
+    best_score = -np.inf
+    scores = []
+    print('Fitting {} models'.format(len(random_states)))
+    for random_state in random_states:
+        print("Starting {}".format(random_state))
+        model = Scseg(DirMulHMM(n_components=nstates, n_iter=niter, random_state=random_state, verbose=True,
+                                n_jobs=n_jobs))
+        model.fit(data)
+        score = model.score(data)
+        scores.append(score)
+        if best_score < score:
+            best_score = score
+            best_model = model
+            best_seed = random_state
+
+    print('all models: seed={}, score={}'.format(random_states, scores))
+    print('best model: seed={}, score={}'.format(best_seed, best_score))
+    scmodel = best_model
+    return scmodel
+    
 class Scseg(object):
     """Scseg class: Single-cell segmentation
 

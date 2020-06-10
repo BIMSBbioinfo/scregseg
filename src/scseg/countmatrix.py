@@ -1,3 +1,5 @@
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import os
 import copy
 import gzip
@@ -14,6 +16,16 @@ from scipy.sparse import dok_matrix
 
 from scseg.bam_utils import Barcoder
 from scseg.bam_utils import fragmentlength_in_regions
+
+def load_count_matrices(countfiles, bedfile, mincounts, maxcounts, trimcounts, minregioncounts):
+    data = []
+    for cnt in countfiles:
+        cm = CountMatrix.create_from_countmatrix(cnt, bedfile)
+        cm.filter_count_matrix(mincounts, maxcounts, minregioncounts, binarize=False, trimcount=trimcounts)
+    
+        print(cm)
+        data.append(cm)
+    return data
 
 def make_counting_bins(bamfile, binsize, storage=None):
     """ Genome intervals for binsize.

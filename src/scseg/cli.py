@@ -14,36 +14,35 @@ Why does this file exist, and why not put this in __main__?
 
   Also see (1) from http://click.pocoo.org/5/setuptools/#setuptools-integration
 """
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import os
 import sys
 import glob
-import warnings
 from scseg.countmatrix import CountMatrix
-#from scseg.countmatrix import get_cell_annotation_first_row_
 from scseg.countmatrix import write_cannot_table
 from scseg.countmatrix import get_cell_annotation
 from scseg.countmatrix import make_counting_bins
+from scseg.countmatrix import load_count_matrices
 from scseg.countmatrix import sparse_count_reads_in_regions
 from scseg.hmm import MultinomialHMM
 from scseg.hmm import DirMulHMM
 from scseg import Scseg
+from scseg.scseg import run_segmentation
+from scseg.utils import fragmentlength_by_state
 from scseg.scseg import export_bed
 from scipy.sparse import hstack
 from scipy.stats import zscore
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-#from umap import UMAP
 import numpy as np
 from pybedtools import BedTool
 from pybedtools import Interval
 import argparse
 
-warnings.simplefilter(action='ignore', category=FutureWarning)
 
 parser = argparse.ArgumentParser(description='Scseg - single-cell genome segmentation.')
-#parser.add_help()
-#subparsers = parser.add_subparsers(dest='segment', help='segmentation')
 
 subparsers = parser.add_subparsers(dest='program')
 
@@ -96,6 +95,7 @@ fsegment.add_argument('--labels', dest='labels', nargs='*', type=str, help="Name
 fsegment.add_argument('--mincount', dest='mincounts', type=int, default=0, help='Minimum number of counts per cell')
 fsegment.add_argument('--maxcount', dest='maxcounts', type=int, default=sys.maxsize, help='Maximum number of counts per cell')
 fsegment.add_argument('--minregioncount', dest='minregioncounts', type=int, default=0, help='Minimum number of counts per region')
+#fsegment.add_argument('--topfrac', dest='topfrac', type=float, default=1., help='Fraction of top most covered regions to use.')
 fsegment.add_argument('--trimcount', dest='trimcounts', type=int, default=sys.maxsize, help='Maximum number of counts per matrix element. For instance, trimcount 1 amounts to binarization.')
 fsegment.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
 fsegment.add_argument('--storage', dest='storage', type=str, help="Location for storing output")
@@ -104,7 +104,7 @@ fsegment.add_argument('--randomseed', dest='randomseed', nargs='+', type=int, de
 fsegment.add_argument('--niter', dest='niter', type=int, default=100, help='Number of EM iterations')
 fsegment.add_argument('--n_jobs', dest='n_jobs', type=int, default=1, help='Number Jobs')
 fsegment.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
-fsegment.add_argument('--replicate', dest='replicate', type=str, default='sum', choices=['sum', 'geometric_mean', 'arithmetic_mean'], help='Model name')
+#fsegment.add_argument('--replicate', dest='replicate', type=str, default='sum', choices=['sum', 'geometric_mean', 'arithmetic_mean'], help='Model name')
 
 # fitting a model from scratch
 segment = subparsers.add_parser('segment', help='Segment genome with existing model.')
@@ -148,12 +148,12 @@ seg2bed.add_argument('--max_state_abundance', dest='max_state_abundance', type=f
 seg2bed.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
 seg2bed.add_argument('--output', dest='output', type=str, help='Output BED file containing the state calls.', default='')
 seg2bed.add_argument('--nsmallest', dest='nsmallest', type=int, default=-1, help='Number of most rare states to export. Default: -1 (all states are considered).')
+seg2bed.add_argument('--statenames', dest='statenames', nargs='*', help='List of states to export.')
 
 
 annotate = subparsers.add_parser('annotate', help='Annotate states')
 annotate.add_argument('--files', dest='files', nargs='+', type=str, help="Location of a BAM-, BIGWIG or BED-files to annotate the states with.")
 annotate.add_argument('--labels', dest='labels', nargs='+', type=str, help="Annotation labels.")
-#annotate.add_argument('--plot', dest='plot', help="Flag indicating whether to plot the features association.", action='store_true', default=False)
 annotate.add_argument('--storage', dest='storage', type=str, help="Location for containing the pre-trained segmentation and for storing the annotated segmentation results")
 annotate.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
 
@@ -177,19 +177,6 @@ featurecorr.add_argument('--threshold', dest='threshold', type=float, default=0.
                                                                                      "Only export results that exceed the posterior decoding threshold. "
                                                                                      "This allows to adjust the stringency of state calls for down-stream analysis steps.")
 featurecorr.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
-
-celltyping = subparsers.add_parser('celltype', help='Cell type characterization')
-celltyping.add_argument('--storage', dest='storage', type=str, help="Location for containing the pre-trained segmentation and for storing the annotated segmentation results")
-celltyping.add_argument('--counts', dest='counts', nargs='+', type=str, help="Location of count matrix or matrices")
-celltyping.add_argument('--mincount', dest='mincounts', type=int, default=0, help='Minimum number of counts per cell')
-celltyping.add_argument('--maxcount', dest='maxcounts', type=int, default=sys.maxsize, help='Maximum number of counts per cell')
-celltyping.add_argument('--minregioncount', dest='minregioncounts', type=int, default=0, help='Minimum number of counts per region')
-celltyping.add_argument('--trimcount', dest='trimcounts', type=int, default=sys.maxsize, help='Maximum number of counts per matrix element. For instance, trimcount 1 amounts to binarization.')
-celltyping.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
-celltyping.add_argument('--cell_annotation', dest='cell_annotation', type=str, help='Location of a cell annotation table.')
-celltyping.add_argument('--method', dest='method', type=str, default='probability', choices=['probability', 'zscore', 'logfold', 'chisqstat'])
-celltyping.add_argument('--post', dest='post', help="Flag indicating whether to use posterior decoding.", action='store_true', default=False)
-celltyping.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
 
 enrichment = subparsers.add_parser('enrichment', help='State over-representation test')
 enrichment.add_argument('--storage', dest='storage', type=str, help="Location for containing the pre-trained segmentation and for storing the annotated segmentation results")
@@ -220,37 +207,6 @@ fragmentsize.add_argument('--maxfraglen', dest='maxfraglen', type=int, default=1
 
 
 
-def load_count_matrices(countfiles, bedfile, mincounts, maxcounts, trimcounts, minregioncounts):
-    data = []
-    for cnt in countfiles:
-        cm = CountMatrix.create_from_countmatrix(cnt, bedfile)
-        cm.filter_count_matrix(mincounts, maxcounts, minregioncounts, binarize=False, trimcount=trimcounts)
-    
-        print(cm)
-        data.append(cm)
-    return data
-
-def run_segmentation(data, nstates, niter, random_states, n_jobs, mode):
-    best_score = -np.inf
-    scores = []
-    print('Fitting {} models'.format(len(random_states)))
-    for random_state in random_states:
-        print("Starting {}".format(random_state))
-        model = Scseg(DirMulHMM(n_components=nstates, n_iter=niter, random_state=random_state, verbose=True,
-                          n_jobs=n_jobs, replicate=mode))
-        model.fit(data)
-        score = model.score(data)
-        scores.append(score)
-        if best_score < score:
-            best_score = score
-            best_model = model
-            best_seed = random_state
-
-    print('all models: seed={}, score={}'.format(random_states, scores))
-    print('best model: seed={}, score={}'.format(best_seed, best_score))
-    scmodel = best_model
-    return scmodel
-    
 
 def make_folders(output):
     os.makedirs(output, exist_ok=True)
@@ -403,15 +359,16 @@ def local_main(args):
 
         outputpath = os.path.join(args.storage, args.modelname)
         print('Segmentation ...')
+        # fit on subset of the data
         data = load_count_matrices(args.counts, args.regions,
                                                args.mincounts, args.maxcounts,
                                                args.trimcounts, args.minregioncounts)
-
-        print('fitting the hmm ...')
+ 
         scmodel = run_segmentation(data, args.nstates,
                                    args.niter, args.randomseed,
-                                   args.n_jobs, args.replicate)
+                                   args.n_jobs)
 
+        # predict on the entire genome
         data = load_count_matrices(args.counts, args.regions,
                                    args.mincounts, args.maxcounts,
                                    args.trimcounts, 0)
@@ -424,24 +381,15 @@ def local_main(args):
         plot_normalized_emissions(scmodel, outputpath, args.labels)
         save_score(scmodel, data, outputpath)
 
-#    elif args.program == 'score':
-#        outputpath = os.path.join(args.storage, args.modelname)
-#        print('loading data ...')
-#        data, cell_annot = load_count_matrices(args.counts, args.regions, args.mincounts, args.maxcounts, args.trimcounts)
-#        datanames = [os.path.basename(c) for c in args.counts]
-#        scmodel = Scseg.load(outputpath)
-#        print('score={}'.format(scmodel.model.score(data)))
-
     elif args.program == 'segment':
         outputpath = os.path.join(args.storage, args.modelname)
-        print('loading data ...')
         data = load_count_matrices(args.counts,
                                                args.regions,
                                                args.mincounts,
                                                args.maxcounts, args.trimcounts,
                                                0)
         scmodel = Scseg.load(outputpath)
-        print('Run state calling ...')
+        print('State calling ...')
         scmodel.segment(data, args.regions)
         scmodel.save(outputpath)
         make_state_summary(scmodel, outputpath, args.labels)
@@ -455,7 +403,9 @@ def local_main(args):
         scmodel = Scseg.load(outputpath)
 
         # select query states
-        if args.nsmallest > 1:
+        if args.statenames is not None and len(args.statenames) > 0:
+            query_states = args.statenames
+        elif args.nsmallest > 1:
             query_states = pd.Series(scmodel.model.get_stationary_distribution(), index=['state_{}'.format(i) for i in range(scmodel.n_components)])
             query_states = query_states.nsmallest(args.nsmallest).index.tolist()
         else:
@@ -465,7 +415,7 @@ def local_main(args):
         if args.exclude_states is not None:
             query_states = list(set(query_states).difference(set(args.exclude_states)))
 
-        print("exporting {} states".format(len(query_states)))
+        print("Exporting {} states".format(len(query_states)))
         # subset and merge the state calls
         #subset = scmodel.get_statecalls(query_states, collapse_neighbors=args.merge_neighbors,
         #                                state_prob_threshold=args.threshold)
@@ -495,7 +445,7 @@ def local_main(args):
         
     elif args.program == 'plot_annot':
         outputpath = os.path.join(args.storage, args.modelname)
-        print('plot annotation ...')
+        print('Plot annotation ...')
         scmodel = Scseg.load(outputpath)
 
         if args.plottype == 'heatmap':
@@ -507,66 +457,6 @@ def local_main(args):
                                            args.labels, args.title, args.plottype,
                                            args.threshold, args.groupby)
 
-#    elif args.program == 'celltype':
-#        outputpath = os.path.join(args.storage, args.modelname)
-#        
-#        outputcelltyping = os.path.join(outputpath, 'celltyping')
-#
-#        print('celltyping ...')
-#        scmodel = Scseg.load(outputpath)
-#
-#        data, celllabels = load_count_matrices(args.counts, args.regions, args.mincounts, args.maxcounts, args.trimcounts)
-#        datanames = [os.path.basename(c) for c in args.counts]
-#
-#        assoc = scmodel.cell2state_enrichment(data, mode=args.method, post=args.post)
-#        method = args.method
-#
-#        make_folders(outputcelltyping)
-#        for i, folds in enumerate(assoc):
-#            sns.clustermap(folds, cmap="Blues", robust=True).savefig(os.path.join(outputcelltyping,
-#                       'cellstate_heatmap_{}_{}.png'.format(method, datanames[i])))
-#            df = pd.DataFrame(folds, columns=[scmodel.to_statename(i) for i in range(scmodel.n_components)],
-#                              index=celllabels[i].cell)
-#            df.to_csv(os.path.join(outputcelltyping, 'cell2state_{}.csv'.format(method)))
-#
-#        tot_assoc = np.concatenate(assoc, axis=0)
-#        embedding = UMAP().fit_transform(tot_assoc)
-#
-#        merged_celllabels = pd.concat(celllabels, axis=0, ignore_index=True)
-#
-#        df = pd.DataFrame(embedding, columns=["X","Y"])
-#        df = pd.concat([df, merged_celllabels], axis=1)
-#        
-#        for label in merged_celllabels.columns:
-#            if label == 'cell':
-#                continue
-#            fig, ax = plt.subplots()
-#            sns.scatterplot(x='X', y='Y', ax=ax, hue=label, data=df, alpha=.1)
-#            fig.savefig(os.path.join(outputcelltyping, 'cellstate_umap_{}_color{}.png'.format(method, label)))
-#        
-#        for label in merged_celllabels.columns:
-#            if label == 'cell':
-#                continue
-#            g = sns.FacetGrid(df, col=label)
-#            g = g.map(sns.scatterplot, "X", "Y",
-#                      edgecolor='w',
-#                      **{'alpha':.2}).add_legend().savefig(os.path.join(outputcelltyping,
-#                                                                        'cellstate_umap_{}_facet{}.png'.format(method, label)))
-#        for i in np.arange(scmodel.n_components):
-#            fig, ax = plt.subplots()
-#            sns.scatterplot(x='X', y='Y', ax=ax, data=df,
-#                            hue=tot_assoc[:, i],
-#                            alpha=.1, hue_norm=(0, tot_assoc.max()),
-#                            cmap='Blues')
-#            fig.savefig(os.path.join(outputcelltyping,
-#                                     'cellstate_umap_{}_{}.png'.format(method, scmodel.to_statename(i))))
-#
-#        fig, ax = plt.subplots()
-#        sns.scatterplot(x='X', y='Y', ax=ax, data=df, alpha=.1)
-#        fig.savefig(os.path.join(outputcelltyping, 'cellstate_umap_{}.png'.format(method)))
-#
-#        df.to_csv(os.path.join(outputcelltyping, 'umap_{}.csv'.format(method)))
-#
     elif args.program == 'enrichment':
         outputpath = os.path.join(args.storage, args.modelname)
 
@@ -581,10 +471,7 @@ def local_main(args):
             featurenames = [os.path.basename(name)[:-4] for name in featuresets]
             obs, lens, _ = scmodel.geneset_observed_state_counts(featuresets, flanking=args.flanking)
         else:
-            #featuresets = glob.glob(os.path.join(args.features, '*.bed'))
-            #featurenames = [os.path.basename(name)[:-4] for name in featuresets]
             obs, lens, featurenames = scmodel.observed_state_counts(args.features, flanking=args.flanking, using_tss = not args.using_genebody)
-            #print(obs.shape, obs.head())
             obs.to_csv(os.path.join(outputenr, 'state_counts_{}.tsv'.format(args.title)), sep='\t')
 
         enr = scmodel.broadregion_enrichment(obs, mode=args.method)
@@ -607,7 +494,6 @@ def local_main(args):
                 x = enr.nlargest(ntop, state)
                 for i, row in x.iterrows():
                     f.write('{}\t{}\t{}\n'.format(state, i, row[state]))
-      # enr.nlargest(ntop, enr.columns).to_csv(os.path.join(outputenr, 'state_enrichment_top{}_{}_{}.tsv'.format(ntop, args.method, args.title)), sep='\t')
     elif args.program == 'extract_motifs':
         outputpath = os.path.join(args.storage, args.modelname)
 
@@ -622,7 +508,7 @@ def local_main(args):
         motifextractor._extract_motifs(motifoutput)
         motifextractor.save_motifs(motifoutput)
     elif args.program == 'fragmentsize':
-        print('extract fragment size distribution')
+        print('Extract fragment size distribution ...')
         outputpath = os.path.join(args.storage, args.modelname)
 
         scmodel = Scseg.load(outputpath)
@@ -632,11 +518,8 @@ def local_main(args):
         fmat = CountMatrix.create_from_fragmentsize(args.bamfile, bed.TEMPFILES[-1], resolution=args.resolution, maxlen=args.maxfraglen)
 
         fmat.export_counts(os.path.join(outputpath, 'summary', 'fragmentsize_per_state.mtx'))
-        df =  pd.DataFrame(fmat.cmat.toarray(), columns=fmat.cannot.cell)
+        adf = fragmentlength_by_state(scmodel, fmat)
 
-        df['name'] = scmodel._segments.name
-        adf = df.groupby('name').aggregate('sum')
-        adf = adf.div(adf.sum(axis=1), axis=0).rename({'cell': 'Fragment size'})
         fig, ax =  plt.subplots(figsize=(10,10))
         sns.heatmap(adf, ax=ax)
         fig.savefig(os.path.join(outputpath, 'summary', 'fragmentsize_per_state.svg'))

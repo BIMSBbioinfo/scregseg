@@ -3,6 +3,7 @@
 """ Helper Functions
 """
 import numpy as np
+import pandas as pd
 from scipy.special import logsumexp
 from sklearn.utils import check_array
 from sklearn.utils import check_random_state
@@ -63,4 +64,11 @@ def iter_from_X_lengths(X, lengths, state=None):
         for i in range(len(lengths)):
             yield start[i], end[i]
 
+def fragmentlength_by_state(model, fmat):
+    df =  pd.DataFrame(fmat.cmat.toarray(), columns=fmat.cannot.cell)
 
+    df['name'] = model._segments.name
+    adf = df.groupby('name').aggregate('sum')
+    adf = adf.div(adf.sum(axis=1), axis=0).rename({'cell': 'Fragment size'})
+
+    return adf
