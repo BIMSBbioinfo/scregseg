@@ -26,6 +26,8 @@ class Barcoder:
     def __call__(self, aln):
         if callable(self.tag):
             rg = self.tag(aln)
+        elif self.tag in ':.':
+            rg = aln.query_name.split(self.tag)[0]
         elif aln.has_tag(self.tag):
             rg = aln.get_tag(self.tag)
         else:
