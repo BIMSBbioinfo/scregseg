@@ -422,7 +422,7 @@ class Scseg(object):
         return self._color
 
 
-    def segment(self, X, regions):
+    def segment(self, X, regions=None):
         """
         Performs segmentation.
 
@@ -431,15 +431,18 @@ class Scseg(object):
 
         Parameters
         ----------
-        X : list(np.array) or list(scipy.sparse.csc_matrix)
+        X : list(CountMatrix) or list(np.array) or list(scipy.sparse.csc_matrix)
             List of count matrices for which state calling is performed
-        regions : pd.DataFrame
+        regions : pd.DataFrame or None
             Dataframe containing the genomic intervals (e.g. from a bed file).
+            If None, the regions are extracted from the countmatrix object.
 
         """
+        if not isinstance(X, list):
+            X = [X]
         X_, _ = get_labeled_data(X)
-        if isinstance(X, CountMatrix):
-            regions_ = X[0].regions
+        if isinstance(X[0], CountMatrix):
+            regions_ = X[0].regions.copy()
         else:
             bed = BedTool(regions)
 
@@ -449,7 +452,6 @@ class Scseg(object):
         statenames = self.to_statenames(self.model.predict(X_))
         statescores = self.model.predict_proba(X_)
 
-        print(X[0].shape, statescores.shape, len(statenames))
         regions_['name'] = statenames
         regions_['strand'] = '.'
         regions_['thickStart'] = regions_.start
@@ -472,9 +474,6 @@ class Scseg(object):
 
         self._segments = regions_
         cleanup()
-
-
-
 
     def annotate(self, annotations):
         """Annotate the bins with BED, BAM or BIGWIG files.
@@ -773,7 +772,6 @@ class Scseg(object):
     def _init_broadregion_null_distribution(self, max_len):
         max_len = int(max_len)
         cnt_dist = np.zeros((max_len+1, self.n_components, self.n_components))
-        #print(max_len, cnt_dist.shape)
         
         stationary = self.model.get_stationary_distribution()
 
