@@ -1,4 +1,6 @@
 import os
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 #os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 import tempfile
 import pandas as pd
@@ -55,7 +57,8 @@ class Meme:
 
 
 class MotifExtractor:
-    def __init__(self, scmodel, refgenome, ntop=15000, nbottom=15000, ngap=70000, flank=250, nmotifs=10):
+    def __init__(self, scmodel, refgenome, ntop=15000, nbottom=15000,
+                 ngap=70000, flank=250, nmotifs=10):
        self.ntop = ntop
        self.refgenome = refgenome
        self.nmotifs = nmotifs
