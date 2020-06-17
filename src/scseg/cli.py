@@ -547,7 +547,16 @@ def local_main(args):
 
         bed = BedTool([Interval(row.chrom, row.start, row.end) for _, row in scmodel._segments.iterrows()])
 
-        fmat = CountMatrix.create_from_fragmentsize(args.bamfile, bed.TEMPFILES[-1], resolution=args.resolution, maxlen=args.maxfraglen)
+        fmat = CountMatrix.create_from_fragmentsize(args.bamfile, bed.TEMPFILES[-1],
+                                                    resolution=1, maxlen=args.maxfraglen)
+
+        nfr = np.asarray(fmat.cmat[:, :150].sum(1)).flatten()
+        total = np.asarray(fmat.cmat.sum(1)).flatten()
+
+        scmodel._segments['nf_prop'] = nfr / total
+        scmodel._segments['nf_prop'] = scmodel._segments['nf_prop'].fillna(0.0)
+
+        scmodel.save(outputpath)
 
         fmat.export_counts(os.path.join(outputpath, 'summary', 'fragmentsize_per_state.mtx'))
         adf = fragmentlength_by_state(scmodel, fmat)
@@ -560,6 +569,11 @@ def local_main(args):
         x = np.asarray(fmat.cmat.sum(0)).flatten()
         ax.plot(np.arange(fmat.shape[1]), x)
         fig.savefig(os.path.join(outputpath, 'summary', 'fragmentsize.svg'))
+
+        # fraction of nucleosome-free fragments vs all fragments
+        #total = np.asarray(fmat.cmat.sum(1)).flatten()
+        #nfr = np.asarray(fmat.cmat[:, :max(1, 150//args.resolution)].sum(1)).flatten()
+
 
 def main():
     args = parser.parse_args()
