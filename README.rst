@@ -2,92 +2,41 @@
 Overview
 ========
 
-.. start-badges
+**Scregseg** (**S**ingle-**C**ell **REG**ulatory landscape **SEG**mentation) is a tool
+that facilitates the analysis of single cell ATAC-seq data by an HMM-based
+segmentation algorithm. To this end, Scregseg integrates and extends the hmmlearn package.
+In more detail, Scregseg uses an HMM with Dirichlet-Multinomial emission probabilities
+to segment the genome either according to distinct relative cross-cell accessibility profiles or
+(after collapsing the single-cell tracks to pseudo-bulk tracks) to capture
+distinct cross-cluster accessibility profiles.
 
-.. list-table::
-    :stub-columns: 1
+This enable to
 
-    * - docs
-      - |docs|
-    * - tests
-      - | |travis|
-        | |codecov|
-    * - package
-      - | |version| |wheel| |supported-versions| |supported-implementations|
-        | |commits-since|
-.. |docs| image:: https://readthedocs.org/projects/scseg/badge/?style=flat
-    :target: https://readthedocs.org/projects/scseg
-    :alt: Documentation Status
+ 1. identify informative feature identification (as an alternative to e.g. peak calling)
+ 2. characterze regulatory programs.
 
-.. |travis| image:: https://travis-ci.org/wkopp/scseg.svg?branch=master
-    :alt: Travis-CI Build Status
-    :target: https://travis-ci.org/wkopp/scseg
+Furthermore, the states and state calls can be annotatated and characterized based on
+1) gene set enrichment, 2) marker gene extraction and 3) motif extraction.
 
-.. |codecov| image:: https://codecov.io/github/wkopp/scseg/coverage.svg?branch=master
-    :alt: Coverage Status
-    :target: https://codecov.io/github/wkopp/scseg
+Regarding **feature identification**: The segmentation results can be used to assemble a set of regions of interest reflecting diverse cross-cell accessibility patterns for the downstream clustering analysis (e.g. using cisTopic). This may improve cell type clustering. By contrast, peak calling may not reveal the most informative regions, because it is biased to reveal regions by peak height. That is, peak calling most confidently extracts consitutive accessible regions which are usually the highest peaks but less informative for cell-type identification and it might miss peaks from small cell populations due to their limited peak height.
 
-.. |version| image:: https://img.shields.io/pypi/v/scseg.svg
-    :alt: PyPI Package latest release
-    :target: https://pypi.org/project/scseg
+Regarding **regulatory program identification**: Instead of employing a differential accessibility analysis (e.g. one-vs-all cluster accessibility) Scregseg reveals distinct cross cell-type accessibility profiles which
+allows to not only capture regions specific for single cell type, but also regions shared across cell types.
 
-.. |commits-since| image:: https://img.shields.io/github/commits-since/wkopp/scseg/v0.0.0.svg
-    :alt: Commits since latest release
-    :target: https://github.com/wkopp/scseg/compare/v0.0.0...master
-
-.. |wheel| image:: https://img.shields.io/pypi/wheel/scseg.svg
-    :alt: PyPI Wheel
-    :target: https://pypi.org/project/scseg
-
-.. |supported-versions| image:: https://img.shields.io/pypi/pyversions/scseg.svg
-    :alt: Supported versions
-    :target: https://pypi.org/project/scseg
-
-.. |supported-implementations| image:: https://img.shields.io/pypi/implementation/scseg.svg
-    :alt: Supported implementations
-    :target: https://pypi.org/project/scseg
-
-
-.. end-badges
-
-Single cell chromatin segmentation
-
-* Free software: MIT license
+* Free software: GPL-v3 license
 
 Installation
 ============
 
+
 ::
 
-    pip install scseg
+    pip install scregseg
 
-Documentation
-=============
+Usage
+=====
+
+Example of the Scregseg functionality (within python) is illustrated in several jupyter notebooks 
+Furthermore, most Scregseg functionality can be used from a command-line interface as well. 
 
 
-https://scseg.readthedocs.io/
-
-
-Development
-===========
-
-To run the all tests run::
-
-    tox
-
-Note, to combine the coverage data from all the tox environments run:
-
-.. list-table::
-    :widths: 10 90
-    :stub-columns: 1
-
-    - - Windows
-      - ::
-
-            set PYTEST_ADDOPTS=--cov-append
-            tox
-
-    - - Other
-      - ::
-
-            PYTEST_ADDOPTS=--cov-append tox
