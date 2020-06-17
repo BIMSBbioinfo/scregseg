@@ -29,6 +29,7 @@ from scseg.hmm import MultinomialHMM
 from scseg.hmm import DirMulHMM
 from scseg import Scseg
 from scseg.scseg import run_segmentation
+from scseg.scseg import get_statecalls
 from scseg.utils import fragmentlength_by_state
 from scseg.scseg import export_bed
 from scipy.sparse import hstack
@@ -139,7 +140,7 @@ seg2bed.add_argument('--individual', dest='individualbeds', action='store_true',
 seg2bed.add_argument('--threshold', dest='threshold', type=float, default=0.0, help="Threshold on posterior decoding probability. "
                                                                                      "Only export state calls that exceed the posterior decoding threshold. "
                                                                                      "This allows to adjust the stringency of state calls for down-stream analysis steps.")
-seg2bed.add_argument('--merge_neighbors', dest='merge_neighbors', action='store_true', default=False, help='Whether to merge neighboring bins representing the same state. Default=False.')
+seg2bed.add_argument('--no_bookended_merging', dest='no_bookended_merging', action='store_true', default=False, help='Whether to merge neighboring bins representing the same state. Default=False.')
 seg2bed.add_argument('--exclude_states', dest='exclude_states', nargs='*', type=str, help='List of state names which should be exclued.')
 seg2bed.add_argument('--max_state_abundance', dest='max_state_abundance', type=float, default=1., help='Max. state abundance across the genome. '
          'This parameters allows to report only rarely occurring states. '
@@ -148,7 +149,10 @@ seg2bed.add_argument('--max_state_abundance', dest='max_state_abundance', type=f
 seg2bed.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
 seg2bed.add_argument('--output', dest='output', type=str, help='Output BED file containing the state calls.', default='')
 seg2bed.add_argument('--nsmallest', dest='nsmallest', type=int, default=-1, help='Number of most rare states to export. Default: -1 (all states are considered).')
+seg2bed.add_argument('--nlargest', dest='nlargest', type=int, default=20, help='Number of most nucleosome-free fragment enriched states to export. Default: -1 (all states are considered).')
+seg2bed.add_argument('--nregsperstate', dest='nregsperstate', type=int, default=5000, help='Number of regions per state to export. Default: 5000.')
 seg2bed.add_argument('--statenames', dest='statenames', nargs='*', help='List of states to export.')
+seg2bed.add_argument('--method', dest='method', type=str, default='rarest', help='Method for selecting states for exporting.', choices=['rarest', 'nucfree', 'manuelselect', 'abundancethreshold'])
 
 
 annotate = subparsers.add_parser('annotate', help='Annotate states')
@@ -402,27 +406,55 @@ def local_main(args):
 
         scmodel = Scseg.load(outputpath)
 
-        # select query states
-        if args.statenames is not None and len(args.statenames) > 0:
+        sdf = scmodel._segments.copy()
+        if args.method == "manuelselect":
+            if args.statenames is None:
+                raise ValueError("--method manuelselect also requires --statenames <list state names>")
             query_states = args.statenames
-        elif args.nsmallest > 1:
+        elif args.method == "rarest":
+            if args.nsmallest <= 0:
+                raise ValueError("--method rarest also requires --nsmallest <int>")
             query_states = pd.Series(scmodel.model.get_stationary_distribution(), index=['state_{}'.format(i) for i in range(scmodel.n_components)])
             query_states = query_states.nsmallest(args.nsmallest).index.tolist()
-        else:
+        elif args.method == "abundancethreshold":
             query_states = ['state_{}'.format(i) for i, p in enumerate(scmodel.model.get_stationary_distribution()) \
                             if p<=args.max_state_abundance]
+        elif args.method == "nucfree":
+            if 'nf_prop' not in scmodel._segments.columns:
+                raise ValueError("'scseg fragmentsize' must be run before.")
+            if args.nlargest <= 0:
+                raise ValueError("--method nucfree also requires --nlargest <int>")
+            sdf.nf_prop = sdf.nf_prop.fillna(0.0)
+            nrdf = sdf[['name', 'nf_prop']].groupby('name').mean()
+            query_states = nrdf.nlargest(args.nlargest, 'nf_prop').index.tolist()
+
+            sdf.readdepth = sdf.readdepth*sdf.nf_prop
+        print(query_states)
+
+#        # select query states
+#        if args.statenames is not None and len(args.statenames) > 0:
+#
+#            query_states = args.statenames
+#        elif args.nsmallest > 1:
+#
+#            query_states = pd.Series(scmodel.model.get_stationary_distribution(), index=['state_{}'.format(i) for i in range(scmodel.n_components)])
+#            query_states = query_states.nsmallest(args.nsmallest).index.tolist()
+#
+#        else:
+#            query_states = ['state_{}'.format(i) for i, p in enumerate(scmodel.model.get_stationary_distribution()) \
+#                            if p<=args.max_state_abundance]
 
         if args.exclude_states is not None:
             query_states = list(set(query_states).difference(set(args.exclude_states)))
 
-        print("Exporting {} states".format(len(query_states)))
         # subset and merge the state calls
-        #subset = scmodel.get_statecalls(query_states, collapse_neighbors=args.merge_neighbors,
+        #subset = scmodel.get_statecalls(scmodel._segments, query_states, collapse_neighbors=args.merge_neighbors,
         #                                state_prob_threshold=args.threshold)
-        subset = scmodel.get_statecalls3(query_states, ntop=5000,
+        subset = get_statecalls(sdf, query_states, ntop=args.nregsperstate,
+                                collapse_neighbors=not args.no_bookended_merging,
                                          state_prob_threshold=args.threshold)
 
-
+        print("Exporting {} states with {} regions".format(len(query_states), subset.shape[0]))
         if args.output == '':
             output = outputpath = os.path.join(args.storage, args.modelname, 'summary', 'segments.bed')
         else:
