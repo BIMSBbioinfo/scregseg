@@ -2,4 +2,4 @@
 Authors
 =======
 
-* Wolfgang Kopp - github.com/wkopp
+* Wolfgang Kopp - `@wkopp <https://github.com/wkopp>`_

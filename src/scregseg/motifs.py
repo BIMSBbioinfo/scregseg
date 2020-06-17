@@ -18,7 +18,7 @@ from janggu import Scorer
 from sklearn.metrics import r2_score
 from keras import Model
 #import subprocess
-from scseg import Scseg
+from scregseg import Scregseg
 
 class Meme:
   def __init__(self):
@@ -67,26 +67,26 @@ class MotifExtractor:
        self.flank = flank
        self.scmodel = scmodel
        self.meme = Meme()
-       
+
     def extract_motifs(self):
         tmpdir = tempfile.mkdtemp()
         filename = 'labels.bedgraph'
         roi = os.path.join(tmpdir, filename)
-       
+
 
         binsize = self.scmodel._segments.iloc[0].end - \
                   self.scmodel._segments.iloc[0].start
 
         for i in range(self.scmodel.n_components):
-        
+
             process_state= 'state_{}'.format(i)
-            
+
             df = self.scmodel._segments
-            
+
             df['pscore'] = df['Prob_{}'.format(process_state)] * df['readdepth']
             df.pscore.rolling(3, win_type='triang',
                               center=True).sum().fillna(0.0)
-            
+
             N = self.ntop + self.nbottom + self.ngap
             sdf = pd.concat([df[['chrom',
                                  'start',
@@ -102,21 +102,21 @@ class MotifExtractor:
             sdf[['chrom', 'start',
                  'end', 'pscore']].to_csv(roi, sep='\t',
                 header=False, index=False)
-            
+
             DNA = Bioseq.create_from_refgenome('dna',
                                                refgenome=self.refgenome,
                                                roi=roi,
                                                binsize=binsize,
                                                flank=self.flank,
-                                               cache=False) 
-            
+                                               cache=False)
+
             LABELS = ReduceDim(Cover.create_from_bed('score',
                                                      bedfiles=roi,
                                                      roi=roi,
                                                      binsize=binsize,
                                                      cache=False,
                                                      resolution=binsize))
-            
+
             @inputlayer
             @outputdense('linear')
             def cnn_model(inputs, inp, oup, params):
@@ -132,24 +132,24 @@ class MotifExtractor:
                                   inputs=DNA,
                                   outputs=LABELS,
                                   name='simple_cnn_{}'.format(process_state))
-            
+
             model.compile(optimizer='adam', loss='mae')
 
             hist = model.fit(DNA, LABELS,
                              epochs=300, batch_size=32,
                              validation_data=['chr1', 'chr5'],
                              callbacks=[EarlyStopping(patience=20, restore_best_weights=True)])
-            
+
             # extract motifs
             W, b = model.kerasmodel.layers[1].get_weights()
             fmodel = Model(model.kerasmodel.inputs,
                            model.kerasmodel.layers[1].output)
             featureacts = fmodel.predict(DNA).max(axis=(1,2))
-            
+
             fdf = pd.DataFrame(featureacts)
                    #            columns=['motif_{}'.format(i) for i in range(featureacts.shape[1])])
             fdf['score']= LABELS[:]
-            
+
             ranking = fdf.corr(method='spearman')['score'].sort_values(ascending=False)
             print(ranking.head())
             for i, m in enumerate(ranking.index[1:(self.nmotifs+1)]):

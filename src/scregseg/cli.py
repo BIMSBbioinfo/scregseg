@@ -6,11 +6,11 @@ Why does this file exist, and why not put this in __main__?
   You might be tempted to import things from __main__ later, but that will cause
   problems: the code will get executed twice:
 
-  - When you run `python -mscseg` python will execute
+  - When you run `python -mscregseg` python will execute
     ``__main__.py`` as a script. That means there won't be any
-    ``scseg.__main__`` in ``sys.modules``.
+    ``scregseg.__main__`` in ``sys.modules``.
   - When you import __main__ it will get executed again (as a module) because
-    there's no ``scseg.__main__`` in ``sys.modules``.
+    there's no ``scregseg.__main__`` in ``sys.modules``.
 
   Also see (1) from http://click.pocoo.org/5/setuptools/#setuptools-integration
 """
@@ -19,19 +19,19 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 import os
 import sys
 import glob
-from scseg.countmatrix import CountMatrix
-from scseg.countmatrix import write_cannot_table
-from scseg.countmatrix import get_cell_annotation
-from scseg.countmatrix import make_counting_bins
-from scseg.countmatrix import load_count_matrices
-from scseg.countmatrix import sparse_count_reads_in_regions
-from scseg.hmm import MultinomialHMM
-from scseg.hmm import DirMulHMM
-from scseg import Scseg
-from scseg.scseg import run_segmentation
-from scseg.scseg import get_statecalls
-from scseg.utils import fragmentlength_by_state
-from scseg.scseg import export_bed
+from scregseg.countmatrix import CountMatrix
+from scregseg.countmatrix import write_cannot_table
+from scregseg.countmatrix import get_cell_annotation
+from scregseg.countmatrix import make_counting_bins
+from scregseg.countmatrix import load_count_matrices
+from scregseg.countmatrix import sparse_count_reads_in_regions
+from scregseg.hmm import MultinomialHMM
+from scregseg.hmm import DirMulHMM
+from scregseg import Scregseg
+from scregseg.scregseg import run_segmentation
+from scregseg.scregseg import get_statecalls
+from scregseg.utils import fragmentlength_by_state
+from scregseg.scregseg import export_bed
 from scipy.sparse import hstack
 from scipy.stats import zscore
 import matplotlib.pyplot as plt
@@ -43,7 +43,7 @@ from pybedtools import Interval
 import argparse
 
 
-parser = argparse.ArgumentParser(description='Scseg - single-cell genome segmentation.')
+parser = argparse.ArgumentParser(description='Scregseg - single-cell genome segmentation.')
 
 subparsers = parser.add_subparsers(dest='program')
 
@@ -223,7 +223,7 @@ def save_score(scmodel, data, output):
 
 def get_cell_grouping(table):
     group2cellmap = pd.read_csv(table, sep='\t')
-    
+
     cell = group2cellmap.cells.values
     groups = group2cellmap.groups.values
 
@@ -293,7 +293,7 @@ def plot_state_annotation_relationship(model, storage, labels,
             sns.boxplot(x='log_'+label, y='name',
                         data=segdf,
                         hue=groupby, orient='h', ax=ax)
-            
+
         #gr = '' if groupby is None else '_'+groupby
     print('writing {}'.format(os.path.join(storage, 'annotation', '{}.png'.format(title))))
     fig.tight_layout()
@@ -315,7 +315,7 @@ def local_main(args):
             cm = cm.pseudobulk(cells, groups)
 
         cm.export_counts(args.counts)
-                                      
+
     elif args.program == 'filter_counts':
         print('Filter counts ...')
         cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
@@ -355,7 +355,7 @@ def local_main(args):
             cm = CountMatrix.create_from_countmatrix(incount, args.regions)
             cms.append(cm)
 
-        
+
         merged_cm = CountMatrix.merge(cms)
         merged_cm.export_counts(args.outcounts)
 
@@ -367,7 +367,7 @@ def local_main(args):
         data = load_count_matrices(args.counts, args.regions,
                                                args.mincounts, args.maxcounts,
                                                args.trimcounts, args.minregioncounts)
- 
+
         scmodel = run_segmentation(data, args.nstates,
                                    args.niter, args.randomseed,
                                    args.n_jobs)
@@ -392,19 +392,19 @@ def local_main(args):
                                                args.mincounts,
                                                args.maxcounts, args.trimcounts,
                                                0)
-        scmodel = Scseg.load(outputpath)
+        scmodel = Scregseg.load(outputpath)
         print('State calling ...')
         scmodel.segment(data, args.regions)
         scmodel.save(outputpath)
         make_state_summary(scmodel, outputpath, args.labels)
         plot_normalized_emissions(scmodel, outputpath, args.labels)
         save_score(scmodel, data, outputpath)
-        
+
 
     elif args.program == 'seg_to_bed':
         outputpath = os.path.join(args.storage, args.modelname)
 
-        scmodel = Scseg.load(outputpath)
+        scmodel = Scregseg.load(outputpath)
 
         sdf = scmodel._segments.copy()
         if args.method == "manuelselect":
@@ -421,7 +421,7 @@ def local_main(args):
                             if p<=args.max_state_abundance]
         elif args.method == "nucfree":
             if 'nf_prop' not in scmodel._segments.columns:
-                raise ValueError("'scseg fragmentsize' must be run before.")
+                raise ValueError("'scregseg fragmentsize' must be run before.")
             if args.nlargest <= 0:
                 raise ValueError("--method nucfree also requires --nlargest <int>")
             sdf.nf_prop = sdf.nf_prop.fillna(0.0)
@@ -466,7 +466,7 @@ def local_main(args):
 
     elif args.program == 'annotate':
         outputpath = os.path.join(args.storage, args.modelname)
-        scmodel = Scseg.load(outputpath)
+        scmodel = Scregseg.load(outputpath)
 
         assert len(args.labels) == len(args.files), "Number of files and labels mismatching"
         print('annotate states ...')
@@ -474,11 +474,11 @@ def local_main(args):
         scmodel.annotate(files)
 
         scmodel.save(outputpath)
-        
+
     elif args.program == 'plot_annot':
         outputpath = os.path.join(args.storage, args.modelname)
         print('Plot annotation ...')
-        scmodel = Scseg.load(outputpath)
+        scmodel = Scregseg.load(outputpath)
 
         if args.plottype == 'heatmap':
             plot_state_annotation_relationship_heatmap(scmodel, outputpath,
@@ -495,9 +495,9 @@ def local_main(args):
         outputenr = os.path.join(outputpath, 'annotation')
 
         print('enrichment analysis')
-        scmodel = Scseg.load(outputpath)
+        scmodel = Scregseg.load(outputpath)
         make_folders(outputenr)
- 
+
         if os.path.isdir(args.features):
             featuresets = glob.glob(os.path.join(args.features, '*.bed'))
             featurenames = [os.path.basename(name)[:-4] for name in featuresets]
@@ -530,7 +530,7 @@ def local_main(args):
         outputpath = os.path.join(args.storage, args.modelname)
 
 
-        scmodel = Scseg.load(outputpath)
+        scmodel = Scregseg.load(outputpath)
         motifextractor = MotifExtractor(scmodel, args.refgenome, ntop=args.ntop,
                                         nbottom=args.nbottom, ngap=args.ngap,
                                         nmotifs=args.nmotifs, flank=args.flank)
@@ -543,7 +543,7 @@ def local_main(args):
         print('Extract fragment size distribution ...')
         outputpath = os.path.join(args.storage, args.modelname)
 
-        scmodel = Scseg.load(outputpath)
+        scmodel = Scregseg.load(outputpath)
 
         bed = BedTool([Interval(row.chrom, row.start, row.end) for _, row in scmodel._segments.iterrows()])
 
@@ -564,7 +564,7 @@ def local_main(args):
         fig, ax =  plt.subplots(figsize=(10,10))
         sns.heatmap(adf, ax=ax)
         fig.savefig(os.path.join(outputpath, 'summary', 'fragmentsize_per_state.svg'))
-    
+
         fig, ax =  plt.subplots(figsize=(10,10))
         x = np.asarray(fmat.cmat.sum(0)).flatten()
         ax.plot(np.arange(fmat.shape[1]), x)

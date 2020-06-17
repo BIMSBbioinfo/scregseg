@@ -2,7 +2,7 @@
 Changelog
 =========
 
-0.0.0 (2019-04-11)
+0.0.0 (2020-06)
 ------------------
 
-* First release on PyPI.
+* Initial version

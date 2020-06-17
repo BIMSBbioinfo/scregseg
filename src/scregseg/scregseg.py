@@ -1,4 +1,4 @@
-""" Scregseg main module
+""" Scseg main module
 """
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -9,8 +9,8 @@ import tempfile
 from pybedtools import BedTool
 from pybedtools import Interval
 from pybedtools.helpers import cleanup
-from scregseg.hmm import DirMulHMM
-from scregseg.countmatrix import CountMatrix
+from scseg.hmm import DirMulHMM
+from scseg.countmatrix import CountMatrix
 from scipy.sparse import csc_matrix
 from scipy.sparse import lil_matrix
 from scipy.stats import zscore
@@ -61,7 +61,7 @@ def export_bed(subset, filename, individual_beds=False):
 
     if individual_beds:
         f = filename.split('.bed')[0]
-
+        
         for state in subset.name.unique():
             subset[(subset.name == state)].to_csv(
                 '{}_{}.bed'.format(f, state), sep='\t',
@@ -116,7 +116,7 @@ def run_segmentation(data, nstates, niter, random_states, n_jobs):
     print('Fitting {} models'.format(len(random_states)))
     for random_state in random_states:
         print("Starting {}".format(random_state))
-        model = Scregseg(DirMulHMM(n_components=nstates, n_iter=niter, random_state=random_state, verbose=True,
+        model = Scseg(DirMulHMM(n_components=nstates, n_iter=niter, random_state=random_state, verbose=True,
                                 n_jobs=n_jobs))
         model.fit(data)
         score = model.score(data)
@@ -130,7 +130,7 @@ def run_segmentation(data, nstates, niter, random_states, n_jobs):
     print('best model: seed={}, score={}'.format(best_seed, best_score))
     scmodel = best_model
     return scmodel
-
+    
 def get_statecalls(segments, query_states,
                     ntop=5000,
                     state_prob_threshold=0.9,
@@ -150,7 +150,7 @@ def get_statecalls(segments, query_states,
     ntop : int
         Minimum posterior decoding probability to select high confidence state calls.
         Default: 0.99
-
+    
     Returns
     -------
     pandas.DataFrame :
@@ -195,9 +195,9 @@ def get_statecalls(segments, query_states,
 
         for state in query_states:
             processing['Prob_' + state] = 'max'
-
+        
         processing['readdepth'] = 'sum'
-
+        
         subset = subset.groupby(['common', 'name']).aggregate(processing)
 
     dfs = []
@@ -228,7 +228,7 @@ def get_statecalls_posteriorprob(segments, query_states,
     state_prob_threshold : float
         Minimum posterior decoding probability to select high confidence state calls.
         Default: 0.99
-
+    
     Returns
     -------
     pandas.DataFrame :
@@ -272,17 +272,17 @@ def get_statecalls_posteriorprob(segments, query_states,
 
     for state in query_states:
         processing['Prob_' + state] = 'max'
-
+    
     for field in list(set(subset.columns) - set(processing.keys())):
         processing[field] = 'mean'
-
+    
     subset_merged = subset.groupby(['common', 'name']).aggregate(processing)
 
     return subset_merged
 
 
-class Scregseg(object):
-    """Scregseg class: Single-cell segmentation
+class Scseg(object):
+    """Scseg class: Single-cell segmentation
 
     Parameters
     ----------
@@ -302,7 +302,7 @@ class Scregseg(object):
                        zip(self.to_statenames(np.arange(self.n_components)), cm.get_cmap('gist_rainbow')(np.linspace(0.0, 1.0, self.n_components))[:, :3].tolist())}
 
     def score(self, X):
-        """ Log-likelihood score for X given the HMM.
+        """ Log-likelihood score for X given the HMM. 
 
         Parameters
         ----------
@@ -311,12 +311,12 @@ class Scregseg(object):
 
         Returns
         -------
-        float :
+        float : 
             Log-likelihood score for X given the model.
         """
         X_, _ = get_labeled_data(X)
         return self.model.score(X_)
-
+        
     def fit(self, X):
         """ Model fitting given X.
 
@@ -360,7 +360,7 @@ class Scregseg(object):
 
         Returns
         -------
-        Scregseg object
+        Scseg object
         """
 
         if os.path.exists(os.path.join(path, 'modelparams', 'dirmulhmm.npz')):
@@ -524,8 +524,8 @@ class Scregseg(object):
         adf = df.groupby('name').aggregate('mean')
         fig, ax =  plt.subplots()
         sns.heatmap(sdf, ax=ax)
-
-
+        
+       
     def plot_readdepth(self):
         """
         plots read depths associated with states
@@ -728,7 +728,7 @@ class Scregseg(object):
 
         """
         if isinstance(genesets, dict):
-
+            
             genesetnames = []
             genesetfile =[]
             for k in genesets:
@@ -803,7 +803,7 @@ class Scregseg(object):
         if isinstance(regions, str) and os.path.exists(regions):
             regions = BedTool(regions)
 
-
+        
         regionnames = ['{}:{}-{}:({})'.format(iv.chrom, iv.start, iv.end, iv.name) for iv in regions]
         #regionnames = [iv.name for iv in regions]
         reg2id = {iv.name: i for i, iv in enumerate(regions)}
@@ -839,7 +839,7 @@ class Scregseg(object):
 
         region_length = observed_segmentcounts.sum(-1)
 
-
+        
         obscntdf = pd.DataFrame(observed_segmentcounts, columns=self.to_statenames(np.arange(self.n_components)),
                              index=regionnames)
         os.remove(tmpfilename)
@@ -856,7 +856,7 @@ class Scregseg(object):
         ----------
         state_counts : np.array[n_features, n_states] or pd.DataFrame
             Observed state counts in a region or a set of regions.
-        regionslengths :
+        regionslengths : 
             Total number of bins representing the regions.
         featurenames : list(str) or None
             Feature or region names.
@@ -871,12 +871,12 @@ class Scregseg(object):
             The pvalue method is well suited for testing enrichment in short stretches, because its runtime
             depends on the number of bins. On the other hand, the remaining options are suited for long
             sequence stretches.
-
+         
         Returns
         -------
         pd.DataFrame[n_features, n_states] :
            Table of enrichment test results
-        """
+        """ 
         stateprob = self.model.get_stationary_distribution()
         if isinstance(state_counts, pd.DataFrame):
             featurenames = state_counts.index
@@ -922,7 +922,7 @@ class Scregseg(object):
     def _init_broadregion_null_distribution(self, max_len):
         max_len = int(max_len)
         cnt_dist = np.zeros((max_len+1, self.n_components, self.n_components))
-
+        
         stationary = self.model.get_stationary_distribution()
 
         # initialize array with stationary distribution
@@ -1088,3 +1088,5 @@ class Scregseg(object):
             submats.append(submat.tocsc())
 
         return submats, subset_merged
+
+

@@ -43,7 +43,7 @@ if 'TOXENV' in os.environ and 'SETUPPY_CFLAGS' in os.environ:
     os.environ['CFLAGS'] = os.environ['SETUPPY_CFLAGS']
 
 setup(
-    name='scseg',
+    name='scregseg',
     version='0.0.0',
     license='GPL-3.0',
     description='Single cell chromatin segmentation',
@@ -53,7 +53,7 @@ setup(
     ),
     author='Wolfgang Kopp',
     author_email='wolfgang.kopp@mdc-berlin.de',
-    url='https://github.com/wkopp/scseg',
+    url='https://github.com/BIMSBbioinfo/scregseg',
     packages=find_packages('src'),
     package_dir={'': 'src'},
     py_modules=[splitext(basename(path))[0] for path in glob('src/*.py')],
@@ -83,9 +83,9 @@ setup(
         'Topic :: Utilities',
     ],
     project_urls={
-        'Documentation': 'https://scseg.readthedocs.io/',
-        'Changelog': 'https://scseg.readthedocs.io/en/latest/changelog.html',
-        'Issue Tracker': 'https://github.com/wkopp/scseg/issues',
+        'Documentation': 'https://scregseg.readthedocs.io/',
+        'Changelog': 'https://scregseg.readthedocs.io/en/latest/changelog.html',
+        'Issue Tracker': 'https://github.com/wkopp/scregseg/issues',
     },
     keywords=[
         # eg: 'keyword1', 'keyword2', 'keyword3',
@@ -131,7 +131,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'scseg = scseg.cli:main',
+            'scregseg = scregseg.cli:main',
         ]
     },
 )

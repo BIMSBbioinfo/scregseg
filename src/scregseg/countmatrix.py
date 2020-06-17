@@ -14,15 +14,15 @@ from pysam import AlignmentFile
 from collections import Counter
 from scipy.sparse import dok_matrix
 
-from scseg.bam_utils import Barcoder
-from scseg.bam_utils import fragmentlength_in_regions
+from scregseg.bam_utils import Barcoder
+from scregseg.bam_utils import fragmentlength_in_regions
 
 def load_count_matrices(countfiles, bedfile, mincounts, maxcounts, trimcounts, minregioncounts):
     data = []
     for cnt in countfiles:
         cm = CountMatrix.create_from_countmatrix(cnt, bedfile)
         cm.filter_count_matrix(mincounts, maxcounts, minregioncounts, binarize=False, trimcount=trimcounts)
-    
+
         print(cm)
         data.append(cm)
     return data
@@ -199,7 +199,7 @@ def sparse_count_reads_in_regions(bamfile, regions,
                     pass
                 else:
                     sdokmat[idx, barcodemap[bar]] += 1
-                   
+
 
             if not aln.is_paired or mode == 'countboth':
                 # count single-end reads at 5p end
@@ -215,9 +215,9 @@ def sparse_count_reads_in_regions(bamfile, regions,
 
     return sdokmat.tocsr(), pd.DataFrame({'cell': barcode_string.split(';')})
 
-        
+
 def save_sparsematrix(filename, mat, barcodes):
-    """ Save sparse count matrix and annotation 
+    """ Save sparse count matrix and annotation
 
     Parameters
     ----------
@@ -260,7 +260,7 @@ def get_count_matrix_(filename):
         return mmread(filename).tocsr()
 
 def get_cell_annotation(filename):
-    """ Load Cell/barcode information from '.bct' file 
+    """ Load Cell/barcode information from '.bct' file
 
     Parameter
     ---------
@@ -298,7 +298,7 @@ class CountMatrix:
         CountMatrix object
         """
         cannot = get_cell_annotation(countmatrixfile)
-        
+
         if 'cell' not in cannot.columns:
             cannot['cell'] = cannot[cannot.columns[0]]
         rannot = get_regions_from_bed_(regionannotation)
@@ -322,7 +322,7 @@ class CountMatrix:
         mode : str
             Specifies the counting mode for paired end data.
             'bothends' counts each 5' end, 'midpoint' counts the fragment once at the midpoint
-            and 'eitherend' counts once if either end is present in the interval, but if 
+            and 'eitherend' counts once if either end is present in the interval, but if
             both ends are inside of the interval, it is counted only once to mitigate double counting.
             Default: 'eitherend'
         mapq : int
@@ -346,9 +346,9 @@ class CountMatrix:
                                   mode=mode,
                                   only_with_barcode=not no_barcode,
                                   maxfraglen=maxfraglen)
-        
+
         return cls(cmat.tocsr(), rannot, cannot)
-        
+
 
     @classmethod
     def create_from_fragmentsize(cls, bamfile, regions, mapq=30, maxlen=1000, resolution=50):
@@ -377,9 +377,9 @@ class CountMatrix:
         rannot = get_regions_from_bed_(regions)
         cmat, cannot = fragmentlength_in_regions(bamfile, regions,
                                   mapq=mapq, maxlen=maxlen, resolution=resolution)
-        
+
         return cls(csr_matrix(cmat), rannot, cannot)
-        
+
 
     def __init__(self, countmatrix, regionannotation, cellannotation):
 
@@ -417,7 +417,7 @@ class CountMatrix:
             List of count matrices
         samplelabel : list(str) or None
             Associated sample labels. If None, a default sample name is used 'sample_x'.
-        
+
         Returns
         -------
         CountMatrix object
@@ -463,13 +463,13 @@ class CountMatrix:
             self.cmat.data[self.cmat.data > 0] = 1
 
         if trimcount is not None and trimcount > 0:
-            self.cmat.data[self.cmat.data > trimcount] = trimcount 
+            self.cmat.data[self.cmat.data > trimcount] = trimcount
 
         if minreadsincell is None:
             minreadsincell = 0
 
         cellcounts = self.cmat.sum(axis=0)
-        
+
         if maxreadsincell is None:
             maxreadsincell = cellcounts.max()
 
@@ -514,7 +514,7 @@ class CountMatrix:
 
         cannot = pd.DataFrame(grouplabels, columns=['cell'])
         return CountMatrix(csr_matrix(cnts), self.regions, cannot)
-        
+
     def subset(self, cell):
         """ Subset countmatrix
 
@@ -538,7 +538,7 @@ class CountMatrix:
         cnts = cmat[:, ids]
 
         return CountMatrix(csr_matrix(cnts), self.regions, cannot)
-        
+
     def __getitem__(self, ireg):
         return self.cmat[ireg]
 
