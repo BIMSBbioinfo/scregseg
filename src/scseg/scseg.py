@@ -131,6 +131,156 @@ def run_segmentation(data, nstates, niter, random_states, n_jobs):
     scmodel = best_model
     return scmodel
     
+def get_statecalls(segments, query_states,
+                    ntop=5000,
+                    state_prob_threshold=0.9,
+                    collapse_neighbors=True,
+                    minreads=0.):
+    """ obtain state calls from segmentation.
+
+    This function allows to filter state calls in various ways
+    and optionally to collapse bookended bins of the same state.
+
+    Parameters
+    ----------
+    segments : pd.DataFrame
+        Segmentation results.
+    query_states : list(str)
+        List of query state names to report
+    ntop : int
+        Minimum posterior decoding probability to select high confidence state calls.
+        Default: 0.99
+    
+    Returns
+    -------
+    pandas.DataFrame :
+        Filtered segmentation results
+    """
+
+    if not isinstance(query_states, list):
+        query_states = [query_states]
+
+    subset = segments[(segments.name.isin(query_states))
+                      & (segments.Prob_max >= state_prob_threshold)
+                      & (segments.readdepth >= minreads)].copy()
+    #subset = self._segments[(self._segments.name.isin(query_states))
+    #                         & (self._segments.Prob_max >= state_prob_threshold)].copy()
+
+    if collapse_neighbors:
+        # determine neighboring bins that can be merged together
+        prevind = -2
+        prevstate = ''
+        nelem = 0
+        mapelem = []
+        for i, r in subset.iterrows():
+            curstate = r['name']
+            nelem += 1
+            if i == (prevind + 1) and prevstate == curstate:
+               nelem -= 1
+            mapelem.append(nelem - 1)
+            prevind = i
+            prevstate = curstate
+
+
+        subset['common'] = mapelem
+
+        processing = {'chrom': 'first',
+                      'start': 'min',
+                      'end': 'max', 'name':'first',
+                      'score': 'max', 'strand': 'first',
+                      'thickStart': 'min', 'thickEnd': 'max',
+                      'itemRbg': 'first',
+                      'Prob_max': 'max',
+                     }
+
+        for state in query_states:
+            processing['Prob_' + state] = 'max'
+        
+        processing['readdepth'] = 'sum'
+        
+        subset = subset.groupby(['common', 'name']).aggregate(processing)
+
+    dfs = []
+
+    for process_state in query_states:
+        subset['pscore'] = subset['Prob_{}'.format(process_state)] * subset['readdepth']
+        #subset = subset[subset.pscore >= minreads]
+        dfs.append(subset.nlargest(ntop, 'pscore').copy())
+
+    subset_merged = pd.concat(dfs, axis=0)
+    return subset_merged
+
+def get_statecalls_posteriorprob(segments, query_states,
+                   collapse_neighbors=True,
+                   state_prob_threshold=0.99):
+    """ obtain state calls from segmentation.
+
+    This function allows to filter state calls in various ways
+    and optionally to collapse bookended bins of the same state.
+
+    Parameters
+    ----------
+    query_states : list(str)
+        List of query state names to report
+    collapse_neighbors : bool
+        Whether to merged bookended bins if they represent the same state.
+        Default: True
+    state_prob_threshold : float
+        Minimum posterior decoding probability to select high confidence state calls.
+        Default: 0.99
+    
+    Returns
+    -------
+    pandas.DataFrame :
+        Filtered segmentation results
+    """
+
+    if not isinstance(query_states, list):
+        query_states = [query_states]
+
+    subset = segments[(segments.name.isin(query_states))
+                            & (segments.Prob_max >= state_prob_threshold)].copy()
+
+    if not collapse_neighbors:
+        return subset
+
+    # determine neighboring bins that can be merged together
+    prevind = -2
+    prevstate = ''
+    nelem = 0
+    mapelem = []
+    for i, r in subset.iterrows():
+        curstate = r['name']
+        nelem += 1
+        if i == (prevind + 1) and prevstate == curstate:
+           nelem -= 1
+        mapelem.append(nelem - 1)
+        prevind = i
+        prevstate = curstate
+
+
+    subset['common'] = mapelem
+
+    processing = {'chrom': 'first',
+                  'start': 'min',
+                  'end': 'max', 'name':'first',
+                  'score': 'max', 'strand': 'first',
+                  'thickStart': 'min', 'thickEnd': 'max',
+                  'itemRbg': 'first',
+                  'Prob_max': 'max',
+                 }
+
+    for state in query_states:
+        processing['Prob_' + state] = 'max'
+    
+    for field in list(set(subset.columns) - set(processing.keys())):
+        processing[field] = 'mean'
+    
+    subset_merged = subset.groupby(['common', 'name']).aggregate(processing)
+
+    return subset_merged
+
+
 class Scseg(object):
     """Scseg class: Single-cell segmentation
 
@@ -883,147 +1033,6 @@ class Scseg(object):
     def _get_broadregion_null_distribution(self, length):
         return self._cnt_storage[length], \
                self._cnt_storage[length].T.dot(np.arange(self._cnt_storage[length].shape[0]))
-
-    def get_statecalls3(self, query_states,
-                        ntop=5000,
-                        state_prob_threshold=0.9):
-        """ obtain state calls from segmentation.
-
-        This function allows to filter state calls in various ways
-        and optionally to collapse bookended bins of the same state.
-
-        Parameters
-        ----------
-        query_states : list(str)
-            List of query state names to report
-        ntop : int
-            Minimum posterior decoding probability to select high confidence state calls.
-            Default: 0.99
-        
-        Returns
-        -------
-        pandas.DataFrame :
-            Filtered segmentation results
-        """
-
-        if not isinstance(query_states, list):
-            query_states = [query_states]
-
-        subset = self._segments[(self._segments.name.isin(query_states))
-                                & (self._segments.Prob_max >= state_prob_threshold)].copy()
-
-        # determine neighboring bins that can be merged together
-        prevind = -2
-        prevstate = ''
-        nelem = 0
-        mapelem = []
-        for i, r in subset.iterrows():
-            curstate = r['name']
-            nelem += 1
-            if i == (prevind + 1) and prevstate == curstate:
-               nelem -= 1
-            mapelem.append(nelem - 1)
-            prevind = i
-            prevstate = curstate
-
-
-        subset['common'] = mapelem
-
-        processing = {'chrom': 'first',
-                      'start': 'min',
-                      'end': 'max', 'name':'first',
-                      'score': 'max', 'strand': 'first',
-                      'thickStart': 'min', 'thickEnd': 'max',
-                      'itemRbg': 'first',
-                      'Prob_max': 'max',
-                     }
-
-        for state in query_states:
-            processing['Prob_' + state] = 'max'
-        
-        processing['readdepth'] = 'sum'
-        
-        subset = subset.groupby(['common', 'name']).aggregate(processing)
-
-        dfs = []
-
-        for process_state in query_states:
-            subset['pscore'] = subset['Prob_{}'.format(process_state)] * subset['readdepth']
-            dfs.append(subset.nlargest(ntop, 'pscore').copy())
-
-        subset_merged = pd.concat(dfs, axis=0)
-        return subset_merged
-
-    def get_statecalls(self, query_states,
-                       collapse_neighbors=True,
-                       state_prob_threshold=0.99):
-        """ obtain state calls from segmentation.
-
-        This function allows to filter state calls in various ways
-        and optionally to collapse bookended bins of the same state.
-
-        Parameters
-        ----------
-        query_states : list(str)
-            List of query state names to report
-        collapse_neighbors : bool
-            Whether to merged bookended bins if they represent the same state.
-            Default: True
-        state_prob_threshold : float
-            Minimum posterior decoding probability to select high confidence state calls.
-            Default: 0.99
-        
-        Returns
-        -------
-        pandas.DataFrame :
-            Filtered segmentation results
-        """
-
-        if not isinstance(query_states, list):
-            query_states = [query_states]
-
-        subset = self._segments[(self._segments.name.isin(query_states))
-                                & (self._segments.Prob_max >= state_prob_threshold)].copy()
-
-        if not collapse_neighbors:
-            return subset
-
-        # determine neighboring bins that can be merged together
-        prevind = -2
-        prevstate = ''
-        nelem = 0
-        mapelem = []
-        for i, r in subset.iterrows():
-            curstate = r['name']
-            nelem += 1
-            if i == (prevind + 1) and prevstate == curstate:
-               nelem -= 1
-            mapelem.append(nelem - 1)
-            prevind = i
-            prevstate = curstate
-
-
-        subset['common'] = mapelem
-
-        processing = {'chrom': 'first',
-                      'start': 'min',
-                      'end': 'max', 'name':'first',
-                      'score': 'max', 'strand': 'first',
-                      'thickStart': 'min', 'thickEnd': 'max',
-                      'itemRbg': 'first',
-                      'Prob_max': 'max',
-                     }
-
-        for state in query_states:
-            processing['Prob_' + state] = 'max'
-        
-        for field in list(set(subset.columns) - set(processing.keys())):
-            processing[field] = 'mean'
-        
-        subset_merged = subset.groupby(['common', 'name']).aggregate(processing)
-
-        return subset_merged
-
 
     def get_subdata(self, X, query_states, collapse_neighbors=True, state_prob_threshold=0.99):
         """ function deprecated: use get_statecalls() """
