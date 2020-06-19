@@ -298,16 +298,18 @@ motifextraction.add_argument('--nmotifs', dest='nmotifs', type=int,
                              default=10)
 
 fragmentsize = subparsers.add_parser('fragmentsize',
-                                     description='Inspect fragment size with state association')
+                                     description='Inspect fragment size distribution per state')
 fragmentsize.add_argument('--storage', dest='storage', type=str,
                           help="Location for containing the pre-trained segmentation "
-                          "and for storing the annotated segmentation results", required=True)
-fragmentsize.add_argument('--bamfile', dest='bamfile', type=str, help="Location of a file containing paired-end reads")
-fragmentsize.add_argument('--label', dest='label', type=str,
-                          help="Sample label.", default='sample')
+                          "and for storing the annotated segmentation results",
+                          required=True)
+fragmentsize.add_argument('--bamfiles', dest='bamfiles', type=str, nargs='+',
+                          help="Location of one or more BAM file containing paired-end reads.",
+                          required=True)
+fragmentsize.add_argument('--label', dest='label', type=str, default='sample',
+                          help="(Optional) Sample labels. Default: sample")
 fragmentsize.add_argument('--modelname', dest='modelname',
                           type=str, default='dirmulhmm', help='Model name')
-
 fragmentsize.add_argument('--maxfraglen', dest='maxfraglen', type=int,
                           default=1000, help="Maximum fragment length in bp.")
 
@@ -641,20 +643,29 @@ def local_main(args):
         bed = BedTool([Interval(row.chrom, row.start, row.end) \
                        for _, row in scmodel._segments.iterrows()])
 
-        fmat = CountMatrix.create_from_fragmentsize(args.bamfile, bed.TEMPFILES[-1],
-                                                    resolution=1, maxlen=args.maxfraglen)
+        aggfmat = None
+        for bamfile in args.bamfiles:
+            fmat = CountMatrix.create_from_fragmentsize(bamfile,
+                                                        bed.TEMPFILES[-1],
+                                                        resolution=1,
+                                                        maxlen=args.maxfraglen)
 
-        nfr = np.asarray(fmat.cmat[:, :150].sum(1)).flatten()
-        total = np.asarray(fmat.cmat.sum(1)).flatten()
+            if aggfmat is None:
+                aggfmat = fmat
+            else:
+                aggfmat.cmat += fmat.cmat
+
+        nfr = np.asarray(aggfmat.cmat[:, :150].sum(1)).flatten()
+        total = np.asarray(aggfmat.cmat.sum(1)).flatten()
 
         scmodel._segments['nf_prop'] = nfr / total
         scmodel._segments['nf_prop'] = scmodel._segments['nf_prop'].fillna(0.0)
 
         scmodel.save(outputpath)
 
-        fmat.export_counts(os.path.join(outputpath, 'summary',
+        aggfmat.export_counts(os.path.join(outputpath, 'summary',
                            'fragmentsize_per_state_{}.mtx'.format(args.label)))
-        adf = fragmentlength_by_state(scmodel, fmat)
+        adf = fragmentlength_by_state(scmodel, aggfmat)
         adf.to_csv(os.path.join(outputpath, 'summary',
                    'fragmentsize_per_state_{}.csv'.format(args.label)))
 
@@ -664,8 +675,8 @@ def local_main(args):
                     'fragmentsize_per_state_{}.svg'.format(args.label)))
 
         fig, ax =  plt.subplots(figsize=(10,10))
-        x = np.asarray(fmat.cmat.sum(0)).flatten()
-        ax.plot(np.arange(fmat.shape[1]), x)
+        x = np.asarray(aggfmat.cmat.sum(0)).flatten()
+        ax.plot(np.arange(aggfmat.shape[1]), x)
         fig.savefig(os.path.join(outputpath, 'summary',
                     'fragmentsize_{}.svg'.format(args.label)))
 
