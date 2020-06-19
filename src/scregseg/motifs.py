@@ -13,62 +13,90 @@ from janggu import Janggu
 from janggu import DnaConv2D
 import numpy as np
 from scipy.special import logsumexp
-from keras.callbacks import EarlyStopping
+
 from janggu import Scorer
 from sklearn.metrics import r2_score
 from keras import Model
-#import subprocess
+from keras.callbacks import EarlyStopping
+
 from scregseg import Scregseg
 
 class Meme:
-  def __init__(self):
-      self.ppms = []
-      self.names = []
-      pass
-  def add(self, ppm, name=None):
-      self.ppms.append(ppm)
-      if name is None:
-          self.names.append('motif_{}'.format(len(self.ppms)))
-      else:
-          self.names.append(name)
-  def _header(self):
-      return "MEME version 5\n\nALPHABET= ACGT\n\nstrand: + -\n\n"
-  def _motif_header(self, name, length):
-      return "MOTIF {name}\nletter-probability matrix: alength= 4 w= {length}\n".format(name=name, length=length)
-  def _motif_body(self, ppm):
-      s = ""
-      for i in range(ppm.shape[0]):
-          s+='\t'.join([str(e) for e in ppm[i]]) + '\n'
-      s += '\n'
-      return s
-  def _allmotifs(self):
-      s = ""
-      for n, p in zip(self.names, self.ppms):
-          s += self._motif_header(n, len(p))
-          s += self._motif_body(p)
-      return s
-  def __str__(self):
-      return self._header() + self._allmotifs()
-  def __repr__(self):
-      return str(self)
-  def save(self, filename):
-      with open(filename, 'w') as f:
-          f.write(str(self))
+    """Class maintains motifs and exports them to MEME format."""
+    def __init__(self):
+        self.ppms = []
+        self.names = []
+
+    def add(self, ppm, name=None):
+        self.ppms.append(ppm)
+        if name is None:
+            self.names.append('motif_{}'.format(len(self.ppms)))
+        else:
+            self.names.append(name)
+
+    def _header(self):
+        return "MEME version 5\n\nALPHABET= ACGT\n\nstrand: + -\n\n"
+
+    def _motif_header(self, name, length):
+        return "MOTIF {name}\nletter-probability matrix: alength= 4 w= {length}\n".format(name=name, length=length)
+
+    def _motif_body(self, ppm):
+        s = ""
+        for i in range(ppm.shape[0]):
+            s+='\t'.join([str(e) for e in ppm[i]]) + '\n'
+        s += '\n'
+        return s
+
+    def _allmotifs(self):
+        s = ""
+        for n, p in zip(self.names, self.ppms):
+            s += self._motif_header(n, len(p))
+            s += self._motif_body(p)
+        return s
+
+    def __str__(self):
+        return self._header() + self._allmotifs()
+
+    def __repr__(self):
+        return str(self)
+
+    def save(self, filename):
+        with open(filename, 'w') as f:
+            f.write(str(self))
+
+@inputlayer
+@outputdense('linear')
+def cnn_model(inputs, inp, oup, params):
+    with inputs.use('dna') as dna_in:
+        layer = dna_in
+    layer = DnaConv2D(Conv2D(100, (13, 1), activation='sigmoid'))(layer)
+    layer = GlobalMaxPooling2D()(layer)
+    layer = Dropout(.5)(layer)
+    return inputs, layer
 
 
 class MotifExtractor:
-    def __init__(self, scmodel, refgenome, ntop=15000, nbottom=15000,
-                 ngap=70000, flank=250, nmotifs=10):
-       self.ntop = ntop
-       self.refgenome = refgenome
-       self.nmotifs = nmotifs
-       self.nbottom = nbottom
-       self.ngap = ngap
-       self.flank = flank
-       self.scmodel = scmodel
-       self.meme = Meme()
+    """ Neural network motif extractor. """
+    def __init__(self, scmodel, refgenome,
+                 ntop=15000, nbottom=15000,
+                 ngap=70000, flank=250, nmotifs=10,
+                 cnn=None):
+        self.ntop = ntop
+        self.refgenome = refgenome
+        self.nmotifs = nmotifs
+        self.nbottom = nbottom
+        self.ngap = ngap
+        self.flank = flank
+        self.scmodel = scmodel
+        self.meme = Meme()
+
+        if cnn is None:
+            self.cnn = cnn_model
+        else:
+            self.cnn = cnn
 
     def extract_motifs(self):
+        """ Perform motif extraction."""
         tmpdir = tempfile.mkdtemp()
         filename = 'labels.bedgraph'
         roi = os.path.join(tmpdir, filename)
@@ -117,18 +145,8 @@ class MotifExtractor:
                                                      cache=False,
                                                      resolution=binsize))
 
-            @inputlayer
-            @outputdense('linear')
-            def cnn_model(inputs, inp, oup, params):
-              with inputs.use('dna') as dna_in:
-                  layer = dna_in
-              layer = DnaConv2D(Conv2D(100, (13, 1), activation='sigmoid'))(layer)
-              layer = GlobalMaxPooling2D()(layer)
-              layer = Dropout(.5)(layer)
-              return inputs, layer
-
             # fit the model
-            model = Janggu.create(cnn_model, (),
+            model = Janggu.create(self.cnn, (),
                                   inputs=DNA,
                                   outputs=LABELS,
                                   name='simple_cnn_{}'.format(process_state))
