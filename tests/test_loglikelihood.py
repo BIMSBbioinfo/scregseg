@@ -2,11 +2,11 @@ import time
 import numpy as np
 from scipy.sparse import csr_matrix
 
-from scseg.hmm import dirmul_loglikeli_naive
-from scseg.hmm import dirmul_loglikeli
-from scseg.hmm import dirmul_loglikeli_sp
-from scseg.hmm import fast_dirmul_loglikeli_sp
-from scseg.hmm import _fast_dirmul_loglikeli_sp
+from scregseg.hmm import dirmul_loglikeli_naive
+from scregseg.hmm import dirmul_loglikeli
+from scregseg.hmm import dirmul_loglikeli_sp
+from scregseg.hmm import fast_dirmul_loglikeli_sp
+from scregseg.hmm import _fast_dirmul_loglikeli_sp
 
 def test_loglikelihood():
     #10 regions, 3 cells, 4 states
