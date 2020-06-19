@@ -17,7 +17,6 @@ from setuptools import find_packages
 from distutils.extension import Extension
 from distutils.core import setup
 
-import numpy
 try:
     # Allow installing package without any Cython available. This
     # assumes you are going to include the .c files in your sdist.
@@ -25,6 +24,7 @@ try:
 except ImportError:
     Cython = None
 
+import numpy
 def read(*names, **kwargs):
     with io.open(
         join(dirname(__file__), *names),
@@ -101,7 +101,6 @@ setup(
                 'janggu',
                 'pandas',
                 'numba',
-                'umap-learn',
     ],
     extras_require={
         # eg:
