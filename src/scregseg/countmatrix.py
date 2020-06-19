@@ -13,18 +13,48 @@ from pybedtools import BedTool, Interval
 from pysam import AlignmentFile
 from collections import Counter
 from scipy.sparse import dok_matrix
+from scipy.sparse import lil_matrix
 
 from scregseg.bam_utils import Barcoder
 from scregseg.bam_utils import fragmentlength_in_regions
 
-def load_count_matrices(countfiles, bedfile, mincounts, maxcounts, trimcounts, minregioncounts):
+def load_count_matrices(countfiles, bedfile, mincounts,
+                        maxcounts, trimcounts, minregioncounts):
+    """ Load count matrices.
+
+    Parameters
+    ----------
+    bamfile : str
+       Path to bamfile
+    binsize : int
+       Bin size
+    storage : path or None
+       Output path of the BED file.
+
+    Returns
+    -------
+    BedTool object:
+       Output BED file is returned as BedTool object.
+    """
     data = []
     for cnt in countfiles:
         cm = CountMatrix.create_from_countmatrix(cnt, bedfile)
-        cm.filter_count_matrix(mincounts, maxcounts, minregioncounts, binarize=False, trimcount=trimcounts)
+        cm.filter_count_matrix(mincounts, maxcounts,
+                               0, binarize=False, trimcount=trimcounts)
 
         print(cm)
         data.append(cm)
+
+    # make sure the same regions are used afterwards
+    if minregioncounts is not None:
+        regioncounts = np.zeros(data[0].shape[0])
+        for datum in data:
+            regioncounts += datum.cmat.sum(axis=1)
+        for i, _ in enumerate(data):
+            keepregions = np.where(regioncounts >= minregioncounts)[0]
+
+            data[i].cmat = data[i].cmat[keepregions, :]
+            data[i].regions = data[i].regions.iloc[keepregions]
     return data
 
 def make_counting_bins(bamfile, binsize, storage=None):
@@ -74,7 +104,6 @@ def make_counting_bins(bamfile, binsize, storage=None):
     return regions
 
 
-
 def sparse_count_reads_in_regions(bamfile, regions,
                                   barcodetag, flank=0, log=None, mapq=30,
                                   mode='midpoint', only_with_barcode=True,
@@ -121,6 +150,10 @@ def sparse_count_reads_in_regions(bamfile, regions,
         Default: True.
     maxfraglen : int
         Maximum fragment length to consider. Default: 2000 [bp]
+
+    Returns
+    -------
+        Sparse matrix and cell annotation as pd.DataFrame
     """
 
     # Obtain the header information
@@ -216,6 +249,134 @@ def sparse_count_reads_in_regions(bamfile, regions,
     return sdokmat.tocsr(), pd.DataFrame({'cell': barcode_string.split(';')})
 
 
+def sparse_count_reads_in_regions_fast(bamfile, regions,
+                                  barcodetag, flank=0, log=None, mapq=30,
+                                  mode='midpoint', only_with_barcode=True,
+                                  maxfraglen=2000):
+    """ This function obtains the counts per bins of equal size
+    across the genome.
+
+    The function automatically extracts the genome size from the
+    bam file header.
+    If group tags are available, they will be used to extract
+    the indices from.
+    Finally, the function autmatically detects whether the bam-file
+    contains paired-end or single-end reads.
+    Paired-end reads are counted once at the mid-point between the two
+    pairs while single-end reads are counted at the 5' end.
+    For paired-end reads it is optionally possible to count both read ends
+    by setting mode='both' or mode='eitherend'.
+
+    Parameters
+    ----------
+    bamfile :  str
+        Path to a bamfile. The bamfile must be indexed.
+    regions : str
+        BED or GFF file containing the regions of interest.
+    storage : str
+        Path to the output hdf5 file, which contains the counts per chromsome.
+    flank : int
+        Extension of the regions in base pairs. Default: 0
+    template_length : int
+        Assumed template length. This is used when counting paired-end reads
+        at the mid-point and the individual reads do not overlap with
+        the given region, but the mid-point does.
+    mapq : int
+        Minimum mapping quality
+    mode : str
+        For paired-end sequences reads can be counted at the midpoint,
+        by counting both ends (like they came from single-ended sequencing)
+        or by counting if either 5'-end is in the bin.
+        These options are indicated by mode=['midpoint', 'countboth', 'eitherend'].
+        Default: mode='midpoint'
+    only_with_barcode : bool
+        This indicates that reads without barcodes should be skipped.
+        Use False for bulk or pseudobulk aggregation.
+        Default: True.
+    maxfraglen : int
+        Maximum fragment length to consider. Default: 2000 [bp]
+
+    Returns
+    -------
+        Sparse matrix and cell annotation as pd.DataFrame
+    """
+
+    # Obtain the header information
+    afile = AlignmentFile(bamfile, 'rb')
+
+    # extract genome size
+    genomesize = {}
+    for chrom, length in zip(afile.references, afile.lengths):
+        genomesize[chrom] = length
+
+    regfile = BedTool(regions)
+
+    nreg = len(regfile)
+    barcoder = Barcoder(barcodetag)
+
+    barcodecounter = Counter()
+    for aln in afile.fetch():
+        bar = barcoder(aln)
+        if only_with_barcode and bar == 'dummy':
+            continue
+        barcodecounter[bar] += 1
+
+    barcodemap = {key: i for i, key in enumerate(barcodecounter)}
+
+
+    temp_smats = {}
+    for chrom, length in zip(afile.references, afile.lengths):
+        temp_smats[chrom] = dok_matrix((length, len(barcodemap)), dtype='int32')
+
+    # barcode string for final table
+    barcode_string = ';'.join([bar for bar in barcodemap])
+    print('found {} barcodes - fast'.format(len(barcodemap)))
+
+    for aln in afile.fetch():
+        bar = barcoder(aln)
+        if abs(aln.template_length) > maxfraglen:
+            continue
+        if only_with_barcode and bar == 'dummy':
+            continue
+        if aln.mapping_quality < mapq:
+            continue
+
+        if aln.is_proper_pair and aln.is_read1 and mode == 'midpoint':
+
+            pos = min(aln.reference_start, aln.next_reference_start)
+
+            # count paired end reads at midpoint
+            midpoint = pos + abs(aln.template_length)//2
+            temp_smats[aln.reference_name][midpoint, barcodemap[bar]] += 1
+
+        if not aln.is_paired or mode == 'countboth':
+            # count single-end reads at 5p end
+            if not aln.is_reverse:
+                temp_smats[aln.reference_name][aln.reference_start, barcodemap[bar]] += 1
+            else:
+                temp_smats[aln.reference_name][aln.reference_start + aln.reference_length - 1, barcodemap[bar]] += 1
+
+    for k in temp_smats:
+        temp_smats[k] = temp_smats[k].tocsr()
+    afile.close()
+    print('aggregate')
+
+    sdokmat = lil_matrix((nreg, len(barcodemap)), dtype='int32')
+    for idx, iv in enumerate(regfile):
+
+        iv.start -= flank
+        iv.end += flank
+
+        if iv.chrom not in genomesize:
+            # skip over peaks/ regions from chromosomes
+            # that are not contained in the bam file
+            continue
+        sdokmat[idx,:] += temp_smats[iv.chrom][iv.start:iv.end, :].sum(0)
+
+
+    return sdokmat.tocsr(), pd.DataFrame({'cell': barcode_string.split(';')})
+
+
 def save_sparsematrix(filename, mat, barcodes):
     """ Save sparse count matrix and annotation
 
@@ -229,6 +390,9 @@ def save_sparsematrix(filename, mat, barcodes):
     barcodes: list(str) or pandas.DataFrame
         Cell annotation to store in the '.bct' file.
 
+    Returns
+    -------
+        None
     """
     spcoo = mat.tocoo()
     mmwrite(filename, spcoo)
@@ -255,6 +419,10 @@ def get_count_matrix_(filename):
        (Obsolete parameter) header information
     offset : int
        (Obsolete parameter) offset
+
+    Returns
+    -------
+        Sparse matrix in CSR format
     """
     if filename.endswith(".mtx"):
         return mmread(filename).tocsr()
@@ -266,18 +434,34 @@ def get_cell_annotation(filename):
     ---------
     filename : str
        Filename prefix (without the .bct file ending)
+
+    Returns
+    -------
+        Cell annotation as pd.DataFrame
     """
     return pd.read_csv(filename + '.bct', sep='\t')
 
 def get_regions_from_bed_(filename):
     """
     load a bed file
+
+    Parameter
+    ---------
+    filename : str
+       BED file
+
+    Returns
+    -------
+        Region annotation from bed file as pd.DataFrame
     """
-    regions = pd.read_csv(filename, sep='\t', names=['chrom', 'start', 'end'], usecols=[0,1,2])
+    regions = pd.read_csv(filename, sep='\t',
+                          names=['chrom', 'start', 'end'],
+                          usecols=[0,1,2])
     return regions
 
 
 def write_cannot_table(filename, table):
+    """ Save cell annotation to file."""
     table.to_csv(filename + '.bct', sep='\t', index=False)
 
 class CountMatrix:
@@ -306,7 +490,8 @@ class CountMatrix:
         return cls(cmat, rannot, cannot)
 
     @classmethod
-    def create_from_bam(cls, bamfile, regions, barcodetag='CB', mode='eitherend', mapq=30, no_barcode=False,
+    def create_from_bam(cls, bamfile, regions, barcodetag='CB',
+                        mode='eitherend', mapq=30, no_barcode=False,
                         maxfraglen=2000):
         """ Creates a countmatrix from a given bam file and pre-specified target regions.
 
@@ -317,18 +502,23 @@ class CountMatrix:
         regions : str
             Path to the input bed files with the target regions.
         barcodetag : str or callable
-            Barcode tag or callable for extracting the barcode from the alignment.
+            Barcode tag or callable for extracting the barcode
+            from the alignment.
             Default: 'CB'
         mode : str
             Specifies the counting mode for paired end data.
-            'bothends' counts each 5' end, 'midpoint' counts the fragment once at the midpoint
-            and 'eitherend' counts once if either end is present in the interval, but if
-            both ends are inside of the interval, it is counted only once to mitigate double counting.
+            'bothends' counts each 5' end,
+            'midpoint' counts the fragment once at the midpoint
+            and 'eitherend' counts once if either end is
+            present in the interval, but if
+            both ends are inside of the interval,
+            it is counted only once to mitigate double counting.
             Default: 'eitherend'
         mapq : int
             Only consider reads with a minimum mapping quality. Default: 30
         no_barcode : bool
-            Whether the file contains barcodes or whether it contains a bulk sample. Default: False.
+            Whether the file contains barcodes or whether it
+            contains a bulk sample. Default: False.
         maxfraglen : int
             Maximum fragment length to consider. Default: 2000 [bp]
 
@@ -337,21 +527,37 @@ class CountMatrix:
         CountMatrix object
 
         """
-        #if not os.path.exists(regions):
-        #    make_counting_bins(bamfile, binsize, regions)
         rannot = get_regions_from_bed_(regions)
         cmat, cannot = sparse_count_reads_in_regions(bamfile, regions,
-                                  barcodetag, flank=0, log=None,
-                                  mapq=mapq,
-                                  mode=mode,
-                                  only_with_barcode=not no_barcode,
-                                  maxfraglen=maxfraglen)
+                                                     barcodetag,
+                                                     flank=0, log=None,
+                                                     mapq=mapq,
+                                                     mode=mode,
+                                                     only_with_barcode=not no_barcode,
+                                                     maxfraglen=maxfraglen)
+        #if mode in ['midpoint']:
+        #    cmat, cannot = sparse_count_reads_in_regions_fast(bamfile, regions,
+        #                                                 barcodetag,
+        #                                                 flank=0, log=None,
+        #                                                 mapq=mapq,
+        #                                                 mode=mode,
+        #                                                 only_with_barcode=not no_barcode,
+        #                                                 maxfraglen=maxfraglen)
+        #else:
+        #    cmat, cannot = sparse_count_reads_in_regions(bamfile, regions,
+        #                                                 barcodetag,
+        #                                                 flank=0, log=None,
+        #                                                 mapq=mapq,
+        #                                                 mode=mode,
+        #                                                 only_with_barcode=not no_barcode,
+        #                                                 maxfraglen=maxfraglen)
 
         return cls(cmat.tocsr(), rannot, cannot)
 
 
     @classmethod
-    def create_from_fragmentsize(cls, bamfile, regions, mapq=30, maxlen=1000, resolution=50):
+    def create_from_fragmentsize(cls, bamfile, regions, mapq=30,
+                                 maxlen=1000, resolution=50):
         """ Creates a countmatrix from a given bam file and pre-specified target regions.
 
         Parameters
@@ -376,7 +582,8 @@ class CountMatrix:
         #    make_counting_bins(bamfile, binsize, regions)
         rannot = get_regions_from_bed_(regions)
         cmat, cannot = fragmentlength_in_regions(bamfile, regions,
-                                  mapq=mapq, maxlen=maxlen, resolution=resolution)
+                                                 mapq=mapq, maxlen=maxlen,
+                                                 resolution=resolution)
 
         return cls(csr_matrix(cmat), rannot, cannot)
 
@@ -425,10 +632,11 @@ class CountMatrix:
         newcannot = []
         for i, cm in enumerate(cms):
             ca = cm.cannot.copy()
-            if samplelabel is not None:
-                ca['sample'] = samplelabel[i]
-            else:
-                ca['sample'] = 'sample_{}'.format(i)
+            if 'sample' not in ca.columns:
+                if samplelabel is not None:
+                    ca['sample'] = samplelabel[i]
+                else:
+                    ca['sample'] = 'sample_{}'.format(i)
             newcannot.append(ca)
         cannot = pd.concat(newcannot, axis=0)
         return cls(hstack([cm.cmat for cm in cms]), cms[0].regions, cannot)
@@ -437,7 +645,7 @@ class CountMatrix:
                             minreadsinregion=None,
                             binarize=True, trimcount=None):
         """
-        Applies quality filtering to the count matrix.
+        Applies in-place quality filtering to the count matrix.
 
         Parameters
         ----------
@@ -473,7 +681,9 @@ class CountMatrix:
         if maxreadsincell is None:
             maxreadsincell = cellcounts.max()
 
-        keepcells = np.where((cellcounts>=minreadsincell) & (cellcounts<maxreadsincell) & (self.cannot.cell.values!='dummy'))[1]
+        keepcells = np.where((cellcounts >= minreadsincell) &
+                             (cellcounts < maxreadsincell) &
+                             (self.cannot.cell.values != 'dummy'))[1]
 
         self.cmat = self.cmat[:, keepcells]
         self.cannot = self.cannot.iloc[keepcells]
@@ -481,7 +691,7 @@ class CountMatrix:
         if minreadsinregion is None:
             minreadsinregion = 0
         regioncounts = self.cmat.sum(axis=1)
-        keepregions = np.where(regioncounts>=minreadsinregion)[0]
+        keepregions = np.where(regioncounts >= minreadsinregion)[0]
 
         self.cmat = self.cmat[keepregions, :]
         self.regions = self.regions.iloc[keepregions]
@@ -501,7 +711,7 @@ class CountMatrix:
 
         Returns
         -------
-        CountMatrix object
+            CountMatrix object
         """
         grouplabels = list(set(group))
 
