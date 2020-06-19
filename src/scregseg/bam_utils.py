@@ -25,15 +25,16 @@ class Barcoder:
 
     def __call__(self, aln):
         if callable(self.tag):
-            rg = self.tag(aln)
+            barcode = self.tag(aln)
         elif self.tag in ':.':
-            rg = aln.query_name.split(self.tag)[0]
+            barcode = aln.query_name.split(self.tag)[0]
         elif aln.has_tag(self.tag):
-            rg = aln.get_tag(self.tag)
+            barcode = aln.get_tag(self.tag)
         else:
-            rg = 'dummy'
-        return rg
-        
+            barcode = 'dummy'
+        return barcode
+
+
 def deduplicate_reads(bamin, bamout, tag='CB'):
     """Performs deduplication within barcodes/cells.
 
@@ -57,18 +58,18 @@ def deduplicate_reads(bamin, bamout, tag='CB'):
         # skip the read
         val = (aln.reference_id, aln.reference_start,
                aln.is_reverse, aln.tlen)
-        rg = barcoder(aln)
+        barcode = barcoder(aln)
 
-        if rg not in last_barcode:
+        if barcode not in last_barcode:
             output.write(aln)
             # clear dictionary
-            last_barcode[rg] = val
+            last_barcode[barcode] = val
 
-        if val == last_barcode[rg]:
+        if val == last_barcode[barcode]:
             continue
         else:
             output.write(aln)
-            last_barcode[rg] = val
+            last_barcode[barcode] = val
 
 
 def remove_chroms(bamin, bamout, rmchroms):
@@ -93,18 +94,13 @@ def remove_chroms(bamin, bamout, rmchroms):
     treatment = AlignmentFile(bamin, 'rb')
 
     header = copy(treatment.header.as_dict())
-    nh = []
-    for i, seq in enumerate(header['SQ']):
-#        remove=False
-        if not any([x in seq['SN'] for x in rmchroms]):
-            nh.append(seq)
-#        for toremove in rmchroms:
-#            if toremove in seq['SN']:
-#                remove=True
-#        if not remove:
-#            nh.append(seq)
+    newheader = []
+    for seq in header['SQ']:
 
-    header['SQ'] = nh
+        if not any([x in seq['SN'] for x in rmchroms]):
+            newheader.append(seq)
+
+    header['SQ'] = newheader
 
     tidmap = {k['SN']: i for i, k in enumerate(header['SQ'])}
 
@@ -121,7 +117,6 @@ def remove_chroms(bamin, bamout, rmchroms):
         refnextid = tidmap[aln.next_reference_name]
 
         aln.reference_id = refid
-#        if aln.is_paired and aln.is_proper_pair:
         aln.next_reference_id = refnextid
         bam_writer.write(aln)
 
@@ -129,7 +124,8 @@ def remove_chroms(bamin, bamout, rmchroms):
     treatment.close()
 
 
-def make_pseudobulk_bam(inbamfile, outputdir, cells, grouplabels, tag='CB'):
+def make_pseudobulk_bam(inbamfile, outputdir,
+                        cells, grouplabels, tag='CB'):
     """ Generates pseudo-bulk tracks.
 
     Parameters
@@ -151,50 +147,71 @@ def make_pseudobulk_bam(inbamfile, outputdir, cells, grouplabels, tag='CB'):
     assert len(cells) == len(grouplabels)
 
     barcode2groupmap = {}
-    for i in range(len(cells)):
+    for i, _ in enumerate(cells):
         barcode2groupmap[cells[i]] = grouplabels[i]
-    
+
     groups = list(set(grouplabels))
 
     bamreader = AlignmentFile(inbamfile, 'rb')
     barcoder = Barcoder(tag)
 
-    bam_writer = {group: AlignmentFile(os.path.join(outputdir, '{}.bam'.format(group)), 'wb', template=bamreader) for group in groups}
-    cin = 0
-    cout = 0
+    bam_writer = {group: AlignmentFile(os.path.join(outputdir,
+                                                    '{}.bam'.format(group)),
+                  'wb', template=bamreader) for group in groups}
+
 
     for aln in bamreader.fetch(until_eof=True):
         bct = barcoder(aln)
         if bct in barcode2groupmap:
             bam_writer[barcode2groupmap[bct]].write(aln)
-            cin += 1
-        else:
-            cout += 1
 
     bamreader.close()
     for b in bam_writer:
         bam_writer[b].close()
 
 def fragmentlength_in_regions(bamfile, regions, mapq, maxlen, resolution):
+    """ Extract fragment lengths per region.
+
+    Parameters
+    ----------
+    bamfile : str
+       Indexed input bam file.
+    regions : str
+       Regions in bed format. Must be genome-wide bins.
+    mapq : int
+       Mapping quality
+    maxlen : int
+       Maximum fragment length.
+    resolution : int
+       Base pair resolution.
+
+    Return
+    -------
+        CountMatrix and annotation as pd.DataFrame
+    """
 
     bed = BedTool(regions)
     binsize = bed[0].end - bed[0].start
     fragments = np.zeros((len(bed), maxlen//resolution))
     m = {(iv.chrom, iv.start): i for i, iv in enumerate(bed)}
-    
+
     afile = AlignmentFile(bamfile, "rb")
-    
+
     for aln in afile.fetch():
+        if aln.mapping_quality < mapq:
+            continue
         if aln.is_proper_pair and aln.is_read1:
 
             pos = (min(aln.reference_start, aln.next_reference_start) // binsize) * binsize
 
-            tl = abs(aln.tlen)//resolution
-            if tl < maxlen // resolution:
-                fragments[m[(aln.reference_name, pos)], tl] += 1
-    
+            tlen = abs(aln.tlen)//resolution
+            if tlen < maxlen // resolution:
+                fragments[m[(aln.reference_name, pos)], tlen] += 1
+
     afile.close()
     cmat = fragments
-    cannot = pd.DataFrame({'cell': ['{}bp'.format(bp*resolution) for bp in range(maxlen// resolution)]})
+    cannot = pd.DataFrame({'cell':
+                           ['{}bp'.format(bp*resolution) \
+                            for bp in range(maxlen// resolution)]})
 
     return cmat, cannot
