@@ -2,6 +2,6 @@
 Usage
 =====
 
-To use scseg in a project::
+To use scregseg in a project::
 
-	import scseg
+	import scregseg

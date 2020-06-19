@@ -1,9 +1,9 @@
-scseg
-=====
+Scregseg
+========
 
 .. testsetup::
 
-    from scseg import *
+    from scregseg import *
 
-.. automodule:: scseg
+.. automodule:: scregseg
     :members:

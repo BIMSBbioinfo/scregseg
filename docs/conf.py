@@ -22,8 +22,8 @@ if os.getenv('SPELLCHECK'):
 
 source_suffix = '.rst'
 master_doc = 'index'
-project = 'scseg'
-year = '2019'
+project = 'scregseg'
+year = '2019-2020'
 author = 'Wolfgang Kopp'
 copyright = '{0}, {1}'.format(year, author)
 version = release = '0.0.0'
