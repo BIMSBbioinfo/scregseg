@@ -69,7 +69,18 @@ class Meme:
 def cnn_model(inputs, inp, oup, params):
     with inputs.use('dna') as dna_in:
         layer = dna_in
-    layer = DnaConv2D(Conv2D(100, (13, 1), activation='sigmoid'))(layer)
+    #layer = Dropout(.2)(layer)
+    layer = DnaConv2D(Conv2D(100, (21, 1), activation='sigmoid'))(layer)
+    layer = GlobalMaxPooling2D()(layer)
+    layer = Dropout(.5)(layer)
+    return inputs, layer
+
+@inputlayer
+@outputdense('sigmoid')
+def cnn_model_binary(inputs, inp, oup, params):
+    with inputs.use('dna') as dna_in:
+        layer = dna_in
+    layer = DnaConv2D(Conv2D(100, (21, 1), activation='sigmoid'))(layer)
     layer = GlobalMaxPooling2D()(layer)
     layer = Dropout(.5)(layer)
     return inputs, layer
@@ -108,6 +119,7 @@ class MotifExtractor:
         for i in range(self.scmodel.n_components):
 
             process_state= 'state_{}'.format(i)
+            print('processing: {}'.format(process_state))
 
             df = self.scmodel._segments
 
@@ -152,6 +164,7 @@ class MotifExtractor:
                                   name='simple_cnn_{}'.format(process_state))
 
             model.compile(optimizer='adam', loss='mae')
+            model.summary()
 
             hist = model.fit(DNA, LABELS,
                              epochs=300, batch_size=32,
@@ -165,7 +178,6 @@ class MotifExtractor:
             featureacts = fmodel.predict(DNA).max(axis=(1,2))
 
             fdf = pd.DataFrame(featureacts)
-                   #            columns=['motif_{}'.format(i) for i in range(featureacts.shape[1])])
             fdf['score']= LABELS[:]
 
             ranking = fdf.corr(method='spearman')['score'].sort_values(ascending=False)
@@ -174,6 +186,121 @@ class MotifExtractor:
                 s = W[:, 0, :, m]
                 s -= logsumexp(s, axis=1, keepdims=True)
                 s = np.exp(s)
+                print(s)
+                self.meme.add(s, '{}_{}'.format(process_state, i))
+        os.remove(roi)
+
+    def save_motifs(self, output):
+        os.makedirs(os.path.dirname(output), exist_ok=True)
+        self.meme.save(output)
+
+class MotifExtractor2:
+    """ Neural network motif extractor. """
+    def __init__(self, scmodel, refgenome,
+                 ntop=15000,
+                 flank=250, nmotifs=10,
+                 cnn=None):
+        self.ntop = ntop
+        self.refgenome = refgenome
+        self.nmotifs = nmotifs
+        self.flank = flank
+        self.scmodel = scmodel
+        self.meme = Meme()
+
+        if cnn is None:
+            self.cnn = cnn_model
+        else:
+            self.cnn = cnn
+
+    def extract_motifs(self):
+        """ Perform motif extraction."""
+        print('extract motifs')
+        tmpdir = tempfile.mkdtemp()
+        roifilename = 'roi.bedgraph'
+        roi = os.path.join(tmpdir, roifilename)
+        print(roi)
+
+        binsize = self.scmodel._segments.iloc[0].end - \
+                  self.scmodel._segments.iloc[0].start
+
+        for i in range(self.scmodel.n_components):
+
+            process_state= 'state_{}'.format(i)
+            print('processing: {}'.format(process_state))
+
+            df = self.scmodel._segments.copy()
+
+            sdf = df.copy()
+            sdf['pscore'] = sdf['Prob_{}'.format(process_state)] * sdf['readdepth']
+            sdf['pscore'] = sdf.pscore.rolling(3, win_type='triang',
+                              center=True).sum().fillna(0.0)
+
+            spos = sdf[['chrom',
+                        'start',
+                        'end',
+                        'pscore']].nlargest(self.ntop, 'pscore').copy()
+
+            sneg = []
+            for negstate in range(self.scmodel.n_components):
+                sdf = df.copy()
+                if negstate == i:
+                    continue
+                sdf['pscore'] = sdf['Prob_state_{}'.format(negstate)] * sdf['readdepth']
+                sdf['pscore'] = sdf.pscore.rolling(3, win_type='triang',
+                              center=True).sum().fillna(0.0)
+                sdf = sdf.nlargest(2*self.ntop//self.scmodel.n_components, 'pscore')
+                sdf.pscore = sdf.pscore * sdf['Prob_{}'.format(process_state)]
+                sneg.append(sdf)
+                
+            sdf = pd.concat([spos] + sneg, ignore_index=True)
+
+            sdf[['chrom', 'start', 'end', 'pscore']].to_csv(roi, sep='\t',
+                header=False, index=False)
+
+            DNA = Bioseq.create_from_refgenome('dna',
+                                               refgenome=self.refgenome,
+                                               roi=roi,
+                                               binsize=binsize,
+                                               flank=self.flank,
+                                               cache=False)
+
+            LABELS = ReduceDim(Cover.create_from_bed('score',
+                                                     bedfiles=roi,
+                                                     roi=roi,
+                                                     binsize=binsize,
+                                                     cache=False,
+                                                     resolution=binsize))
+
+            # fit the model
+            model = Janggu.create(self.cnn, (),
+                                  inputs=DNA,
+                                  outputs=LABELS,
+                                  name='simple_cnn2_{}'.format(process_state))
+
+            model.compile(optimizer='adam', loss='mae')
+
+            hist = model.fit(DNA, LABELS,
+                             epochs=300, batch_size=32,
+                             validation_data=['chr1', 'chr5'],
+                             callbacks=[EarlyStopping(patience=20, restore_best_weights=True)])
+
+            model.summary()
+            # extract motifs
+            W, b = model.kerasmodel.layers[1].get_weights()
+            fmodel = Model(model.kerasmodel.inputs,
+                           model.kerasmodel.layers[1].output)
+            featureacts = fmodel.predict(DNA).max(axis=(1,2))
+
+            fdf = pd.DataFrame(featureacts)
+            fdf['score']= LABELS[:]
+
+            ranking = fdf.corr(method='spearman')['score'].sort_values(ascending=False)
+            print(ranking.head())
+            for i, m in enumerate(ranking.index[1:(self.nmotifs+1)]):
+                s = W[:, 0, :, m]
+                s -= logsumexp(s, axis=1, keepdims=True)
+                s = np.exp(s)
+                print(s)
                 self.meme.add(s, '{}_{}'.format(process_state, i))
         os.remove(roi)
 

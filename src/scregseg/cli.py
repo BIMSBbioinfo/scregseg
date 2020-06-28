@@ -32,6 +32,8 @@ from scregseg.scregseg import run_segmentation
 from scregseg.scregseg import get_statecalls
 from scregseg.utils import fragmentlength_by_state
 from scregseg.scregseg import export_bed
+from scregseg.motifs import MotifExtractor
+from scregseg.motifs import MotifExtractor2
 from scipy.sparse import hstack
 from scipy.stats import zscore
 import matplotlib.pyplot as plt
@@ -154,7 +156,7 @@ fsegment.add_argument('--niter', dest='niter', type=int, default=100,
 fsegment.add_argument('--n_jobs', dest='n_jobs', type=int, default=1,
                       help='Number jobs to use for parallel processing. Default: 1')
 fsegment.add_argument('--modelname', dest='modelname', type=str,
-                      default='dirmulhmm', help='Model name')
+                      default='dirmulhmm', help='Model name. Default: dirmulhmm')
 
 # fitting a model from scratch
 segment = subparsers.add_parser('segment', description='Re-runs state calling for an existing Scregseg model.')
@@ -175,7 +177,7 @@ segment.add_argument('--trimcount', dest='trimcounts', type=int,
                       default=sys.maxsize,
                       help='Maximum number of counts per matrix element. '
                       'For instance, trimcount 1 amounts to binarization. Default: maxint')
-segment.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
+segment.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name. Default: dirmulhmm')
 
 
 seg2bed = subparsers.add_parser('seg_to_bed', description='Export state calls in BED-format')
@@ -204,7 +206,7 @@ seg2bed.add_argument('--max_state_abundance', dest='max_state_abundance', type=f
          'This parameters allows to report only rarely occurring states. '
          'Abundant states are filtered out as they usually reflect the genomic background distribution. '
          'A good choice for this is a value that is slightly lower than 1./n_state. Default=1.')
-seg2bed.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
+seg2bed.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name. Default: dirmulhmm')
 
 seg2bed.add_argument('--nsmallest', dest='nsmallest', type=int, default=-1,
                      help='Number of most rare states to export. Default: -1 (all states are considered).')
@@ -228,7 +230,7 @@ annotate.add_argument('--storage', dest='storage', type=str,
                       help='Location for containing the pre-trained segmentation and '
                       'for storing the annotated segmentation results', required=True)
 annotate.add_argument('--modelname', dest='modelname', type=str,
-                      default='dirmulhmm', help='Model name')
+                      default='dirmulhmm', help='Model name. Default: dirmulhmm')
 
 plotannotate = subparsers.add_parser('plot_annot', description='Plot state-annotation associated.')
 plotannotate.add_argument('--labels', dest='labels', nargs='+', type=str,
@@ -242,7 +244,7 @@ plotannotate.add_argument('--threshold', dest='threshold', type=float, default=0
                           help="Threshold on posterior decoding probability. "
                                 "Only export results that exceed the posterior decoding threshold. "
                                 "This allows to adjust the stringency of state calls for down-stream analysis steps.")
-plotannotate.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
+plotannotate.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name. Default: dirmulhmm')
 plotannotate.add_argument('--plottype', dest='plottype', type=str, default='boxplot',
                           choices=['boxplot', 'countplot', 'heatmap'],
                           help='Plot type')
@@ -268,7 +270,7 @@ enrichment.add_argument('--method', dest='method', type=str, default='chisqstat'
                         'chisqstat compute (o - e)^2 / e where o and e denote the observed and expected state number of state counts (faster than pvalue).'
                         'Default: chisqstat',
                         choices=['pvalue', 'logfold', 'chisqstat'])
-enrichment.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name')
+enrichment.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name. Default: dirmulhmm')
 enrichment.add_argument('--noplot', dest='noplot', action='store_true',
                         default=False, help='Whether to skip plotting the heatmap. Default: False')
 enrichment.add_argument('--ntop', dest='ntop', type=int, default=5,
@@ -276,6 +278,10 @@ enrichment.add_argument('--ntop', dest='ntop', type=int, default=5,
 enrichment.add_argument('--using_genebody', dest='using_genebody', action='store_true',
                         default=False, help='Uses state enrichment in gene body (+/- flank). '
                         'Otherwise, the state enrichment is determined around the TSS only (+/- flank)')
+enrichment.add_argument('--output', dest='output', type=str,
+                        default=None,
+                        help='Alternative output directory. If not specified, '
+                             'the results are stored in <storage>/<modelname>/annotation')
 
 motifextraction = subparsers.add_parser('extract_motifs', description='Extract motifs associated with states')
 motifextraction.add_argument('--storage', dest='storage', type=str,
@@ -284,6 +290,7 @@ motifextraction.add_argument('--storage', dest='storage', type=str,
 motifextraction.add_argument('--refgenome', dest='refgenome', type=str, help="Reference genome.", required=True)
 motifextraction.add_argument('--ntop', dest='ntop', type=int,
                              help="Positive set size. Default: 15000", default=15000)
+motifextraction.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name. Default: dirmulhmm')
 motifextraction.add_argument('--ngap', dest='ngap', type=int,
                              help="Gap size between positive and negative set. Default: 70000",
                              default=70000)
@@ -296,6 +303,13 @@ motifextraction.add_argument('--flank', dest='flank', type=int,
 motifextraction.add_argument('--nmotifs', dest='nmotifs', type=int,
                              help="Number of motifs to report. Default: 10",
                              default=10)
+motifextraction.add_argument('--output', dest='output', type=str,
+                        default=None,
+                        help='Alternative output directory. If not specified, '
+                             'the results are stored in <storage>/<modelname>/motifs')
+motifextraction.add_argument('--method', dest='method', type=str,
+                        default='classification',
+                        help='Extraction method: regression or classification. Default: classification ')
 
 fragmentsize = subparsers.add_parser('fragmentsize',
                                      description='Inspect fragment size distribution per state')
@@ -309,9 +323,13 @@ fragmentsize.add_argument('--bamfiles', dest='bamfiles', type=str, nargs='+',
 fragmentsize.add_argument('--label', dest='label', type=str, default='sample',
                           help="(Optional) Sample labels. Default: sample")
 fragmentsize.add_argument('--modelname', dest='modelname',
-                          type=str, default='dirmulhmm', help='Model name')
+                          type=str, default='dirmulhmm', help='Model name. Default: dirmulhmm')
 fragmentsize.add_argument('--maxfraglen', dest='maxfraglen', type=int,
                           default=1000, help="Maximum fragment length in bp.")
+fragmentsize.add_argument('--output', dest='output', type=str,
+                        default=None,
+                        help='Alternative output directory. If not specified, '
+                             'the results are stored in <storage>/<modelname>/summary')
 
 
 
@@ -330,11 +348,11 @@ def save_score(scmodel, data, output):
 def get_cell_grouping(table):
     """ Extract cell-group mapping"""
     if table.endswith('.csv'):
-        group2cellmap = pd.read_csv(table, sep=',')
+        group2cellmap = pd.read_csv(table, sep=',', usecols=[0,1])
     elif table.endswith('.tsv'):
-        group2cellmap = pd.read_csv(table, sep='\t')
+        group2cellmap = pd.read_csv(table, sep='\t', usecols=[0,1])
 
-    group2cellmap.columns[:2] = ['cells', 'groups']
+    group2cellmap.columns = ['cells', 'groups']
 
     cell = group2cellmap.cells.values
     groups = group2cellmap.groups.values
@@ -351,7 +369,7 @@ def make_state_summary(model, output, labels):
 def plot_normalized_emissions(model, output, labels):
     """ Save normalized emission probabilities"""
     make_folders(os.path.join(output, 'summary'))
-    for i, dataname in enumerate(datanames):
+    for i, dataname in enumerate(labels):
         model.plot_normalized_emissions(i).savefig(os.path.join(output, 'summary', 'emission_{}.png'.format(dataname)))
 
 def plot_state_annotation_relationship_heatmap(model, storage, labels,
@@ -585,10 +603,14 @@ def local_main(args):
     elif args.program == 'enrichment':
         outputpath = os.path.join(args.storage, args.modelname)
 
-        outputenr = os.path.join(outputpath, 'annotation')
-
         print('enrichment analysis')
         scmodel = Scregseg.load(outputpath)
+
+        if args.output is None:
+            outputenr = os.path.join(outputpath, 'annotation')
+        else:
+            outputenr = args.output
+
         make_folders(outputenr)
 
         if os.path.isdir(args.features):
@@ -624,19 +646,36 @@ def local_main(args):
     elif args.program == 'extract_motifs':
         outputpath = os.path.join(args.storage, args.modelname)
 
+        if args.output is None:
+            motifoutput = os.path.join(outputpath, 'motifs')
+        else:
+            motifoutput = args.output
+        make_folders(motifoutput)
+
         scmodel = Scregseg.load(outputpath)
-        motifextractor = MotifExtractor(scmodel, args.refgenome, ntop=args.ntop,
-                                        nbottom=args.nbottom, ngap=args.ngap,
-                                        nmotifs=args.nmotifs, flank=args.flank)
-        motifoutput = os.path.join(rootdir, 'motifs')
+        if args.method == "regression":
+            motifextractor = MotifExtractor(scmodel, args.refgenome, ntop=args.ntop,
+                                            nbottom=args.nbottom, ngap=args.ngap,
+                                            nmotifs=args.nmotifs, flank=args.flank)
+        elif args.method == "betweenstates":
+            motifextractor = MotifExtractor2(scmodel, args.refgenome, ntop=args.ntop,
+                                                    nmotifs=args.nmotifs, flank=args.flank)
+        else:
+            raise ValueError("--method {} unknown. regression or classification supported.".format(args.method))
 
         os.environ['JANGGU_OUTPUT'] = motifoutput
-        motifextractor._extract_motifs(motifoutput)
-        motifextractor.save_motifs(motifoutput)
+        motifextractor.extract_motifs()
+        motifextractor.save_motifs(os.path.join(motifoutput, 'scregseg_motifs.meme'))
 
     elif args.program == 'fragmentsize':
         print('Extract fragment size distribution ...')
         outputpath = os.path.join(args.storage, args.modelname)
+
+        if args.output is None:
+            resultspath = os.path.join(outputpath, 'summary')
+        else:
+            resultspath = args.output
+        make_folders(resultspath)
 
         scmodel = Scregseg.load(outputpath)
 
@@ -663,21 +702,21 @@ def local_main(args):
 
         scmodel.save(outputpath)
 
-        aggfmat.export_counts(os.path.join(outputpath, 'summary',
+        aggfmat.export_counts(os.path.join(resultspath, 
                            'fragmentsize_per_state_{}.mtx'.format(args.label)))
         adf = fragmentlength_by_state(scmodel, aggfmat)
-        adf.to_csv(os.path.join(outputpath, 'summary',
+        adf.to_csv(os.path.join(resultspath, 
                    'fragmentsize_per_state_{}.csv'.format(args.label)))
 
         fig, ax =  plt.subplots(figsize=(10,10))
         sns.heatmap(adf, ax=ax)
-        fig.savefig(os.path.join(outputpath, 'summary',
+        fig.savefig(os.path.join(resultspath,
                     'fragmentsize_per_state_{}.svg'.format(args.label)))
 
         fig, ax =  plt.subplots(figsize=(10,10))
         x = np.asarray(aggfmat.cmat.sum(0)).flatten()
         ax.plot(np.arange(aggfmat.shape[1]), x)
-        fig.savefig(os.path.join(outputpath, 'summary',
+        fig.savefig(os.path.join(resultspath, 
                     'fragmentsize_{}.svg'.format(args.label)))
 
 
