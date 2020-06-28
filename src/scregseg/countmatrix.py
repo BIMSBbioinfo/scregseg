@@ -47,14 +47,15 @@ def load_count_matrices(countfiles, bedfile, mincounts,
 
     # make sure the same regions are used afterwards
     if minregioncounts is not None:
-        regioncounts = np.zeros(data[0].shape[0])
+        regioncounts = np.zeros((data[0].shape[0], ))
         for datum in data:
-            regioncounts += datum.cmat.sum(axis=1)
+            regioncounts += np.asarray(datum.cmat.sum(axis=1)).flatten()
         for i, _ in enumerate(data):
             keepregions = np.where(regioncounts >= minregioncounts)[0]
 
             data[i].cmat = data[i].cmat[keepregions, :]
             data[i].regions = data[i].regions.iloc[keepregions]
+    print(cm)
     return data
 
 def make_counting_bins(bamfile, binsize, storage=None):
