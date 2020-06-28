@@ -28,15 +28,20 @@ allows to not only capture regions specific for single cell type, but also regio
 Installation
 ============
 
+The package is developmental stage and the interface may change slightly in the future.
+Prior to installing scregseg, numpy and tensorflow must be installed. Afterwards,
+type:
 
 ::
 
-    pip install scregseg
+    pip install git+https://github.com/BIMSBbioinfo/scregseg
 
 Usage
 =====
 
-Example of the Scregseg functionality (within python) is illustrated in several jupyter notebooks 
-Furthermore, most Scregseg functionality can be used from a command-line interface as well. 
+Help on usage of the command-line interface can be optained by `scregseg -h`.
+Various subprograms allow to 1) load, filtered and manipulate count matrices (e.g. bam_to_counts), 2) fit a segmentation model (fig_segment)
+and 3) explore the relationship of the states with additional annotation (e.g. enrichment, annotate, extract_motifs).
+An in depth tutorial is in preparation.
 
 
