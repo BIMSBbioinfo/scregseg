@@ -72,3 +72,8 @@ def fragmentlength_by_state(model, fmat):
     adf = adf.div(adf.sum(axis=1), axis=0).rename({'cell': 'Fragment size'})
 
     return adf
+
+def fit_mixture(args):
+    model, data = args
+    model.fit(data)
+    return model
