@@ -537,7 +537,7 @@ class Scregseg(object):
         fig.tight_layout()
         return fig
 
-    def plot_normalized_emissions(self, idat=0):
+    def plot_normalized_emissions(self, idat=None, selectedstates=None):
        """ Plot background normalized emission probabilities.
 
        Parameters
@@ -550,20 +550,31 @@ class Scregseg(object):
        fig :
            sns.clustermap figure object
        """
-       em = self.model.emission_suffstats_[idat] + self.model.emission_prior_[idat]
+       if idat is None:
+           em = np.concatenate([es + ep for es, ep in zip(self.model.emission_suffstats_, self.model.emission_prior_)], axis=1)
+       else:
+           em = self.model.emission_suffstats_[idat] + self.model.emission_prior_[idat]
 
        nem = em / em.sum(1, keepdims=True)
        tem = em.sum(0, keepdims=True)/em.sum()
        lodds = np.log(nem) - np.log(tem)
 
        if hasattr(self, "labels_"):
-           l = self.labels_[self.labels_.matrixid == idat].label
+           if idat is None:
+               l = self.labels_.label
+           else:
+               l = self.labels_[self.labels_.matrixid == idat].label
        else:
            l = [str(i) for i in range(lodds.shape[1])]
 
-       g = sns.clustermap(pd.DataFrame(lodds, columns=l), center=0., robust=True, cmap='RdBu_r', figsize=(15,15))
-       g.ax_heatmap.set_ylabel('States')
-       g.ax_heatmap.set_xlabel('Features')
+       df = pd.DataFrame(lodds, columns=l, index=self.to_statenames(np.arange(self.n_components))).T
+
+       if selectedstates is not None:
+           df = df[selectedstates]
+
+       g = sns.clustermap(df, center=0., robust=True, cmap='RdBu_r', figsize=(15,15))
+       g.ax_heatmap.set_ylabel('Features')
+       g.ax_heatmap.set_xlabel('States')
 
        return g
 
