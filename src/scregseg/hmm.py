@@ -35,7 +35,8 @@ import json
 
 from hmmlearn import _utils
 from .base import _BaseHMM, MinibatchMonitor
-from .utils import iter_from_X_lengths, _to_list, get_nsamples, get_batch
+from .utils import iter_from_X_lengths, _to_list, get_nsamples, get_batch, _check_array
+from .utils import fit_mixture
 from hmmlearn.utils import normalize, log_normalize
 from ._utils import _fast_dirmul_loglikeli_sp
 
@@ -486,7 +487,6 @@ class DirMulHMM(_BaseHMM):
         X = _to_list(X)
 
         if 'e' in self.init_params:
-            self.n_features = []
             self.emission_suffstats_ = []
             self.emission_prior_ = []
 
@@ -495,8 +495,6 @@ class DirMulHMM(_BaseHMM):
             for modi in range(len(X)):
                 # random init but with read depth offset
                 _, n_features = X[modi].shape
-
-                self.n_features.append(n_features)
 
                 # prior
                 x = np.array(X[modi].sum(0)) + 1.
@@ -508,6 +506,7 @@ class DirMulHMM(_BaseHMM):
                 r = z.T.dot(X[modi]).toarray()
                 
                 self.emission_suffstats_.append(r)
+        self.n_features = [x.shape[1] for x in X]
 
     def _check(self):
         super(DirMulHMM, self)._check()
@@ -558,7 +557,6 @@ class DirMulHMM(_BaseHMM):
     def print_progress(self):
         if not self.verbose:
             return
-        #print(str(datetime.now()) + ' stateprob:', self.get_stationary_distribution())
 
     def save(self, path):
         """
