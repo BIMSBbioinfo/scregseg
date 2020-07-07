@@ -179,6 +179,16 @@ segment.add_argument('--trimcount', dest='trimcounts', type=int,
                       'For instance, trimcount 1 amounts to binarization. Default: maxint')
 segment.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name. Default: dirmulhmm')
 
+plotannotate = subparsers.add_parser('plot_emission', description='Plot state-emissions.')
+plotannotate.add_argument('--output', dest='output', type=str,
+                          help="Output figure.", required=True)
+plotannotate.add_argument('--storage', dest='storage', type=str,
+                          help="Location for containing the pre-trained segmentation "
+                          "and for storing the annotated segmentation results", required=True)
+plotannotate.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name. Default: dirmulhmm')
+plotannotate.add_argument('--states', dest='states', type=str, nargs='*',
+                          help='Selection of states to visualize. Default: all states are visualized')
+
 
 seg2bed = subparsers.add_parser('seg_to_bed', description='Export state calls in BED-format')
 seg2bed.add_argument('--storage', dest='storage', type=str, help="Location of the model folder.", required=True)
@@ -210,12 +220,12 @@ seg2bed.add_argument('--modelname', dest='modelname', type=str, default='dirmulh
 
 seg2bed.add_argument('--nsmallest', dest='nsmallest', type=int, default=-1,
                      help='Number of most rare states to export. Default: -1 (all states are considered).')
-seg2bed.add_argument('--nlargest', dest='nlargest', type=int, default=20,
+seg2bed.add_argument('--nlargest', dest='nlargest', type=int, default=-1,
                      help='Number of most nucleosome-free fragment enriched '
                      'states to export. Default: -1 (all states are considered).')
-seg2bed.add_argument('--nregsperstate', dest='nregsperstate', type=int, default=5000,
+seg2bed.add_argument('--nregsperstate', dest='nregsperstate', type=int, default=-1,
                      help='Number of regions per state to export. Usually, only a subset of representative state calls'
-                     'need to be exported to achieve satisfying results for the downstream clustering. Default: 5000.')
+                     'need to be exported to achieve satisfying results for the downstream clustering.')
 seg2bed.add_argument('--statenames', dest='statenames', nargs='*',
                      help='List of states to export.')
 
@@ -308,8 +318,9 @@ motifextraction.add_argument('--output', dest='output', type=str,
                         help='Alternative output directory. If not specified, '
                              'the results are stored in <storage>/<modelname>/motifs')
 motifextraction.add_argument('--method', dest='method', type=str,
-                        default='classification',
-                        help='Extraction method: regression or classification. Default: classification ')
+                        default='betweenstates',
+                        help='Extraction method determines how to constitute the negative samples. betweenstates'
+                             ' uses the other high-confidence state calls as contrast.')
 
 fragmentsize = subparsers.add_parser('fragmentsize',
                                      description='Inspect fragment size distribution per state')
@@ -506,6 +517,12 @@ def local_main(args):
         make_state_summary(scmodel, outputpath, args.labels)
         plot_normalized_emissions(scmodel, outputpath, args.labels)
         save_score(scmodel, data, outputpath)
+
+    elif args.program == 'plot_emission':
+
+        outputpath = os.path.join(args.storage, args.modelname)
+        scmodel = Scregseg.load(outputpath)
+        scmodel.plot_normalized_emissions(selectedstates=args.states).savefig(args.output)
 
     elif args.program == 'segment':
         assert len(args.labels) == len(args.counts)
