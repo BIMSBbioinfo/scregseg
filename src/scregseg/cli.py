@@ -43,6 +43,7 @@ import numpy as np
 from pybedtools import BedTool
 from pybedtools import Interval
 import argparse
+import logging
 
 
 parser = argparse.ArgumentParser(description='Scregseg - Single-Cell REGulatory landscape SEGmentation.')
@@ -352,7 +353,7 @@ def make_folders(output):
 def save_score(scmodel, data, output):
     """ Save log-likelihood score to file."""
     score = scmodel.score(data)
-    print('loglikelihood = {}'.format(score))
+    logging.debug('loglikelihood = {}'.format(score))
     with open(os.path.join(output, "summary", "score.txt"), 'w') as f:
         f.write('{}\n'.format(score))
 
@@ -399,7 +400,7 @@ def plot_state_annotation_relationship_heatmap(model, storage, labels,
 
     sns.heatmap(segdf, cmap="RdBu_r",
                 robust=True, center=0.0, ax=ax)
-    print('writing {}'.format(os.path.join(storage, 'annotation', '{}.png'.format(title))))
+    logging.debug('writing {}'.format(os.path.join(storage, 'annotation', '{}.png'.format(title))))
     fig.tight_layout()
     fig.savefig(os.path.join(storage, 'annotation', '{}.png'.format(title)))
 
@@ -427,17 +428,26 @@ def plot_state_annotation_relationship(model, storage, labels,
                         data=segdf,
                         hue=groupby, orient='h', ax=ax)
 
-    print('writing {}'.format(os.path.join(storage, 'annotation', '{}.png'.format(title))))
+    logging.debug('writing {}'.format(os.path.join(storage, 'annotation', '{}.png'.format(title))))
     fig.tight_layout()
     fig.savefig(os.path.join(storage, 'annotation', '{}.png'.format(title)))
 
 
 
+
 def local_main(args):
-    print(args)
+    if hasattr(args, 'storage'):
+        logfile = os.path.join(args.storage, 'log', 'logfile.log')
+        make_folders(os.path.dirname(logfile))
+        logging.basicConfig(filename = logfile, level=logging.DEBUG,
+                            format='%(asctime)s;%(levelname)s;%(message)s',
+                            datefmt='%Y-%m-%d %H:%M:%S')
+        
+    logging.debug(args)
+    
     if args.program == 'bam_to_counts':
 
-        print('Make countmatrix ...')
+        logging.debug('Make countmatrix ...')
         cm = CountMatrix.create_from_bam(args.bamfile,
                                     args.regions, barcodetag=args.barcodetag,
                                     mode=args.mode)
@@ -449,14 +459,14 @@ def local_main(args):
         cm.export_counts(args.counts)
 
     elif args.program == 'filter_counts':
-        print('Filter counts ...')
+        logging.debug('Filter counts ...')
         cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
         cm.filter_count_matrix(args.mincounts, args.maxcounts,
                                args.minregioncounts, binarize=False, maxcount=args.trimcounts)
         cm.export_counts(args.outcounts)
 
     elif args.program == 'batchannot':
-        print('Adding annotation ...')
+        logging.debug('Adding annotation ...')
         cannot = get_cell_annotation(args.counts)
         for batch in args.batches:
             name, value = batch.split(':')
@@ -464,7 +474,7 @@ def local_main(args):
         write_cannot_table(args.counts, cannot)
 
     elif args.program == 'groupcells':
-        print('Group cells (pseudobulk)...')
+        logging.debug('Group cells (pseudobulk)...')
         cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
 
         cells,  groups = get_cell_grouping(args.cellgroup)
@@ -473,7 +483,7 @@ def local_main(args):
 
     elif args.program == 'subset':
 
-        print('Subset cells ...')
+        logging.debug('Subset cells ...')
         cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
 
         cells,  _ = get_cell_grouping(args.subset)
@@ -481,7 +491,7 @@ def local_main(args):
         pscm.export_counts(args.outcounts)
 
     elif args.program == 'merge':
-        print('Merge count matrices ...')
+        logging.debug('Merge count matrices ...')
         cms = []
         for incount in args.incounts:
             cm = CountMatrix.create_from_countmatrix(incount, args.regions)
@@ -495,7 +505,7 @@ def local_main(args):
         assert len(args.labels) == len(args.counts)
 
         outputpath = os.path.join(args.storage, args.modelname)
-        print('Segmentation ...')
+        logging.debug('Segmentation ...')
         # fit on subset of the data
         data = load_count_matrices(args.counts, args.regions,
                                                args.mincounts, args.maxcounts,
@@ -508,12 +518,16 @@ def local_main(args):
         # predict on the entire genome
         data = load_count_matrices(args.counts, args.regions,
                                    args.mincounts, args.maxcounts,
-                                   args.trimcounts, 0)
+                                   args.trimcounts, None)
+
+        logging.debug('segmentation data:')
+        for d in data:
+            logging.debug(d)
 
         scmodel.segment(data, args.regions)
         scmodel.save(outputpath)
 
-        print('summarize results ...')
+        logging.debug('summarize results ...')
         make_state_summary(scmodel, outputpath, args.labels)
         plot_normalized_emissions(scmodel, outputpath, args.labels)
         save_score(scmodel, data, outputpath)
@@ -534,7 +548,7 @@ def local_main(args):
                                                args.maxcounts, args.trimcounts,
                                                0)
         scmodel = Scregseg.load(outputpath)
-        print('State calling ...')
+        logging.debug('State calling ...')
         scmodel.segment(data, args.regions)
         scmodel.save(outputpath)
         make_state_summary(scmodel, outputpath, args.labels)
@@ -570,7 +584,7 @@ def local_main(args):
             query_states = nrdf.nlargest(args.nlargest, 'nf_prop').index.tolist()
 
             sdf.readdepth = sdf.readdepth*sdf.nf_prop
-        print(query_states)
+        logging.debug(query_states)
 
         if args.exclude_states is not None:
             query_states = list(set(query_states).difference(set(args.exclude_states)))
@@ -582,7 +596,7 @@ def local_main(args):
                                 collapse_neighbors=not args.no_bookended_merging,
                                          state_prob_threshold=args.threshold)
 
-        print("Exporting {} states with {} regions".format(len(query_states), subset.shape[0]))
+        logging.debug("Exporting {} states with {} regions".format(len(query_states), subset.shape[0]))
         if args.output == '':
             output = outputpath = os.path.join(args.storage, args.modelname, 'summary', 'segments.bed')
         else:
@@ -597,7 +611,7 @@ def local_main(args):
         scmodel = Scregseg.load(outputpath)
 
         assert len(args.labels) == len(args.files), "Number of files and labels mismatching"
-        print('annotate states ...')
+        logging.debug('annotate states ...')
         files = {key: filename for key, filename in zip(args.labels, args.files)}
         scmodel.annotate(files)
 
@@ -605,7 +619,7 @@ def local_main(args):
 
     elif args.program == 'plot_annot':
         outputpath = os.path.join(args.storage, args.modelname)
-        print('Plot annotation ...')
+        logging.debug('Plot annotation ...')
         scmodel = Scregseg.load(outputpath)
 
         if args.plottype == 'heatmap':
@@ -620,7 +634,7 @@ def local_main(args):
     elif args.program == 'enrichment':
         outputpath = os.path.join(args.storage, args.modelname)
 
-        print('enrichment analysis')
+        logging.debug('enrichment analysis')
         scmodel = Scregseg.load(outputpath)
 
         if args.output is None:
@@ -685,7 +699,7 @@ def local_main(args):
         motifextractor.save_motifs(os.path.join(motifoutput, 'scregseg_motifs.meme'))
 
     elif args.program == 'fragmentsize':
-        print('Extract fragment size distribution ...')
+        logging.debug('Extract fragment size distribution ...')
         outputpath = os.path.join(args.storage, args.modelname)
 
         if args.output is None:

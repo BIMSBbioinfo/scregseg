@@ -7,6 +7,7 @@ from __future__ import print_function
 import string
 import sys
 from collections import deque
+import logging
 
 import numpy as np
 from scipy.special import logsumexp
@@ -495,7 +496,6 @@ class _BaseHMM(BaseEstimator):
             parallel = Parallel(n_jobs=n_jobs, verbose=max(0,
                                 self.verbose - 1))
 
-            print('using {} jobs'.format(n_jobs))
             lengths = X[0].shape[0]//n_jobs
 
             for iter_ in range(self.n_iter):
@@ -524,6 +524,8 @@ class _BaseHMM(BaseEstimator):
                 self._do_mstep(stats)
 
                 self.print_progress()
+                delta = curr_logprob - self.monitor_.history[-1] if self.monitor_.history else np.nan
+                logging.debug(self.monitor_._template.format(iter=iter_+1, logprob=curr_logprob, delta=delta))
                 self.monitor_.report(curr_logprob)
                 if self.monitor_.converged:
                     break

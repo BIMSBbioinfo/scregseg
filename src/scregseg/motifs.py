@@ -1,4 +1,5 @@
 import os
+import logging
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 #os.environ['CUDA_VISIBLE_DEVICES'] = '1'
@@ -119,7 +120,7 @@ class MotifExtractor:
         for i in range(self.scmodel.n_components):
 
             process_state= 'state_{}'.format(i)
-            print('processing: {}'.format(process_state))
+            logging.DEBUG('processing: {}'.format(process_state))
 
             df = self.scmodel._segments
 
@@ -181,12 +182,10 @@ class MotifExtractor:
             fdf['score']= LABELS[:]
 
             ranking = fdf.corr(method='spearman')['score'].sort_values(ascending=False)
-            print(ranking.head())
             for i, m in enumerate(ranking.index[1:(self.nmotifs+1)]):
                 s = W[:, 0, :, m]
                 s -= logsumexp(s, axis=1, keepdims=True)
                 s = np.exp(s)
-                print(s)
                 self.meme.add(s, '{}_{}'.format(process_state, i))
         os.remove(roi)
 
@@ -214,11 +213,10 @@ class MotifExtractor2:
 
     def extract_motifs(self):
         """ Perform motif extraction."""
-        print('extract motifs')
+        logging.DEBUG('extract motifs')
         tmpdir = tempfile.mkdtemp()
         roifilename = 'roi.bedgraph'
         roi = os.path.join(tmpdir, roifilename)
-        print(roi)
 
         binsize = self.scmodel._segments.iloc[0].end - \
                   self.scmodel._segments.iloc[0].start
@@ -226,7 +224,7 @@ class MotifExtractor2:
         for i in range(self.scmodel.n_components):
 
             process_state= 'state_{}'.format(i)
-            print('processing: {}'.format(process_state))
+            logging.DEBUG('processing: {}'.format(process_state))
 
             df = self.scmodel._segments.copy()
 
@@ -295,12 +293,10 @@ class MotifExtractor2:
             fdf['score']= LABELS[:]
 
             ranking = fdf.corr(method='spearman')['score'].sort_values(ascending=False)
-            print(ranking.head())
             for i, m in enumerate(ranking.index[1:(self.nmotifs+1)]):
                 s = W[:, 0, :, m]
                 s -= logsumexp(s, axis=1, keepdims=True)
                 s = np.exp(s)
-                print(s)
                 self.meme.add(s, '{}_{}'.format(process_state, i))
         os.remove(roi)
 

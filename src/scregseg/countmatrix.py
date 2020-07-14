@@ -1,3 +1,4 @@
+import logging
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import os
@@ -42,7 +43,6 @@ def load_count_matrices(countfiles, bedfile, mincounts,
         cm.filter_count_matrix(mincounts, maxcounts,
                                0, binarize=False, trimcount=trimcounts)
 
-        print(cm)
         data.append(cm)
 
     # make sure the same regions are used afterwards
@@ -55,7 +55,6 @@ def load_count_matrices(countfiles, bedfile, mincounts,
 
             data[i].cmat = data[i].cmat[keepregions, :]
             data[i].regions = data[i].regions.iloc[keepregions]
-    print(cm)
     return data
 
 def make_counting_bins(bamfile, binsize, storage=None):
@@ -87,7 +86,6 @@ def make_counting_bins(bamfile, binsize, storage=None):
     genomesize = {}
     for chrom, length in zip(afile.references, afile.lengths):
         genomesize[chrom] = length
-    print('found {} chromosomes'.format(len(genomesize)))
     bed_content = [] #pd.DataFrame(columns=['chr', 'start', 'end'])
 
     for chrom in genomesize:
@@ -99,7 +97,6 @@ def make_counting_bins(bamfile, binsize, storage=None):
 
         bed_content += [Interval(c, s, e) for c, s, e in zip(chr_, starts, ends)]
     regions = BedTool(bed_content)
-    print('found {} regions'.format(len(regions)))
     if storage is not None:
         regions.moveto(storage)
     return regions
@@ -179,7 +176,6 @@ def sparse_count_reads_in_regions(bamfile, regions,
 
     barcodemap = {key: i for i, key in enumerate(barcodecounter)}
 
-    print('found {} barcodes'.format(len(barcodemap)))
 
     # barcode string for final table
     barcode_string = ';'.join([bar for bar in barcodemap])
@@ -331,7 +327,6 @@ def sparse_count_reads_in_regions_fast(bamfile, regions,
 
     # barcode string for final table
     barcode_string = ';'.join([bar for bar in barcodemap])
-    print('found {} barcodes - fast'.format(len(barcodemap)))
 
     for aln in afile.fetch():
         bar = barcoder(aln)
@@ -360,7 +355,6 @@ def sparse_count_reads_in_regions_fast(bamfile, regions,
     for k in temp_smats:
         temp_smats[k] = temp_smats[k].tocsr()
     afile.close()
-    print('aggregate')
 
     sdokmat = lil_matrix((nreg, len(barcodemap)), dtype='int32')
     for idx, iv in enumerate(regfile):

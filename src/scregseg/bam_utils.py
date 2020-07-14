@@ -1,3 +1,4 @@
+import logging
 import os
 from copy import copy
 import pysam
@@ -20,7 +21,7 @@ class Barcoder:
     """
 
     def __init__(self, tag):
-        print('Barcodes determined from {} tag'.format(tag))
+        logging.DEBUG('Barcodes determined from {} tag'.format(tag))
         self.tag = tag
 
     def __call__(self, aln):

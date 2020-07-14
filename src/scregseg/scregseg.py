@@ -19,6 +19,7 @@ import os
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from sklearn.utils import check_random_state
+import logging
 
 from numba import jit, njit
 from numba import prange
@@ -113,9 +114,9 @@ def get_labeled_data(X):
 def run_segmentation(data, nstates, niter, random_states, n_jobs):
     best_score = -np.inf
     scores = []
-    print('Fitting {} models'.format(len(random_states)))
+    logging.debug('Fitting {} models'.format(len(random_states)))
     for random_state in random_states:
-        print("Starting {}".format(random_state))
+        logging.debug("Starting {}".format(random_state))
         model = Scregseg(DirMulHMM(n_components=nstates, n_iter=niter, random_state=random_state, verbose=True,
                                 n_jobs=n_jobs))
         model.fit(data)
@@ -126,8 +127,8 @@ def run_segmentation(data, nstates, niter, random_states, n_jobs):
             best_model = model
             best_seed = random_state
 
-    print('all models: seed={}, score={}'.format(random_states, scores))
-    print('best model: seed={}, score={}'.format(best_seed, best_score))
+    logging.debug('all models: seed={}, score={}'.format(random_states, scores))
+    logging.debug('best model: seed={}, score={}'.format(best_seed, best_score))
     scmodel = best_model
     return scmodel
 
@@ -751,7 +752,7 @@ class Scregseg(object):
 
         ngsets = len(genesets)
 
-        print('Segmentation enrichment for {} states and {} sets.'.format(self.n_components, ngsets))
+        logging.debug('Segmentation enrichment for {} states and {} sets.'.format(self.n_components, ngsets))
         tmpdir = tempfile.mkdtemp()
         filename = 'dummyexport'
         tmpfilename = os.path.join(tmpdir, filename)
@@ -821,7 +822,7 @@ class Scregseg(object):
 
         nregions = len(regionnames)
 
-        print('Segmentation enrichment for {} states and {} regions.'.format(self.n_components, nregions))
+        logging.debug('Segmentation enrichment for {} states and {} regions.'.format(self.n_components, nregions))
 
         tmpdir = tempfile.mkdtemp()
         filename = 'dummyexport'

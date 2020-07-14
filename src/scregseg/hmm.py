@@ -14,7 +14,8 @@
 """
 The :mod:`hmmlearn.hmm` module implements hidden Markov models.
 """
-
+import logging
+from multiprocessing import Pool
 from datetime import datetime
 import numpy as np
 from scipy.special import logsumexp
