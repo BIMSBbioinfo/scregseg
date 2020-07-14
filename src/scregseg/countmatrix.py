@@ -40,18 +40,25 @@ def load_count_matrices(countfiles, bedfile, mincounts,
     data = []
     for cnt in countfiles:
         cm = CountMatrix.create_from_countmatrix(cnt, bedfile)
-        cm.filter_count_matrix(mincounts, maxcounts,
-                               0, binarize=False, trimcount=trimcounts)
+        cm.filter(mincounts, maxcounts,
+                  binarize=False, trimcount=trimcounts)
 
         data.append(cm)
 
+    if minregioncounts is None:
+        minregioncounts = 0
+
     # make sure the same regions are used afterwards
-    if minregioncounts is not None:
+    if minregioncounts > 0:
         regioncounts = np.zeros((data[0].shape[0], ))
         for datum in data:
             regioncounts += np.asarray(datum.cmat.sum(axis=1)).flatten()
+        maxregioncounts = regioncounts.max()
+        #minregioncounts = np.median(regioncounts)
+        #maxregioncounts = np.quantile(regioncounts, 0.99)
+        logging.debug('removing region with x < {} and x >= {}'.format(minregioncounts, maxregioncounts))
         for i, _ in enumerate(data):
-            keepregions = np.where(regioncounts >= minregioncounts)[0]
+            keepregions = np.where((regioncounts >= minregioncounts) & (regioncounts <= maxregioncounts))[0]
 
             data[i].cmat = data[i].cmat[keepregions, :]
             data[i].regions = data[i].regions.iloc[keepregions]
@@ -462,6 +469,23 @@ def write_cannot_table(filename, table):
 class CountMatrix:
 
     @classmethod
+    def from_mtx(cls, countmatrixfile, regionannotation):
+        """ Load Countmatrix from matrix market format file.
+
+        Parameters
+        ----------
+        countmatrixfile : str
+            Matrix market file
+        regionannotation : str
+            Region anntation in bed format
+
+        Returns
+        -------
+        CountMatrix object
+        """
+        return cls.create_from_countmatrix(countmatrixfile, regionannotation)
+
+    @classmethod
     def create_from_countmatrix(cls, countmatrixfile, regionannotation):
         """ Load Countmatrix from matrix market format file.
 
@@ -483,6 +507,47 @@ class CountMatrix:
         rannot = get_regions_from_bed_(regionannotation)
         cmat = get_count_matrix_(countmatrixfile)
         return cls(cmat, rannot, cannot)
+
+    @classmethod
+    def from_bam(cls, bamfile, regions, barcodetag='CB',
+                        mode='eitherend', mapq=30, no_barcode=False,
+                        maxfraglen=2000):
+        """ Creates a countmatrix from a given bam file and pre-specified target regions.
+
+        Parameters
+        ----------
+        bamfile : str
+            Path to the input bam file.
+        regions : str
+            Path to the input bed files with the target regions.
+        barcodetag : str or callable
+            Barcode tag or callable for extracting the barcode
+            from the alignment.
+            Default: 'CB'
+        mode : str
+            Specifies the counting mode for paired end data.
+            'bothends' counts each 5' end,
+            'midpoint' counts the fragment once at the midpoint
+            and 'eitherend' counts once if either end is
+            present in the interval, but if
+            both ends are inside of the interval,
+            it is counted only once to mitigate double counting.
+            Default: 'eitherend'
+        mapq : int
+            Only consider reads with a minimum mapping quality. Default: 30
+        no_barcode : bool
+            Whether the file contains barcodes or whether it
+            contains a bulk sample. Default: False.
+        maxfraglen : int
+            Maximum fragment length to consider. Default: 2000 [bp]
+
+        Returns
+        -------
+        CountMatrix object
+
+        """
+        return cls.create_from_bam(bamfile, regions, barcodetag,
+                                   mode, mapq, no_barcode, maxfraglen)
 
     @classmethod
     def create_from_bam(cls, bamfile, regions, barcodetag='CB',
@@ -599,6 +664,7 @@ class CountMatrix:
         idx = self.regions.chrom[~self.regions.chrom.isin(chroms)].index
         self.regions = self.regions[~self.regions.chrom.isin(chroms)]
         self.cmat = self.cmat[idx]
+        return self
 
     @property
     def counts(self):
@@ -636,8 +702,8 @@ class CountMatrix:
         cannot = pd.concat(newcannot, axis=0)
         return cls(hstack([cm.cmat for cm in cms]), cms[0].regions, cannot)
 
-    def filter_count_matrix(self, minreadsincell=None, maxreadsincell=None,
-                            minreadsinregion=None,
+    def filter(self, minreadsincell=None, maxreadsincell=None,
+                            minreadsinregion=None, maxreadsinregion=None,
                             binarize=True, trimcount=None):
         """
         Applies in-place quality filtering to the count matrix.
@@ -653,6 +719,43 @@ class CountMatrix:
         minreadsinregion : int or None
             Minimum counts in region to remove low coverage regions.
             Default: None
+        maxreadsinregion : int or None
+            Maximum counts in region to remove low coverage regions.
+            Default: None
+        binarize : bool
+            Whether to binarize the count matrix. Default: True
+        trimcounts : int or None
+            Whether to trim the maximum number of reads per cell and region.
+            This is a generalization to the binarize option.
+            Default: None (No trimming performed)
+
+        """
+        return self.filter_count_matrix(minreadsincell=minreadsincell,
+                                        maxreadsincell=maxreadsincell,
+                                        minreadsinregion=minreadsinregion,
+                                        maxreadsinregion=maxreadsinregion,
+                                        binarize=binarize, trimcount=trimcount)
+
+    def filter_count_matrix(self, minreadsincell=None, maxreadsincell=None,
+                            minreadsinregion=None, maxreadsinregion=None,
+                            binarize=True, trimcount=None):
+        """
+        Applies in-place quality filtering to the count matrix.
+
+        Parameters
+        ----------
+        minreadsincell : int or None
+            Minimum counts in cells to remove poor quality cells with too few reads.
+            Default: None
+        maxreadsincell : int or None
+            Maximum counts in cells to remove poor quality cells with too many reads.
+            Default: None
+        minreadsinregion : int or None
+            Minimum counts in region to remove low coverage regions.
+            Default: None
+        maxreadsinregion : int or None
+            Maximum counts in region to remove low coverage regions.
+            Default: None
         binarize : bool
             Whether to binarize the count matrix. Default: True
         trimcounts : int or None
@@ -662,34 +765,40 @@ class CountMatrix:
 
         """
 
+        if minreadsincell is None:
+            minreadsincell = 0
+
+        if maxreadsincell is None:
+            maxreadsincell = sys.maxsize
+
+        if minreadsinregion is None:
+            minreadsinregion = 0
+
+        if maxreadsinregion is None:
+            maxreadsinregion = sys.maxsize
+
         if binarize:
             self.cmat.data[self.cmat.data > 0] = 1
 
         if trimcount is not None and trimcount > 0:
             self.cmat.data[self.cmat.data > trimcount] = trimcount
 
-        if minreadsincell is None:
-            minreadsincell = 0
-
         cellcounts = self.cmat.sum(axis=0)
 
-        if maxreadsincell is None:
-            maxreadsincell = cellcounts.max()
-
         keepcells = np.where((cellcounts >= minreadsincell) &
-                             (cellcounts < maxreadsincell) &
+                             (cellcounts <= maxreadsincell) &
                              (self.cannot.cell.values != 'dummy'))[1]
 
         self.cmat = self.cmat[:, keepcells]
         self.cannot = self.cannot.iloc[keepcells]
 
-        if minreadsinregion is None:
-            minreadsinregion = 0
         regioncounts = self.cmat.sum(axis=1)
-        keepregions = np.where(regioncounts >= minreadsinregion)[0]
+        keepregions = np.where((regioncounts >= minreadsinregion) &
+                               (regioncounts < maxreadsinregion))[0]
 
         self.cmat = self.cmat[keepregions, :]
         self.regions = self.regions.iloc[keepregions]
+        return self
 
     def pseudobulk(self, cell, group):
         """ Compute pseudobulk counts.
