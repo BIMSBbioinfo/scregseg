@@ -207,7 +207,8 @@ def fragmentlength_in_regions(bamfile, regions, mapq, maxlen, resolution):
 
             tlen = abs(aln.tlen)//resolution
             if tlen < maxlen // resolution:
-                fragments[m[(aln.reference_name, pos)], tlen] += 1
+                if (aln.reference_name, pos) in m:
+                    fragments[m[(aln.reference_name, pos)], tlen] += 1
 
     afile.close()
     cmat = fragments
