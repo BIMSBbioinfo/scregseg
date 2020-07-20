@@ -461,8 +461,9 @@ def local_main(args):
     elif args.program == 'filter_counts':
         logging.debug('Filter counts ...')
         cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
-        cm.filter_count_matrix(args.mincounts, args.maxcounts,
-                               args.minregioncounts, binarize=False, maxcount=args.trimcounts)
+        cm = cm.filter(args.mincounts, args.maxcounts,
+                  args.minregioncounts, binarize=False,
+                  maxcount=args.trimcounts)
         cm.export_counts(args.outcounts)
 
     elif args.program == 'batchannot':

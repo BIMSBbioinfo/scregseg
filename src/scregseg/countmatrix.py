@@ -1,4 +1,5 @@
 import logging
+import sys
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import os
@@ -40,7 +41,7 @@ def load_count_matrices(countfiles, bedfile, mincounts,
     data = []
     for cnt in countfiles:
         cm = CountMatrix.create_from_countmatrix(cnt, bedfile)
-        cm.filter(mincounts, maxcounts,
+        cm = cm.filter(mincounts, maxcounts,
                   binarize=False, trimcount=trimcounts)
 
         data.append(cm)
@@ -777,28 +778,29 @@ class CountMatrix:
         if maxreadsinregion is None:
             maxreadsinregion = sys.maxsize
 
+        cmat = self.cmat.copy()
         if binarize:
-            self.cmat.data[self.cmat.data > 0] = 1
+            cmat.data[self.cmat.data > 0] = 1
 
         if trimcount is not None and trimcount > 0:
-            self.cmat.data[self.cmat.data > trimcount] = trimcount
+            cmat.data[self.cmat.data > trimcount] = trimcount
 
-        cellcounts = self.cmat.sum(axis=0)
+        cellcounts = cmat.sum(axis=0)
 
         keepcells = np.where((cellcounts >= minreadsincell) &
                              (cellcounts <= maxreadsincell) &
                              (self.cannot.cell.values != 'dummy'))[1]
 
-        self.cmat = self.cmat[:, keepcells]
-        self.cannot = self.cannot.iloc[keepcells]
+        cmat = cmat[:, keepcells]
+        cannot = self.cannot.iloc[keepcells].copy()
 
-        regioncounts = self.cmat.sum(axis=1)
+        regioncounts = cmat.sum(axis=1)
         keepregions = np.where((regioncounts >= minreadsinregion) &
-                               (regioncounts < maxreadsinregion))[0]
+                               (regioncounts <= maxreadsinregion))[0]
 
-        self.cmat = self.cmat[keepregions, :]
-        self.regions = self.regions.iloc[keepregions]
-        return self
+        cmat = cmat[keepregions, :]
+        regions = self.regions.iloc[keepregions].copy()
+        return CountMatrix(cmat, regions, cannot)
 
     def pseudobulk(self, cell, group):
         """ Compute pseudobulk counts.
