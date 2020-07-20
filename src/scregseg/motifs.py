@@ -120,7 +120,7 @@ class MotifExtractor:
         for i in range(self.scmodel.n_components):
 
             process_state= 'state_{}'.format(i)
-            logging.DEBUG('processing: {}'.format(process_state))
+            logging.debug('processing: {}'.format(process_state))
 
             df = self.scmodel._segments
 
@@ -213,7 +213,7 @@ class MotifExtractor2:
 
     def extract_motifs(self):
         """ Perform motif extraction."""
-        logging.DEBUG('extract motifs')
+        logging.debug('extract motifs')
         tmpdir = tempfile.mkdtemp()
         roifilename = 'roi.bedgraph'
         roi = os.path.join(tmpdir, roifilename)
@@ -224,7 +224,7 @@ class MotifExtractor2:
         for i in range(self.scmodel.n_components):
 
             process_state= 'state_{}'.format(i)
-            logging.DEBUG('processing: {}'.format(process_state))
+            logging.debug('processing: {}'.format(process_state))
 
             df = self.scmodel._segments.copy()
 

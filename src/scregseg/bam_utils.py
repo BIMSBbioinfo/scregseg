@@ -21,7 +21,7 @@ class Barcoder:
     """
 
     def __init__(self, tag):
-        logging.DEBUG('Barcodes determined from {} tag'.format(tag))
+        logging.debug('Barcodes determined from {} tag'.format(tag))
         self.tag = tag
 
     def __call__(self, aln):
