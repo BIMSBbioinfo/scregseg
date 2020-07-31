@@ -52,6 +52,11 @@ subparsers = parser.add_subparsers(dest='program')
 
 
 # dataset preprocessing and rearrangements
+counts = subparsers.add_parser('make_tile', description='Make genome-wide tile')
+counts.add_argument('--bamfile', dest='bamfile', type=str, help="Location of an indexed BAM-file", required=True)
+counts.add_argument('--regions', dest='regions', type=str, help="Output location of regions in BED format. ", required=True)
+counts.add_argument('--binsize', dest='binsize', type=str, help="Location of regions in BED format. ", required=True)
+
 counts = subparsers.add_parser('bam_to_counts', description='Make countmatrix')
 counts.add_argument('--bamfile', dest='bamfile', type=str, help="Location of an indexed BAM-file", required=True)
 counts.add_argument('--regions', dest='regions', type=str, help="Location of regions in BED format. ", required=True)
@@ -442,9 +447,9 @@ def local_main(args):
         logging.basicConfig(filename = logfile, level=logging.DEBUG,
                             format='%(asctime)s;%(levelname)s;%(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S')
-        
+
     logging.debug(args)
-    
+
     if args.program == 'bam_to_counts':
 
         logging.debug('Make countmatrix ...')
@@ -457,6 +462,9 @@ def local_main(args):
             cm = cm.pseudobulk(cells, groups)
 
         cm.export_counts(args.counts)
+
+    elif args.program == "make_tile":
+        make_counting_bins(args.bamfile, args.binsize, args.regions)
 
     elif args.program == 'filter_counts':
         logging.debug('Filter counts ...')
@@ -734,10 +742,10 @@ def local_main(args):
 
         scmodel.save(outputpath)
 
-        aggfmat.export_counts(os.path.join(resultspath, 
+        aggfmat.export_counts(os.path.join(resultspath,
                            'fragmentsize_per_state_{}.mtx'.format(args.label)))
         adf = fragmentlength_by_state(scmodel, aggfmat)
-        adf.to_csv(os.path.join(resultspath, 
+        adf.to_csv(os.path.join(resultspath,
                    'fragmentsize_per_state_{}.csv'.format(args.label)))
 
         fig, ax =  plt.subplots(figsize=(10,10))
@@ -748,7 +756,7 @@ def local_main(args):
         fig, ax =  plt.subplots(figsize=(10,10))
         x = np.asarray(aggfmat.cmat.sum(0)).flatten()
         ax.plot(np.arange(aggfmat.shape[1]), x)
-        fig.savefig(os.path.join(resultspath, 
+        fig.savefig(os.path.join(resultspath,
                     'fragmentsize_{}.svg'.format(args.label)))
 
 
