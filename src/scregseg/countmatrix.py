@@ -450,7 +450,7 @@ def get_count_matrix_(filename):
     if filename.endswith('.npz'):
         files = np.load(filename)
         return csr_matrix((files['arr_0'], files['arr_1'], files['arr_2']))
-    else
+    else:
         raise ValueError('unknown file format. Counts must be in mtx for npz format')
 
 def get_cell_annotation(filename):
@@ -914,7 +914,7 @@ class CountMatrix:
             self.to_loom(filename)
         elif filename.endswith('.npz'):
             self.to_npz(filename)
-        else
+        else:
             # default to mtx format
             self.to_mtx(filename)
 
