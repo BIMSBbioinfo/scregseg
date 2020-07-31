@@ -16,6 +16,7 @@ from pysam import AlignmentFile
 from collections import Counter
 from scipy.sparse import dok_matrix
 from scipy.sparse import lil_matrix
+import loompy
 
 from scregseg.bam_utils import Barcoder
 from scregseg.bam_utils import fragmentlength_in_regions
@@ -379,6 +380,27 @@ def sparse_count_reads_in_regions_fast(bamfile, regions,
 
     return sdokmat.tocsr(), pd.DataFrame({'cell': barcode_string.split(';')})
 
+def save_cellannotation(filename, barcodes):
+    """ Save cell annotation
+
+    Parameters
+    ----------
+    filename : str
+        Filename of the matrix market output file.
+        The associated cell annotation is stored with the additional prefix '.bct'.
+    barcodes: list(str) or pandas.DataFrame
+        Cell annotation to store in the '.bct' file.
+
+    Returns
+    -------
+        None
+    """
+    if isinstance(barcodes, pd.DataFrame):
+        df = barcodes
+    else:
+        df = pd.DataFrame({'cell': barcodes})
+    df.to_csv(filename + '.bct', sep='\t', header=True, index=False)
+
 
 def save_sparsematrix(filename, mat, barcodes):
     """ Save sparse count matrix and annotation
@@ -399,12 +421,8 @@ def save_sparsematrix(filename, mat, barcodes):
     """
     spcoo = mat.tocoo()
     mmwrite(filename, spcoo)
+    save_cellannotation(filename,  barcodes)
 
-    if isinstance(barcodes, pd.DataFrame):
-        df = barcodes
-    else:
-        df = pd.DataFrame({'cell': barcodes})
-    df.to_csv(filename + '.bct', sep='\t', header=True, index=False)
 
 def get_count_matrix_(filename):
     """ Read count matrix in sparse format
@@ -429,6 +447,11 @@ def get_count_matrix_(filename):
     """
     if filename.endswith(".mtx"):
         return mmread(filename).tocsr()
+    if filename.endswith('.npz'):
+        files = np.load(filename)
+        return csr_matrix((files['arr_0'], files['arr_1'], files['arr_2']))
+    else
+        raise ValueError('unknown file format. Counts must be in mtx for npz format')
 
 def get_cell_annotation(filename):
     """ Load Cell/barcode information from '.bct' file
@@ -559,8 +582,6 @@ class CountMatrix:
         Parameters
         ----------
         bamfile : str
-            Path to the input bam file.
-        regions : str
             Path to the input bed files with the target regions.
         barcodetag : str or callable
             Barcode tag or callable for extracting the barcode
@@ -596,23 +617,6 @@ class CountMatrix:
                                                      mode=mode,
                                                      only_with_barcode=not no_barcode,
                                                      maxfraglen=maxfraglen)
-        #if mode in ['midpoint']:
-        #    cmat, cannot = sparse_count_reads_in_regions_fast(bamfile, regions,
-        #                                                 barcodetag,
-        #                                                 flank=0, log=None,
-        #                                                 mapq=mapq,
-        #                                                 mode=mode,
-        #                                                 only_with_barcode=not no_barcode,
-        #                                                 maxfraglen=maxfraglen)
-        #else:
-        #    cmat, cannot = sparse_count_reads_in_regions(bamfile, regions,
-        #                                                 barcodetag,
-        #                                                 flank=0, log=None,
-        #                                                 mapq=mapq,
-        #                                                 mode=mode,
-        #                                                 only_with_barcode=not no_barcode,
-        #                                                 maxfraglen=maxfraglen)
-
         return cls(cmat.tocsr(), rannot, cannot)
 
 
@@ -639,8 +643,6 @@ class CountMatrix:
         CountMatrix object
 
         """
-        #if not os.path.exists(regions):
-        #    make_counting_bins(bamfile, binsize, regions)
         rannot = get_regions_from_bed_(regions)
         cmat, cannot = fragmentlength_in_regions(bamfile, regions,
                                                  mapq=mapq, maxlen=maxlen,
@@ -831,6 +833,11 @@ class CountMatrix:
         cannot = pd.DataFrame(grouplabels, columns=['cell'])
         return CountMatrix(csr_matrix(cnts), self.regions, cannot)
 
+#    def __getitems__(self, idx):
+#        if issparse(cmat.cmat):
+#            return cmat.cmat[idx]
+#        return csr_matrix(cmat.cmat[idx])
+
     def subset(self, cell):
         """ Subset countmatrix
 
@@ -856,7 +863,9 @@ class CountMatrix:
         return CountMatrix(csr_matrix(cnts), self.regions, cannot)
 
     def __getitem__(self, ireg):
-        return self.cmat[ireg]
+        if issparse(cmat.cmat):
+            return cmat.cmat[idx]
+        return csr_matrix(cmat.cmat[idx])
 
     def __repr__(self):
         return "{} x {} CountMatrix with {} entries".format(self.cmat.shape[0], self.cmat.shape[1], self.cmat.nnz)
@@ -899,5 +908,55 @@ class CountMatrix:
         filename : str
             Output file name.
         """
+        if filename.endswith('.mtx'):
+            self.to_mtx(filename)
+        elif filename.endswith('.loom'):
+            self.to_loom(filename)
+        elif filename.endswith('.npz'):
+            self.to_npz(filename)
+        else
+            # default to mtx format
+            self.to_mtx(filename)
 
+
+    def to_mtx(self, filename):
+        """
+        Exports the countmatrix in matrix market format
+
+        Parameters
+        ----------
+        filename : str
+            Output file name.
+        """
         save_sparsematrix(filename, self.cmat, self.cannot)
+
+    def to_loom(self, filename):
+        """
+        Exports the countmatrix in loom format
+
+        Parameters
+        ----------
+        filename : str
+            Output file name.
+        """
+
+        colnames = self.cannot.to_dict(orient='list')
+        rownames = self.regions.to_dict(orient='list')
+        loompy.create(filename, self.cmat.tocoo(),
+                      rownames, colnames)
+
+    def to_npz(self, filename):
+        """
+        Exports the countmatrix in npz format
+
+        Parameters
+        ----------
+        filename : str
+            Output file name.
+        """
+
+        colnames = self.cannot.to_dict(orient='list')
+        rownames = self.regions.to_dict(orient='list')
+        np.savez(filename, self.cmat.data, self.cmat.indices, self.cmat.indptr)
+        save_cellannotation(filename, self.cannot)
+
