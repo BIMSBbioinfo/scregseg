@@ -16,7 +16,6 @@ from pysam import AlignmentFile
 from collections import Counter
 from scipy.sparse import dok_matrix
 from scipy.sparse import lil_matrix
-import loompy
 
 from scregseg.bam_utils import Barcoder
 from scregseg.bam_utils import fragmentlength_in_regions
@@ -910,8 +909,6 @@ class CountMatrix:
         """
         if filename.endswith('.mtx'):
             self.to_mtx(filename)
-        elif filename.endswith('.loom'):
-            self.to_loom(filename)
         elif filename.endswith('.npz'):
             self.to_npz(filename)
         else:
@@ -929,21 +926,6 @@ class CountMatrix:
             Output file name.
         """
         save_sparsematrix(filename, self.cmat, self.cannot)
-
-    def to_loom(self, filename):
-        """
-        Exports the countmatrix in loom format
-
-        Parameters
-        ----------
-        filename : str
-            Output file name.
-        """
-
-        colnames = self.cannot.to_dict(orient='list')
-        rownames = self.regions.to_dict(orient='list')
-        loompy.create(filename, self.cmat.tocoo(),
-                      rownames, colnames)
 
     def to_npz(self, filename):
         """
