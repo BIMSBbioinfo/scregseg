@@ -452,7 +452,7 @@ def get_count_matrix_(filename):
     else:
         raise ValueError('unknown file format. Counts must be in mtx for npz format')
 
-def get_cell_annotation(filename):
+def get_cell_annotation(filename, suffix='.bct'):
     """ Load Cell/barcode information from '.bct' file
 
     Parameter
@@ -464,7 +464,7 @@ def get_cell_annotation(filename):
     -------
         Cell annotation as pd.DataFrame
     """
-    return pd.read_csv(filename + '.bct', sep='\t')
+    return pd.read_csv(filename + suffix, sep='\t')
 
 def get_regions_from_bed_(filename):
     """
@@ -492,42 +492,56 @@ def write_cannot_table(filename, table):
 class CountMatrix:
 
     @classmethod
-    def from_mtx(cls, countmatrixfile, regionannotation):
+    def from_mtx(cls, countmatrixfile, regionannotation=None, cellannotation=None):
         """ Load Countmatrix from matrix market format file.
 
         Parameters
         ----------
         countmatrixfile : str
             Matrix market file
-        regionannotation : str
+        regionannotation : str or None
             Region anntation in bed format
+        cellannotation : str or None
+            Cell anntation in tsv format
 
         Returns
         -------
         CountMatrix object
         """
-        return cls.create_from_countmatrix(countmatrixfile, regionannotation)
+        return cls.create_from_countmatrix(countmatrixfile, regionannotation=None, cellannotation=None)
 
     @classmethod
-    def create_from_countmatrix(cls, countmatrixfile, regionannotation):
+    def create_from_countmatrix(cls, countmatrixfile, regionannotation=None, cellannotation=None):
         """ Load Countmatrix from matrix market format file.
 
         Parameters
         ----------
         countmatrixfile : str
             Matrix market file
-        regionannotation : str
+        regionannotation : str or None
             Region anntation in bed format
+        cellannotation : str or None
+            Cell anntation in tsv format
 
         Returns
         -------
         CountMatrix object
         """
-        cannot = get_cell_annotation(countmatrixfile)
+        if cellannotation is None:
+            # try to infer cell annotation file
+            cannot = get_cell_annotation(countmatrixfile)
+        else:
+            cannot = get_cell_annotation(cellannotation)
 
         if 'cell' not in cannot.columns:
             cannot['cell'] = cannot[cannot.columns[0]]
-        rannot = get_regions_from_bed_(regionannotation)
+
+        if regionannotation is None:
+            # try to infer region annotation file
+            rannot = get_regions_from_bed_(countmatrixfile + '.bed')
+        else:
+            rannot = get_regions_from_bed_(regionannotation)
+
         cmat = get_count_matrix_(countmatrixfile)
         return cls(cmat, rannot, cannot)
 
