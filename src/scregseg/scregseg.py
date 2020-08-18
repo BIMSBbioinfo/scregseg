@@ -204,11 +204,16 @@ def get_statecalls(segments, query_states,
     dfs = []
 
     for process_state in query_states:
-        subset['pscore'] = subset['Prob_{}'.format(process_state)] * subset['readdepth']
-        #subset = subset[subset.pscore >= minreads]
-        dfs.append(subset.nlargest(ntop, 'pscore').copy())
+        sdf = subset.copy()
+        #sdf['pscore'] = sdf['Prob_{}'.format(process_state)] * sdf['readdepth']
+        sdf['pscore'] = sdf.query("name == '{}'".format(process_state))['readdepth']
+        if ntop < 0:
+            dfs.append(sdf.copy())
+        else:
+            dfs.append(sdf.nlargest(ntop, 'pscore').copy())
 
     subset_merged = pd.concat(dfs, axis=0)
+    subset_merged = subset_merged.drop_duplicates(subset=['chrom', 'start', 'end'], ignore_index=True)
     return subset_merged
 
 def get_statecalls_posteriorprob(segments, query_states,
