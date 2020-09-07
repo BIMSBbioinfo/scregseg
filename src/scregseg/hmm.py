@@ -520,7 +520,7 @@ class DirMulHMM(_BaseHMM):
             es = np.atleast_2d(es)
             if es.shape != (self.n_components, nfeat):
                 raise ValueError(
-                    "emission_suffstats_ must have shape (n_components, n_features)")
+                    "emission_suffstats_ must have shape (n_components, n_features) got {}".format(es.shape))
 
     @classmethod
     def load(cls, path):

@@ -219,7 +219,7 @@ seg2bed.add_argument('--method', dest='method', type=str, default='rarest',
                      'manuelselect exports a list of manually specified states given by --statenames,'
                      'nucfree exports the --nlargest states most enriched for nucleosome free reads (<=150bp),'
                      'abundancethreshold selects the states with maximum state abundance given by --max_state_abundance. Default: rarest',
-                     choices=['rarest', 'nucfree', 'manuelselect', 'abundancethreshold'])
+                     choices=['rarest', 'nucfree', 'tvdist', 'manuelselect', 'abundancethreshold'])
 seg2bed.add_argument('--individual', dest='individualbeds', action='store_true', default=False,
                      help="Save segmentation in individual bed files. Default: False exports a single bed file containing all states.")
 seg2bed.add_argument('--threshold', dest='threshold', type=float, default=0.0,
@@ -616,11 +616,25 @@ def local_main(args):
                 raise ValueError("--method nucfree also requires --nlargest <int>")
             sdf.nf_prop = sdf.nf_prop.fillna(0.0)
             nrdf = sdf[['name', 'nf_prop']].groupby('name').mean()
-            query_states = nrdf.nlargest(args.nlargest, 'nf_prop').index.tolist()
+            query_states = nrdf.nlargest(args.nlargest,
+                                         'nf_prop').index.tolist()
 
             sdf.readdepth = sdf.readdepth*sdf.nf_prop
-        logging.debug(query_states)
+        elif args.method == 'tvdist':
+            params = np.concatenate(scmodel.model.emission_suffstats_, axis=1)
+            totp = params.sum(0, keepdims=True)
+            params /= params.sum(1, keepdims=True)
+            totp /= totp.sum(keepdims=True) 
 
+            tvdist = np.abs(params-totp).mean(1)
+            query_states = pd.Series(tvdist,
+                                     index=['state_{}'.format(i) \
+                                            for i in range(scmodel.n_components)])
+            query_states = query_states.nlargest(args.nlargest).index.tolist()
+            
+        logging.debug("method={}: {}".format(args.method,query_states))
+
+        #get_query_states(model, method, 
         if args.exclude_states is not None:
             query_states = list(set(query_states).difference(set(args.exclude_states)))
 
