@@ -13,9 +13,10 @@ from scipy.sparse import hstack
 from scipy.io import mmread, mmwrite
 from pybedtools import BedTool, Interval
 from pysam import AlignmentFile
-from collections import Counter
+from collections import Counter, OrderedDict
 from scipy.sparse import dok_matrix
 from scipy.sparse import lil_matrix
+from scipy.sparse import coo_matrix
 
 from scregseg.bam_utils import Barcoder
 from scregseg.bam_utils import fragmentlength_in_regions
@@ -109,6 +110,53 @@ def make_counting_bins(bamfile, binsize, storage=None):
         regions.moveto(storage)
     return regions
 
+
+def sparse_count_fragments_in_regions(fragmentfile, regions):
+    """ This function obtains the counts per bins of equal size
+    across the genome.
+
+    The function automatically extracts the genome size from the
+    bam file header.
+    If group tags are available, they will be used to extract
+    the indices from.
+    Finally, the function autmatically detects whether the bam-file
+    contains paired-end or single-end reads.
+    Paired-end reads are counted once at the mid-point between the two
+    pairs while single-end reads are counted at the 5' end.
+    For paired-end reads it is optionally possible to count both read ends
+    by setting mode='both' or mode='eitherend'.
+
+    Parameters
+    ----------
+    bamfile :  str
+        Path to a bamfile. The bamfile must be indexed.
+    regions : str
+        BED or GFF file containing the regions of interest.
+
+    Returns
+    -------
+        Sparse matrix and cell annotation as pd.DataFrame
+    """
+
+    regionbed = BedTool([Interval(chrom=iv.chrom, start=iv.start, end=iv.end, name=str(i)) for i, iv in enumerate(BedTool(regions))])
+    
+    fragments = BedTool(fragmentfile)
+
+    mapping = Counter()
+    for i, frag  in enumerate(fragments):
+        mapping[frag.name] = 1
+
+    mapping = {k:i for i, k in enumerate(mapping)}
+
+    counts = regionbed.intersect(fragments, wo=True)
+
+    rows = np.asarray([[int(c.fields[3]), mapping[c.fields[-3]]] for c in counts])
+
+    smat = coo_matrix((np.ones(rows.shape[0]), (rows[:,0], rows[:,1])),
+                      shape=(len(regionbed), len(mapping)),
+                      dtype='int32')
+
+    return smat.tocsr(), pd.DataFrame({'cell': [k for k in mapping]})
 
 def sparse_count_reads_in_regions(bamfile, regions,
                                   barcodetag, flank=0, log=None, mapq=30,
@@ -508,7 +556,8 @@ class CountMatrix:
         -------
         CountMatrix object
         """
-        return cls.create_from_countmatrix(countmatrixfile, regionannotation=None, cellannotation=None)
+        return cls.create_from_countmatrix(countmatrixfile, regionannotation=regionannotation,
+                                           cellannotation=cellannotation)
 
     @classmethod
     def create_from_countmatrix(cls, countmatrixfile, regionannotation=None, cellannotation=None):
@@ -585,6 +634,26 @@ class CountMatrix:
         """
         return cls.create_from_bam(bamfile, regions, barcodetag,
                                    mode, mapq, no_barcode, maxfraglen)
+
+    @classmethod
+    def create_from_fragments(cls, fragmentfile, regions):
+        """ Creates a countmatrix from a given fragments file (output by cellranger) and pre-specified target regions.
+
+        Parameters
+        ----------
+        fragmentfile : str
+            Path to the input bed files with the target regions.
+        regions : str
+            BED file containing features for which to obtain the counts
+
+        Returns
+        -------
+        CountMatrix object
+
+        """
+        rannot = get_regions_from_bed_(regions)
+        cmat, cannot = sparse_count_fragments_in_regions(fragmentfile, regions)
+        return cls(cmat.tocsr(), rannot, cannot)
 
     @classmethod
     def create_from_bam(cls, bamfile, regions, barcodetag='CB',

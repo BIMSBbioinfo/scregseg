@@ -57,6 +57,20 @@ counts.add_argument('--bamfile', dest='bamfile', type=str, help="Location of an 
 counts.add_argument('--regions', dest='regions', type=str, help="Output location of regions in BED format. ", required=True)
 counts.add_argument('--binsize', dest='binsize', type=int, help="Location of regions in BED format. ", required=True)
 
+counts = subparsers.add_parser('fragments_to_counts', description='Make countmatrix')
+counts.add_argument('--fragmentfile', dest='fragmentfile', type=str, help="Location of a fragments.tsv.gz file (output by cellranger)", required=True)
+counts.add_argument('--regions', dest='regions', type=str, help="Location of regions in BED format. ", required=True)
+counts.add_argument('--counts', dest='counts', type=str,
+                    help="Location of the output count matrix. "
+                    "The matrix will be in matrix market format. Another file will be stored with ending '.bct'"
+                    " holding information associated with the barcode names.", required=True)
+counts.add_argument('--cellgroup', dest='cellgroup', type=str,
+                    help="(Optional) Location of table (csv or tsv) defining groups of cells. "
+                         "If specified, a pseudo-bulk count matrix will be created. "
+                         "The table must have at least two columns, the first specifying the barcode name "
+                         " and the second specifying the group label.")
+
+
 counts = subparsers.add_parser('bam_to_counts', description='Make countmatrix')
 counts.add_argument('--bamfile', dest='bamfile', type=str, help="Location of an indexed BAM-file", required=True)
 counts.add_argument('--regions', dest='regions', type=str, help="Location of regions in BED format. ", required=True)
@@ -456,6 +470,18 @@ def local_main(args):
         cm = CountMatrix.create_from_bam(args.bamfile,
                                     args.regions, barcodetag=args.barcodetag,
                                     mode=args.mode)
+
+        if args.cellgroup is not None:
+            cells,  groups = get_cell_grouping(args.cellgroup)
+            cm = cm.pseudobulk(cells, groups)
+
+        cm.export_counts(args.counts)
+
+    if args.program == 'fragments_to_counts':
+
+        logging.debug('Make countmatrix ...')
+        cm = CountMatrix.create_from_fragments(args.fragmentfile,
+                                    args.regions)
 
         if args.cellgroup is not None:
             cells,  groups = get_cell_grouping(args.cellgroup)
