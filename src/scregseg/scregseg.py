@@ -655,8 +655,12 @@ class Scregseg(object):
         annotations : dict(featurename: filename)
             Dictionary of annotations name:file pairs.
         """
-        from janggu.data import Cover
-        from janggu.data import LogTransform
+        try:
+            from janggu.data import Cover
+            from janggu.data import LogTransform
+        except:
+            raise Exception("janggu is not available, but required for this functionality. "
+                            " Please run: pip install janggu[tf2]")
 
         tmpdir = tempfile.mkdtemp()
         filename = 'dummyexport'

@@ -98,11 +98,12 @@ setup(
                 'scipy',
                 'numpy',
                 'hmmlearn',
-                'janggu',
+                #'janggu',
                 'pandas',
                 'numba',
     ],
     extras_require={
+        'janggu' = ['janggu', 'tensorflow==2.2', 'keras==2.4.3'],
         # eg:
         #   'rst': ['docutils>=0.11'],
         #   ':python_version=="2.6"': ['argparse'],
