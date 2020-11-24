@@ -31,6 +31,7 @@ from scregseg import Scregseg
 from scregseg.scregseg import run_segmentation
 from scregseg.scregseg import get_statecalls
 from scregseg.utils import fragmentlength_by_state
+from scregseg.utils import make_pseudobulk_bam
 from scregseg.scregseg import export_bed
 from scregseg.motifs import MotifExtractor
 from scregseg.motifs import MotifExtractor2
@@ -80,6 +81,30 @@ counts.add_argument('--mode', dest='mode', type=str, default='midpoint',
                     'independently or once if either end is located in the interval.'
                     ' Options are midpoint, countboth and eitherend. '
                     ' Default: mode=midpoint', choices=['eitherend', 'midpoint', 'countboth'])
+counts.add_argument('--barcodecolumn', dest='barcodecolumn', type=int,
+                    help='Column index of barcode column (Zero-based) in the cellgroup table. Default=0', default=0) 
+counts.add_argument('--groupcolumn', dest='groupcolumn', type=int,
+                    help='Column index of cell group/cluster column (Zero-based) in the cellgroup table. Default=1', default=1) 
+
+
+bampseudobulk = subparsers.add_parser('make_pseudobulk_bam', description='Make pseudobulk tracks in BAM format')
+bampseudobulk.add_argument('--bamfile', dest='bamfile', type=str, help="Location of an indexed BAM-file", required=True)
+bampseudobulk.add_argument('--barcodetag', dest='barcodetag', type=str,
+                    help="Barcode encoding tag. For instance, CB or RG depending on which tag represents "
+             "the barcode. If the barcode is encoded as prefix in the read name "
+             "separated by '.' or ':' use '.' or ':'.", default='CB')
+
+bampseudobulk.add_argument('--outdir', dest='outdir', type=str,
+                   help="Output directory in which the pseudobulk BAM files are stored.", required=True)
+bampseudobulk.add_argument('--cellgroup', dest='cellgroup', type=str,
+                    help="(Optional) Location of table (csv or tsv) defining groups of cells. "
+                         "If specified, a pseudo-bulk count matrix will be created. "
+                         "The table must have at least two columns, the first specifying the barcode name "
+                         " and the second specifying the group label.")
+bampseudobulk.add_argument('--barcodecolumn', dest='barcodecolumn', type=int,
+                           help='Column index of barcode column (Zero-based) in the cellgroup table. Default=0', default=0) 
+bampseudobulk.add_argument('--groupcolumn', dest='groupcolumn', type=int,
+                           help='Column index of cell group/cluster column (Zero-based) in the cellgroup table. Default=1', default=1) 
 
 batchannot = subparsers.add_parser('sampleannot', description='Add sample annotation to a count matrix')
 batchannot.add_argument('--counts', dest='counts', type=str, help="Location of a count matrix.", required=True)
@@ -111,7 +136,8 @@ merge.add_argument('--regions', dest='regions', type=str,
 merge.add_argument('--outcounts', dest='outcounts', type=str,
                    help="Location of the merged output count matrix", required=True)
 
-groupcells = subparsers.add_parser('groupcells', description='Collapse cells within pre-defined groups (make pseudo-bulk).')
+groupcells = subparsers.add_parser('groupcells', description='Collapse cells within pre-defined groups (make pseudo-bulk). '
+                                                             'This function operates on countmatrices.')
 groupcells.add_argument('--incounts', dest='incounts', type=str, help="Location of an input count matrix", required=True)
 groupcells.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
 groupcells.add_argument('--outcounts', dest='outcounts', type=str,
@@ -119,6 +145,10 @@ groupcells.add_argument('--outcounts', dest='outcounts', type=str,
 groupcells.add_argument('--cellgroup', dest='cellgroup', type=str,
                         help="Location of a table defining cell groups within which to aggregate the reads.",
                         required=True)
+groupcells.add_argument('--barcodecolumn', dest='barcodecolumn', type=int,
+                    help='Column index of barcode column (Zero-based) in the cellgroup table. Default=0', default=0) 
+groupcells.add_argument('--groupcolumn', dest='groupcolumn', type=int,
+                    help='Column index of cell group/cluster column (Zero-based) in the cellgroup table. Default=1', default=1) 
 
 subset = subparsers.add_parser('subset', description='Subset cells by cell name.')
 subset.add_argument('--incounts', dest='incounts', type=str, help="Location of an input count matrix", required=True)
@@ -128,6 +158,8 @@ subset.add_argument('--subset', dest='subset', type=str,
                     help="Location of a table defining "
                     "cell names which to retain for the output count matrix.",
                     required=True)
+subset.add_argument('--barcodecolumn', dest='barcodecolumn', type=int,
+                    help='Column index of barcode column (Zero-based) in the subset table. Default=0', default=0) 
 
 # score a model from scratch
 fsegment = subparsers.add_parser('fit_segment', description='Fit a Scregseg segmentation model.')
@@ -362,17 +394,15 @@ def save_score(scmodel, data, output):
     with open(os.path.join(output, "summary", "score.txt"), 'w') as f:
         f.write('{}\n'.format(score))
 
-def get_cell_grouping(table):
+def get_cell_grouping(table, barcodecolumn=0, groupcolumn=1):
     """ Extract cell-group mapping"""
     if table.endswith('.csv'):
-        group2cellmap = pd.read_csv(table, sep=',', usecols=[0,1])
+        group2cellmap = pd.read_csv(table, sep=',')
     elif table.endswith('.tsv'):
-        group2cellmap = pd.read_csv(table, sep='\t', usecols=[0,1])
+        group2cellmap = pd.read_csv(table, sep='\t')
 
-    group2cellmap.columns = ['cells', 'groups']
-
-    cell = group2cellmap.cells.values
-    groups = group2cellmap.groups.values
+    cell = df[df.columns[args.barcodecolumn].values
+    group = df[df.columns[args.groupcolumn].values
 
     return cell, groups
 
@@ -458,11 +488,21 @@ def local_main(args):
                                     mode=args.mode)
 
         if args.cellgroup is not None:
-            cells,  groups = get_cell_grouping(args.cellgroup)
+            cells,  groups = get_cell_grouping(args.cellgroup, args.barcodecolumn, args.groupcolumn)
             cm = cm.pseudobulk(cells, groups)
 
         cm.export_counts(args.counts)
 
+    elif args.program == 'make_pseudobulk_bam':
+
+        logging.debug('Make pseudobulk bam-files')
+
+        cells, groups = get_cell_grouping(args.cellgroup, args.barcodecolumn, args.groupcolumn)
+
+        make_pseudobulk_bam(args.bamfile, args.outdir,
+                            cells, group,
+                            tag=args.barcodetag)
+                           
     elif args.program == "make_tile":
         make_counting_bins(args.bamfile, args.binsize, args.regions)
 
@@ -486,7 +526,7 @@ def local_main(args):
         logging.debug('Group cells (pseudobulk)...')
         cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
 
-        cells,  groups = get_cell_grouping(args.cellgroup)
+        cells,  groups = get_cell_grouping(args.cellgroup, args.barcodecolumn, args.groupcolumn)
         pscm = cm.pseudobulk(cells, groups)
         pscm.export_counts(args.outcounts)
 
@@ -495,7 +535,7 @@ def local_main(args):
         logging.debug('Subset cells ...')
         cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
 
-        cells,  _ = get_cell_grouping(args.subset)
+        cells,  _ = get_cell_grouping(args.subset, args.barcodecolumn)
         pscm = cm.subset(cells)
         pscm.export_counts(args.outcounts)
 
