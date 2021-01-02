@@ -31,7 +31,7 @@ from scregseg import Scregseg
 from scregseg.scregseg import run_segmentation
 from scregseg.scregseg import get_statecalls
 from scregseg.utils import fragmentlength_by_state
-from scregseg.utils import make_pseudobulk_bam
+from scregseg.bam_utils import make_pseudobulk_bam
 from scregseg.scregseg import export_bed
 from scregseg.motifs import MotifExtractor
 from scregseg.motifs import MotifExtractor2
