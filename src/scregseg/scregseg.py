@@ -114,6 +114,7 @@ def get_labeled_data(X):
 def run_segmentation(data, nstates, niter, random_states, n_jobs):
     best_score = -np.inf
     scores = []
+    models = []
     logging.debug('Fitting {} models'.format(len(random_states)))
     for random_state in random_states:
         logging.debug("Starting {}".format(random_state))
@@ -122,6 +123,7 @@ def run_segmentation(data, nstates, niter, random_states, n_jobs):
         model.fit(data)
         score = model.score(data)
         scores.append(score)
+        models.append(model)
         if best_score < score:
             best_score = score
             best_model = model
@@ -130,7 +132,7 @@ def run_segmentation(data, nstates, niter, random_states, n_jobs):
     logging.debug('all models: seed={}, score={}'.format(random_states, scores))
     logging.debug('best model: seed={}, score={}'.format(best_seed, best_score))
     scmodel = best_model
-    return scmodel
+    return scmodel, models
 
 def get_statecalls(segments, query_states,
                     ntop=5000,

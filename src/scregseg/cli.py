@@ -563,7 +563,7 @@ def local_main(args):
                                                args.mincounts, args.maxcounts,
                                                args.trimcounts, args.minregioncounts)
 
-        scmodel = run_segmentation(data, args.nstates,
+        scmodel, models = run_segmentation(data, args.nstates,
                                    args.niter, args.randomseed,
                                    args.n_jobs)
 
@@ -578,7 +578,9 @@ def local_main(args):
 
         scmodel.segment(data, args.regions)
         scmodel.save(outputpath)
-
+        for s, m in zip(args.randomseed, models):
+           scmodel.save(outputpath + f'_rseed{s}')
+            
         logging.debug('summarize results ...')
         make_state_summary(scmodel, outputpath, args.labels)
         plot_normalized_emissions(scmodel, outputpath, args.labels)
