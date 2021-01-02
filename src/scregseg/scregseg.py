@@ -162,7 +162,7 @@ def get_statecalls(segments, query_states,
 
     if not isinstance(query_states, list):
         query_states = [query_states]
-
+    segments.loc[:, "ridx"] = np.arange(segments.shape[0])
     subset = segments[(segments.name.isin(query_states))
                       & (segments.Prob_max >= state_prob_threshold)
                       & (segments.readdepth >= minreads)].copy()

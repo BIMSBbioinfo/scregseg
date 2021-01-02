@@ -268,6 +268,21 @@ seg2bed.add_argument('--nregsperstate', dest='nregsperstate', type=int, default=
                      'need to be exported to achieve satisfying results for the downstream clustering.')
 seg2bed.add_argument('--statenames', dest='statenames', nargs='*',
                      help='List of states to export.')
+seg2bed.add_argument('--counts', dest='counts', nargs='+', type=str,
+                      help="Location of one or more input count matrices. Must span the same regions.")
+seg2bed.add_argument('--mincount', dest='mincounts', type=int,
+                      default=0, help='Minimum number of counts per cell. Default: 0')
+seg2bed.add_argument('--maxcount', dest='maxcounts', type=int, default=sys.maxsize,
+                      help='Maximum number of counts per cell. Default: maxint')
+seg2bed.add_argument('--minregioncount', dest='minregioncounts', type=int, default=0,
+                      help='Minimum number of counts per region. Default: 0')
+seg2bed.add_argument('--trimcount', dest='trimcounts', type=int,
+                      default=sys.maxsize,
+                      help='Maximum number of counts per matrix element. '
+                      'For instance, trimcount 1 amounts to binarization. Default: maxint')
+seg2bed.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format")
+#fsegment.add_argument('--topfrac', dest='topfrac', type=float, default=1., help='Fraction of top most covered regions to use.')
+
 
 
 
@@ -673,6 +688,21 @@ def local_main(args):
         # export the state calls as a bed file
         export_bed(subset, output,
                    individual_beds=args.individualbeds)
+
+        if len(args.counts)>0:
+            data = load_count_matrices(args.counts,
+                                       args.regions,
+                                       args.mincounts,
+                                       args.maxcounts, args.trimcounts,
+                                       0)
+            print(subset.head(), subset.shape)
+            for mat, datum in enumerate(data):
+                print(datum)
+                datum.cmat = datum.cmat[subset.ridx.values.tolist(),:]
+                datum.regions = datum.regions.iloc[subset.ridx.values.tolist(),:]
+                print(datum)
+                datum.export_counts(output[:-4] + f'_{mat}.mtx')
+             
 
     elif args.program == 'annotate':
         outputpath = os.path.join(args.storage, args.modelname)
