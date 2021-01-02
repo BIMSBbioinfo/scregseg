@@ -67,7 +67,7 @@ class Meme:
         with open(filename, 'w') as f:
             f.write(str(self))
 
-if janggu not is None:
+if janggu is not None:
     @janggu.inputlayer
     @janggu.outputdense('linear')
     def cnn_model(inputs, inp, oup, params):
