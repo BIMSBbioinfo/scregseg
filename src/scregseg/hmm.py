@@ -41,7 +41,7 @@ from .utils import fit_mixture
 from hmmlearn.utils import normalize, log_normalize
 from ._utils import _fast_dirmul_loglikeli_sp
 
-__all__ = ["MultinomialHMM", "DirMulHMM", "DirMulMixture"]
+__all__ = ["MultinomialHMM", "DirMulHMM"]
 
 
 def dirmul_loglikeli_naive(x, alpha):
