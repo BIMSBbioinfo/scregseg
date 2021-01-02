@@ -56,7 +56,9 @@ subparsers = parser.add_subparsers(dest='program')
 counts = subparsers.add_parser('make_tile', description='Make genome-wide tile')
 counts.add_argument('--bamfile', dest='bamfile', type=str, help="Location of an indexed BAM-file", required=True)
 counts.add_argument('--regions', dest='regions', type=str, help="Output location of regions in BED format. ", required=True)
-counts.add_argument('--binsize', dest='binsize', type=str, help="Location of regions in BED format. ", required=True)
+counts.add_argument('--binsize', dest='binsize', type=int, help="Binsize in bp. ", required=True)
+counts.add_argument('--keep_nonstandard', dest='keep_nonstandard', action='store_true',
+                        default=False, help='Whether to keep non-standard chromosomes (e.g. contigs). Default: False')
 
 counts = subparsers.add_parser('bam_to_counts', description='Make countmatrix')
 counts.add_argument('--bamfile', dest='bamfile', type=str, help="Location of an indexed BAM-file", required=True)
@@ -504,7 +506,8 @@ def local_main(args):
                             tag=args.barcodetag)
                            
     elif args.program == "make_tile":
-        make_counting_bins(args.bamfile, args.binsize, args.regions)
+        make_counting_bins(args.bamfile, args.binsize, args.regions,
+                           args.keep_nonstandard)
 
     elif args.program == 'filter_counts':
         logging.debug('Filter counts ...')

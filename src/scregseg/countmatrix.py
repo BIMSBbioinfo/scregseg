@@ -65,7 +65,8 @@ def load_count_matrices(countfiles, bedfile, mincounts,
             data[i].regions = data[i].regions.iloc[keepregions]
     return data
 
-def make_counting_bins(bamfile, binsize, storage=None):
+def make_counting_bins(bamfile, binsize, storage=None,
+                       keep_nonstandard=True):
     """ Genome intervals for binsize.
 
     For a given bam-file and binsize,
@@ -80,6 +81,8 @@ def make_counting_bins(bamfile, binsize, storage=None):
        Bin size
     storage : path or None
        Output path of the BED file.
+    keep_nonstandard : bool
+       If True, non-standard chromosomes are kept.
 
     Returns
     -------
@@ -97,7 +100,15 @@ def make_counting_bins(bamfile, binsize, storage=None):
     bed_content = [] #pd.DataFrame(columns=['chr', 'start', 'end'])
 
     for chrom in genomesize:
-
+        if not keep_nonstandard:
+            #if 'chrX' in chrom:
+            #    continue
+            #if 'chrY' in chrom:
+            #    continue
+            if 'chrM' in chrom:
+                continue
+            if '_' in chrom:
+                continue
         nbins = genomesize[chrom]//binsize + 1 if (genomesize[chrom] % binsize > 0) else 0
         starts = [int(i*binsize) for i in range(nbins)]
         ends = [min(int((i+1)*binsize), genomesize[chrom]) for i in range(nbins)]
