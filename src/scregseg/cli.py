@@ -403,8 +403,8 @@ def get_cell_grouping(table, barcodecolumn=0, groupcolumn=1):
     elif table.endswith('.tsv'):
         group2cellmap = pd.read_csv(table, sep='\t')
 
-    cell = df[df.columns[args.barcodecolumn].values
-    group = df[df.columns[args.groupcolumn].values
+    cell = df.columns[args.barcodecolumn].values
+    group = df.columns[args.groupcolumn].values
 
     return cell, groups
 
