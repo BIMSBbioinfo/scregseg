@@ -529,7 +529,7 @@ def local_main(args):
         cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
         cm = cm.filter(args.mincounts, args.maxcounts,
                   args.minregioncounts, binarize=False,
-                  maxcount=args.trimcounts)
+                  trimcount=args.trimcounts)
         cm.export_counts(args.outcounts)
 
     elif args.program == 'batchannot':
