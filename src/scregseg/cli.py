@@ -25,7 +25,6 @@ from scregseg.countmatrix import get_cell_annotation
 from scregseg.countmatrix import make_counting_bins
 from scregseg.countmatrix import load_count_matrices
 from scregseg.countmatrix import sparse_count_reads_in_regions
-from scregseg.hmm import MultinomialHMM
 from scregseg.hmm import DirMulHMM
 from scregseg import Scregseg
 from scregseg.scregseg import run_segmentation
