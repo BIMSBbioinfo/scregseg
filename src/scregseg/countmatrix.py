@@ -519,7 +519,7 @@ class CountMatrix:
         -------
         CountMatrix object
         """
-        return cls.create_from_countmatrix(countmatrixfile, regionannotation=None, cellannotation=None)
+        return cls.create_from_countmatrix(countmatrixfile, regionannotation=regionannotation, cellannotation=cellannotation)
 
     @classmethod
     def create_from_countmatrix(cls, countmatrixfile, regionannotation=None, cellannotation=None):
@@ -542,7 +542,7 @@ class CountMatrix:
             # try to infer cell annotation file
             cannot = get_cell_annotation(countmatrixfile)
         else:
-            cannot = get_cell_annotation(cellannotation)
+            cannot = get_cell_annotation(cellannotation, suffix='')
 
         if 'cell' not in cannot.columns:
             cannot['cell'] = cannot[cannot.columns[0]]
