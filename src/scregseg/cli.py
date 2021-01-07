@@ -277,6 +277,8 @@ seg2bed.add_argument('--trimcount', dest='trimcounts', type=int,
                       help='Maximum number of counts per matrix element. '
                       'For instance, trimcount 1 amounts to binarization. Default: maxint')
 seg2bed.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format")
+seg2bed.add_argument('--labels', dest='labels', nargs='*', type=str,
+                      help="Label names for the countmatrices")
 #fsegment.add_argument('--topfrac', dest='topfrac', type=float, default=1., help='Fraction of top most covered regions to use.')
 
 
@@ -395,6 +397,11 @@ fragmentsize.add_argument('--output', dest='output', type=str,
 
 
 
+def _get_labels(mtx, labels):
+    if len(labels)==len(mtx):
+        return labels
+    else:
+        return [str(i) for i in range(len(mtx))]
 
 def make_folders(output):
     """ Create folder """
@@ -686,16 +693,17 @@ def local_main(args):
                    individual_beds=args.individualbeds)
 
         if len(args.counts)>0:
+            labels = _get_labels(args.counts, args.labels)
             data = load_count_matrices(args.counts,
                                        args.regions,
                                        args.mincounts,
                                        args.maxcounts, args.trimcounts,
                                        0)
             print(subset.head(), subset.shape)
-            for mat, datum in enumerate(data):
+            for mat, datum in zip(labels, data):
                 print(datum)
-                datum.cmat = datum.cmat[subset.ridx.values.tolist(),:]
-                datum.regions = datum.regions.iloc[subset.ridx.values.tolist(),:]
+                datum.adata = datum.adata[subset.ridx.values.tolist(),:]
+                #datum.regions = datum.regions.iloc[subset.ridx.values.tolist(),:]
                 print(datum)
                 datum.export_counts(output[:-4] + f'_{mat}.mtx')
              
