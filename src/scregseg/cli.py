@@ -414,15 +414,29 @@ def save_score(scmodel, data, output):
     with open(os.path.join(output, "summary", "score.txt"), 'w') as f:
         f.write('{}\n'.format(score))
 
+def get_cells(table, barcodecolumn=0):
+    """ Extract cell-group mapping"""
+    if table.endswith('.csv'):
+        group2cellmap = pd.read_csv(table, sep=',')
+    elif table.endswith('.tsv'):
+        group2cellmap = pd.read_csv(table, sep='\t')
+    elif table.endswith('.bct'):
+        group2cellmap = pd.read_csv(table, sep='\t')
+
+    cell = group2cellmap[group2cellmap.columns[barcodecolumn]].values
+    return cell
+
 def get_cell_grouping(table, barcodecolumn=0, groupcolumn=1):
     """ Extract cell-group mapping"""
     if table.endswith('.csv'):
         group2cellmap = pd.read_csv(table, sep=',')
     elif table.endswith('.tsv'):
         group2cellmap = pd.read_csv(table, sep='\t')
+    elif table.endswith('.bct'):
+        group2cellmap = pd.read_csv(table, sep='\t')
 
-    cell = df.columns[args.barcodecolumn].values
-    group = df.columns[args.groupcolumn].values
+    cell = group2cellmap[group2cellmap.columns[barcodecolumn]].values
+    group = group2cellmap[group2cellmap.columns[groupcolumn]].values
 
     return cell, groups
 
@@ -556,7 +570,7 @@ def local_main(args):
         logging.debug('Subset cells ...')
         cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
 
-        cells,  _ = get_cell_grouping(args.subset, args.barcodecolumn)
+        cells = get_cells(args.subset, args.barcodecolumn)
         pscm = cm.subset(cells)
         pscm.export_counts(args.outcounts)
 
