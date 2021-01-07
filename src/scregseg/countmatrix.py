@@ -16,6 +16,8 @@ from pysam import AlignmentFile
 from collections import Counter
 from scipy.sparse import dok_matrix
 from scipy.sparse import lil_matrix
+from anndata import AnnData
+from anndata import read_h5ad
 
 from scregseg.bam_utils import Barcoder
 from scregseg.bam_utils import fragmentlength_in_regions
@@ -503,6 +505,21 @@ def write_cannot_table(filename, table):
 class CountMatrix:
 
     @classmethod
+    def from_h5ad(cls, countmatrixfile):
+        """ Load Countmatrix from matrix market format file.
+
+        Parameters
+        ----------
+        countmatrixfile : str
+            anndata storage
+        Returns
+        -------
+        CountMatrix object
+        """
+        adata = read_h5ad(countmatrixfile)
+        return cls(adata.X, adata.obs, adata.var)
+
+    @classmethod
     def from_mtx(cls, countmatrixfile, regionannotation=None, cellannotation=None):
         """ Load Countmatrix from matrix market format file.
 
@@ -680,17 +697,25 @@ class CountMatrix:
         if not issparse(countmatrix):
             countmatrix = csr_matrix(countmatrix)
 
-        self.cmat = countmatrix.tocsr()
-        self.cannot = cellannotation
-        self.regions = regionannotation
+        self.adata = AnnData(countmatrix.tocsr(), obs=regionannotation, var=cellannotation)
         assert self.cmat.shape[0] == len(self.regions)
         assert self.cmat.shape[1] == len(self.cannot)
 
+    @property
+    def cmat(self):
+        return self.adata.X
+
+    @property
+    def cannot(self):
+        return self.adata.var
+
+    @property
+    def regions(self):
+        return self.adata.obs
+
     def remove_chroms(self, chroms):
         """Remove chromsomes."""
-        idx = self.regions.chrom[~self.regions.chrom.isin(chroms)].index
-        self.regions = self.regions[~self.regions.chrom.isin(chroms)]
-        self.cmat = self.cmat[idx]
+        self.adata = self.adata[~self.adata.obs.chrom.isin(chroms),:]
         return self
 
     @property
@@ -717,17 +742,15 @@ class CountMatrix:
         -------
         CountMatrix object
         """
-        newcannot = []
         for i, cm in enumerate(cms):
-            ca = cm.cannot.copy()
-            if 'sample' not in ca.columns:
+            if 'sample' not in cm.adata.var.columns:
                 if samplelabel is not None:
-                    ca['sample'] = samplelabel[i]
+                    cm.adata.var.loc[:,'sample'] = samplelabel[i]
                 else:
-                    ca['sample'] = 'sample_{}'.format(i)
-            newcannot.append(ca)
-        cannot = pd.concat(newcannot, axis=0)
-        return cls(hstack([cm.cmat for cm in cms]), cms[0].regions, cannot)
+                    cm.adata.var.loc[:,'sample'] = 'sample_{}'.format(i)
+        
+        adata = ad.concat([cm.adata for cm in cms], axis=1)
+        return cls(adata.X, obs=adata.obs, var=adata.var)
 
     def filter(self, minreadsincell=None, maxreadsincell=None,
                             minreadsinregion=None, maxreadsinregion=None,
@@ -804,29 +827,28 @@ class CountMatrix:
         if maxreadsinregion is None:
             maxreadsinregion = sys.maxsize
 
-        cmat = self.cmat.copy()
+        adata = self.adata.copy()
         if binarize:
-            cmat.data[self.cmat.data > 0] = 1
+            adata.X.data[adata.X.data > 0] = 1
 
         if trimcount is not None and trimcount > 0:
-            cmat.data[self.cmat.data > trimcount] = trimcount
+            adata.X.data[adata.X.data > trimcount] = trimcount
 
-        cellcounts = cmat.sum(axis=0)
+        cellcounts = np.asarray(adata.X.sum(axis=0)).flatten()
+        adata.var.loc[:,'nFrags'] = cellcounts
 
-        keepcells = np.where((cellcounts >= minreadsincell) &
-                             (cellcounts <= maxreadsincell) &
-                             (self.cannot.cell.values != 'dummy'))[1]
+        adata = adata[:, (adata.var.nFrags >= minreadsincell) &
+                         (adata.var.nFrags <= maxreadsincell) &
+                         (adata.var.cell != 'dummy')].copy()
 
-        cmat = cmat[:, keepcells]
-        cannot = self.cannot.iloc[keepcells].copy()
+        regioncounts = np.asarray(adata.X.sum(axis=1)).flatten()
+        print(regioncounts)
+        adata.obs.loc[:,'nFrags'] = regioncounts
+        print(adata.obs.head())
 
-        regioncounts = cmat.sum(axis=1)
-        keepregions = np.where((regioncounts >= minreadsinregion) &
-                               (regioncounts <= maxreadsinregion))[0]
-
-        cmat = cmat[keepregions, :]
-        regions = self.regions.iloc[keepregions].copy()
-        return CountMatrix(cmat, regions, cannot)
+        adata = adata[(adata.obs.nFrags >= minreadsinregion) &
+                      (adata.obs.nFrags <= maxreadsinregion), :].copy()
+        return CountMatrix(adata.X, adata.obs, adata.var)
 
     def pseudobulk(self, cell, group):
         """ Compute pseudobulk counts.
@@ -850,17 +872,12 @@ class CountMatrix:
         cnts = np.zeros((self.n_regions, len(grouplabels)))
 
         for i, glab in enumerate(grouplabels):
-            ids = self.cannot.cell.isin(cell[group == glab])
-            ids = np.arange(self.cannot.shape[0])[ids]
+            ids = self.adata.var.cell.isin(cell[group == glab])
+            ids = np.arange(self.adata.shape[1])[ids]
             cnts[:, i:(i+1)] = self.cmat[:, ids].sum(1)
 
         cannot = pd.DataFrame(grouplabels, columns=['cell'])
         return CountMatrix(csr_matrix(cnts), self.regions, cannot)
-
-#    def __getitems__(self, idx):
-#        if issparse(cmat.cmat):
-#            return cmat.cmat[idx]
-#        return csr_matrix(cmat.cmat[idx])
 
     def subset(self, cell):
         """ Subset countmatrix
@@ -886,21 +903,29 @@ class CountMatrix:
 
         return CountMatrix(csr_matrix(cnts), self.regions, cannot)
 
+    def split(self, samplename):
+        cms = []
+        names = self.adata.var.loc[:,samplename].unique()
+        for name in names:
+            ada = self.adata[:, self.adata.var[samplename]==name]
+            cms.append(CountMatrix(ada.X, ada.obs, ada.var))
+        return cms
+
     def __getitem__(self, ireg):
         if issparse(cmat.cmat):
             return cmat.cmat[idx]
         return csr_matrix(cmat.cmat[idx])
 
     def __repr__(self):
-        return "{} x {} CountMatrix with {} entries".format(self.cmat.shape[0], self.cmat.shape[1], self.cmat.nnz)
+        return "{} x {} CountMatrix with {} entries".format(self.adata.shape[0], self.adata.shape[1], self.adata.X.nnz)
 
     @property
     def n_cells(self):
-        return self.cmat.shape[1]
+        return self.adata.shape[1]
 
     @property
     def n_regions(self):
-        return self.cmat.shape[0]
+        return self.adata.shape[0]
 
     @property
     def shape(self):
@@ -936,6 +961,8 @@ class CountMatrix:
             self.to_mtx(filename)
         elif filename.endswith('.npz'):
             self.to_npz(filename)
+        elif filename.endswith('.h5ad'):
+            self.to_h5ad(filename)
         else:
             # default to mtx format
             self.to_mtx(filename)
@@ -967,3 +994,13 @@ class CountMatrix:
         np.savez(filename, self.cmat.data, self.cmat.indices, self.cmat.indptr)
         save_cellannotation(filename, self.cannot)
 
+    def to_h5ad(self, filename):
+        """
+        Exports the countmatrix in npz format
+
+        Parameters
+        ----------
+        filename : str
+            Output file name.
+        """
+        self.adata.write(filename)
