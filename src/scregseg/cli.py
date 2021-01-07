@@ -234,9 +234,9 @@ seg2bed.add_argument('--storage', dest='storage', type=str, help="Location of th
 seg2bed.add_argument('--output', dest='output', type=str, help='Output BED file containing the state calls.', required=True)
 seg2bed.add_argument('--method', dest='method', type=str, default='rarest',
                      help='Method for selecting states for exporting:'
-                     'rarest exports the --nsmallest states, '
+                     'rarest exports the --nstates states, '
                      'manuelselect exports a list of manually specified states given by --statenames,'
-                     'nucfree exports the --nlargest states most enriched for nucleosome free reads (<=150bp),'
+                     'nucfree exports the --nstates states most enriched for nucleosome free reads (<=150bp),'
                      'abundancethreshold selects the states with maximum state abundance given by --max_state_abundance. Default: rarest',
                      choices=['rarest', 'nucfree', 'tvdist', 'manuelselect', 'abundancethreshold'])
 seg2bed.add_argument('--individual', dest='individualbeds', action='store_true', default=False,
@@ -257,11 +257,8 @@ seg2bed.add_argument('--max_state_abundance', dest='max_state_abundance', type=f
          'A good choice for this is a value that is slightly lower than 1./n_state. Default=1.')
 seg2bed.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name. Default: dirmulhmm')
 
-seg2bed.add_argument('--nsmallest', dest='nsmallest', type=int, default=-1,
-                     help='Number of most rare states to export. Default: -1 (all states are considered).')
-seg2bed.add_argument('--nlargest', dest='nlargest', type=int, default=-1,
-                     help='Number of most nucleosome-free fragment enriched '
-                     'states to export. Default: -1 (all states are considered).')
+seg2bed.add_argument('--nstates', dest='nstates', type=int, default=-1,
+                     help='Number of states to export. Default: -1 (all states are considered).')
 seg2bed.add_argument('--nregsperstate', dest='nregsperstate', type=int, default=-1,
                      help='Number of regions per state to export. Usually, only a subset of representative state calls'
                      'need to be exported to achieve satisfying results for the downstream clustering.')
@@ -635,21 +632,21 @@ def local_main(args):
                 raise ValueError("--method manuelselect also requires --statenames <list state names>")
             query_states = args.statenames
         elif args.method == "rarest":
-            if args.nsmallest <= 0:
-                raise ValueError("--method rarest also requires --nsmallest <int>")
+            if args.nstates <= 0:
+                raise ValueError("--method rarest also requires --nstates <int>")
             query_states = pd.Series(scmodel.model.get_stationary_distribution(), index=['state_{}'.format(i) for i in range(scmodel.n_components)])
-            query_states = query_states.nsmallest(args.nsmallest).index.tolist()
+            query_states = query_states.nsmallest(args.nstates).index.tolist()
         elif args.method == "abundancethreshold":
             query_states = ['state_{}'.format(i) for i, p in enumerate(scmodel.model.get_stationary_distribution()) \
                             if p<=args.max_state_abundance]
         elif args.method == "nucfree":
             if 'nf_prop' not in scmodel._segments.columns:
                 raise ValueError("'scregseg fragmentsize' must be run before.")
-            if args.nlargest <= 0:
-                raise ValueError("--method nucfree also requires --nlargest <int>")
+            if args.nstates <= 0:
+                raise ValueError("--method nucfree also requires --nstates <int>")
             sdf.nf_prop = sdf.nf_prop.fillna(0.0)
             nrdf = sdf[['name', 'nf_prop']].groupby('name').mean()
-            query_states = nrdf.nlargest(args.nlargest,
+            query_states = nrdf.nlargest(args.nstates,
                                          'nf_prop').index.tolist()
 
             sdf.readdepth = sdf.readdepth*sdf.nf_prop
@@ -663,7 +660,7 @@ def local_main(args):
             query_states = pd.Series(tvdist,
                                      index=['state_{}'.format(i) \
                                             for i in range(scmodel.n_components)])
-            query_states = query_states.nlargest(args.nlargest).index.tolist()
+            query_states = query_states.nlargest(args.nstates).index.tolist()
             
         logging.debug("method={}: {}".format(args.method,query_states))
 
