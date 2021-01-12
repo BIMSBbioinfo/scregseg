@@ -114,7 +114,7 @@ batchannot.add_argument('--batches', dest='batches', type=str, nargs='+',
 
 filtering = subparsers.add_parser('filter_counts', description='Filter countmatrix to remove poor quality cells')
 filtering.add_argument('--incounts', dest='incounts', type=str, help="Location of input count matrix", required=True)
-filtering.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
+filtering.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format")
 filtering.add_argument('--outcounts', dest='outcounts', type=str, help="Location of output count matrix", required=True)
 filtering.add_argument('--mincount', dest='mincounts', type=int,
                        default=0, help='Minimum number of counts per cell. Default: 0')
@@ -398,6 +398,8 @@ fragmentsize.add_argument('--output', dest='output', type=str,
 
 
 def _get_labels(mtx, labels):
+    if labels is None:
+        labels = []
     if len(labels)==len(mtx):
         return labels
     else:
@@ -543,7 +545,10 @@ def local_main(args):
 
     elif args.program == 'filter_counts':
         logging.debug('Filter counts ...')
-        cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
+        if args.incounts.endswith('.h5ad'):
+            cm = CountMatrix.from_h5ad(args.incounts)
+        else:
+            cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
         cm = cm.filter(args.mincounts, args.maxcounts,
                   args.minregioncounts, binarize=False,
                   trimcount=args.trimcounts)
@@ -717,7 +722,6 @@ def local_main(args):
             for mat, datum in zip(labels, data):
                 print(datum)
                 datum.adata = datum.adata[subset.ridx.values.tolist(),:]
-                #datum.regions = datum.regions.iloc[subset.ridx.values.tolist(),:]
                 print(datum)
                 datum.export_counts(output[:-4] + f'_{mat}.mtx')
              

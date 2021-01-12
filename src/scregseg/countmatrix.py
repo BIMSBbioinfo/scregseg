@@ -42,7 +42,11 @@ def load_count_matrices(countfiles, bedfile, mincounts,
     """
     data = []
     for cnt in countfiles:
-        cm = CountMatrix.create_from_countmatrix(cnt, bedfile)
+        if cnt.endswith('.h5ad'):
+            cm = CountMatrix.from_h5ad(cnt)
+        else:
+            cm = CountMatrix.create_from_countmatrix(cnt, bedfile)
+        #cm = CountMatrix.create_from_countmatrix(cnt, bedfile)
         cm = cm.filter(mincounts, maxcounts,
                   binarize=False, trimcount=trimcounts)
 
