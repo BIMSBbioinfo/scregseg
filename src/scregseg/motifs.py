@@ -5,17 +5,19 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 #os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 import tempfile
 import pandas as pd
-from keras.layers import Conv2D, MaxPooling2D, Dense, GlobalMaxPooling2D, Dropout
-from janggu.data import Bioseq
-from janggu.data import Cover
-from janggu.data import ReduceDim
-from janggu import inputlayer, outputdense
-from janggu import Janggu
-from janggu import DnaConv2D
+try:
+    from keras import layers
+except:
+    layers = None
+    
+try:
+    import janggu
+except:
+    janggu = None
+    
 import numpy as np
 from scipy.special import logsumexp
 
-from janggu import Scorer
 from sklearn.metrics import r2_score
 from keras import Model
 from keras.callbacks import EarlyStopping
@@ -65,26 +67,27 @@ class Meme:
         with open(filename, 'w') as f:
             f.write(str(self))
 
-@inputlayer
-@outputdense('linear')
-def cnn_model(inputs, inp, oup, params):
-    with inputs.use('dna') as dna_in:
-        layer = dna_in
-    #layer = Dropout(.2)(layer)
-    layer = DnaConv2D(Conv2D(100, (21, 1), activation='sigmoid'))(layer)
-    layer = GlobalMaxPooling2D()(layer)
-    layer = Dropout(.5)(layer)
-    return inputs, layer
-
-@inputlayer
-@outputdense('sigmoid')
-def cnn_model_binary(inputs, inp, oup, params):
-    with inputs.use('dna') as dna_in:
-        layer = dna_in
-    layer = DnaConv2D(Conv2D(100, (21, 1), activation='sigmoid'))(layer)
-    layer = GlobalMaxPooling2D()(layer)
-    layer = Dropout(.5)(layer)
-    return inputs, layer
+if janggu is not None:
+    @janggu.inputlayer
+    @janggu.outputdense('linear')
+    def cnn_model(inputs, inp, oup, params):
+        with inputs.use('dna') as dna_in:
+            layer = dna_in
+        #layer = Dropout(.2)(layer)
+        layer = janggu.DnaConv2D(layers.Conv2D(100, (21, 1), activation='sigmoid'))(layer)
+        layer = layers.GlobalMaxPooling2D()(layer)
+        layer = layers.Dropout(.5)(layer)
+        return inputs, layer
+    
+    @janggu.inputlayer
+    @janggu.outputdense('sigmoid')
+    def cnn_model_binary(inputs, inp, oup, params):
+        with inputs.use('dna') as dna_in:
+            layer = dna_in
+        layer = janggu.DnaConv2D(layers.Conv2D(100, (21, 1), activation='sigmoid'))(layer)
+        layer = layers.GlobalMaxPooling2D()(layer)
+        layer = layers.Dropout(.5)(layer)
+        return inputs, layer
 
 
 class MotifExtractor:
@@ -93,6 +96,12 @@ class MotifExtractor:
                  ntop=15000, nbottom=15000,
                  ngap=70000, flank=250, nmotifs=10,
                  cnn=None):
+        if janggu is None:
+            raise Exception("janggu is not available, but required for this functionality. "
+                            " Please run: pip install janggu[tf2]")
+        if keras is None:
+            raise Exception("keras is not available, but required for this functionality. "
+                            " Please run: pip install keras")
         self.ntop = ntop
         self.refgenome = refgenome
         self.nmotifs = nmotifs
@@ -144,14 +153,14 @@ class MotifExtractor:
                  'end', 'pscore']].to_csv(roi, sep='\t',
                 header=False, index=False)
 
-            DNA = Bioseq.create_from_refgenome('dna',
+            DNA = janggu.data.Bioseq.create_from_refgenome('dna',
                                                refgenome=self.refgenome,
                                                roi=roi,
                                                binsize=binsize,
                                                flank=self.flank,
                                                cache=False)
 
-            LABELS = ReduceDim(Cover.create_from_bed('score',
+            LABELS = janggu.data.ReduceDim(janggu.data.Cover.create_from_bed('score',
                                                      bedfiles=roi,
                                                      roi=roi,
                                                      binsize=binsize,
@@ -159,7 +168,7 @@ class MotifExtractor:
                                                      resolution=binsize))
 
             # fit the model
-            model = Janggu.create(self.cnn, (),
+            model = janggu.Janggu.create(self.cnn, (),
                                   inputs=DNA,
                                   outputs=LABELS,
                                   name='simple_cnn_{}'.format(process_state))
@@ -199,6 +208,12 @@ class MotifExtractor2:
                  ntop=15000,
                  flank=250, nmotifs=10,
                  cnn=None):
+        if janggu is None:
+            raise Exception("janggu is not available, but required for this functionality. "
+                            " Please run: pip install janggu[tf2]")
+        if keras is None:
+            raise Exception("keras is not available, but required for this functionality. "
+                            " Please run: pip install keras")
         self.ntop = ntop
         self.refgenome = refgenome
         self.nmotifs = nmotifs
@@ -255,14 +270,14 @@ class MotifExtractor2:
             sdf[['chrom', 'start', 'end', 'pscore']].to_csv(roi, sep='\t',
                 header=False, index=False)
 
-            DNA = Bioseq.create_from_refgenome('dna',
+            DNA = janggu.data.Bioseq.create_from_refgenome('dna',
                                                refgenome=self.refgenome,
                                                roi=roi,
                                                binsize=binsize,
                                                flank=self.flank,
                                                cache=False)
 
-            LABELS = ReduceDim(Cover.create_from_bed('score',
+            LABELS = janggu.data.ReduceDim(janggu.data.Cover.create_from_bed('score',
                                                      bedfiles=roi,
                                                      roi=roi,
                                                      binsize=binsize,
@@ -270,7 +285,7 @@ class MotifExtractor2:
                                                      resolution=binsize))
 
             # fit the model
-            model = Janggu.create(self.cnn, (),
+            model = janggu.Janggu.create(self.cnn, (),
                                   inputs=DNA,
                                   outputs=LABELS,
                                   name='simple_cnn2_{}'.format(process_state))

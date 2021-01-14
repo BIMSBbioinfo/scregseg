@@ -25,12 +25,12 @@ from scregseg.countmatrix import get_cell_annotation
 from scregseg.countmatrix import make_counting_bins
 from scregseg.countmatrix import load_count_matrices
 from scregseg.countmatrix import sparse_count_reads_in_regions
-from scregseg.hmm import MultinomialHMM
 from scregseg.hmm import DirMulHMM
 from scregseg import Scregseg
 from scregseg.scregseg import run_segmentation
 from scregseg.scregseg import get_statecalls
 from scregseg.utils import fragmentlength_by_state
+from scregseg.bam_utils import make_pseudobulk_bam
 from scregseg.scregseg import export_bed
 from scregseg.motifs import MotifExtractor
 from scregseg.motifs import MotifExtractor2
@@ -55,7 +55,9 @@ subparsers = parser.add_subparsers(dest='program')
 counts = subparsers.add_parser('make_tile', description='Make genome-wide tile')
 counts.add_argument('--bamfile', dest='bamfile', type=str, help="Location of an indexed BAM-file", required=True)
 counts.add_argument('--regions', dest='regions', type=str, help="Output location of regions in BED format. ", required=True)
-counts.add_argument('--binsize', dest='binsize', type=int, help="Location of regions in BED format. ", required=True)
+counts.add_argument('--binsize', dest='binsize', type=int, help="Binsize in bp. ", required=True)
+counts.add_argument('--keep_nonstandard', dest='keep_nonstandard', action='store_true',
+                        default=False, help='Whether to keep non-standard chromosomes (e.g. contigs). Default: False')
 
 counts = subparsers.add_parser('fragments_to_counts', description='Make countmatrix')
 counts.add_argument('--fragmentfile', dest='fragmentfile', type=str, help="Location of a fragments.tsv.gz file (output by cellranger)", required=True)
@@ -69,7 +71,6 @@ counts.add_argument('--cellgroup', dest='cellgroup', type=str,
                          "If specified, a pseudo-bulk count matrix will be created. "
                          "The table must have at least two columns, the first specifying the barcode name "
                          " and the second specifying the group label.")
-
 
 counts = subparsers.add_parser('bam_to_counts', description='Make countmatrix')
 counts.add_argument('--bamfile', dest='bamfile', type=str, help="Location of an indexed BAM-file", required=True)
@@ -94,6 +95,30 @@ counts.add_argument('--mode', dest='mode', type=str, default='midpoint',
                     'independently or once if either end is located in the interval.'
                     ' Options are midpoint, countboth and eitherend. '
                     ' Default: mode=midpoint', choices=['eitherend', 'midpoint', 'countboth'])
+counts.add_argument('--barcodecolumn', dest='barcodecolumn', type=int,
+                    help='Column index of barcode column (Zero-based) in the cellgroup table. Default=0', default=0) 
+counts.add_argument('--groupcolumn', dest='groupcolumn', type=int,
+                    help='Column index of cell group/cluster column (Zero-based) in the cellgroup table. Default=1', default=1) 
+
+
+bampseudobulk = subparsers.add_parser('make_pseudobulk_bam', description='Make pseudobulk tracks in BAM format')
+bampseudobulk.add_argument('--bamfile', dest='bamfile', type=str, help="Location of an indexed BAM-file", required=True)
+bampseudobulk.add_argument('--barcodetag', dest='barcodetag', type=str,
+                    help="Barcode encoding tag. For instance, CB or RG depending on which tag represents "
+             "the barcode. If the barcode is encoded as prefix in the read name "
+             "separated by '.' or ':' use '.' or ':'.", default='CB')
+
+bampseudobulk.add_argument('--outdir', dest='outdir', type=str,
+                   help="Output directory in which the pseudobulk BAM files are stored.", required=True)
+bampseudobulk.add_argument('--cellgroup', dest='cellgroup', type=str,
+                    help="(Optional) Location of table (csv or tsv) defining groups of cells. "
+                         "If specified, a pseudo-bulk count matrix will be created. "
+                         "The table must have at least two columns, the first specifying the barcode name "
+                         " and the second specifying the group label.")
+bampseudobulk.add_argument('--barcodecolumn', dest='barcodecolumn', type=int,
+                           help='Column index of barcode column (Zero-based) in the cellgroup table. Default=0', default=0) 
+bampseudobulk.add_argument('--groupcolumn', dest='groupcolumn', type=int,
+                           help='Column index of cell group/cluster column (Zero-based) in the cellgroup table. Default=1', default=1) 
 
 batchannot = subparsers.add_parser('sampleannot', description='Add sample annotation to a count matrix')
 batchannot.add_argument('--counts', dest='counts', type=str, help="Location of a count matrix.", required=True)
@@ -125,7 +150,8 @@ merge.add_argument('--regions', dest='regions', type=str,
 merge.add_argument('--outcounts', dest='outcounts', type=str,
                    help="Location of the merged output count matrix", required=True)
 
-groupcells = subparsers.add_parser('groupcells', description='Collapse cells within pre-defined groups (make pseudo-bulk).')
+groupcells = subparsers.add_parser('groupcells', description='Collapse cells within pre-defined groups (make pseudo-bulk). '
+                                                             'This function operates on countmatrices.')
 groupcells.add_argument('--incounts', dest='incounts', type=str, help="Location of an input count matrix", required=True)
 groupcells.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
 groupcells.add_argument('--outcounts', dest='outcounts', type=str,
@@ -133,6 +159,10 @@ groupcells.add_argument('--outcounts', dest='outcounts', type=str,
 groupcells.add_argument('--cellgroup', dest='cellgroup', type=str,
                         help="Location of a table defining cell groups within which to aggregate the reads.",
                         required=True)
+groupcells.add_argument('--barcodecolumn', dest='barcodecolumn', type=int,
+                    help='Column index of barcode column (Zero-based) in the cellgroup table. Default=0', default=0) 
+groupcells.add_argument('--groupcolumn', dest='groupcolumn', type=int,
+                    help='Column index of cell group/cluster column (Zero-based) in the cellgroup table. Default=1', default=1) 
 
 subset = subparsers.add_parser('subset', description='Subset cells by cell name.')
 subset.add_argument('--incounts', dest='incounts', type=str, help="Location of an input count matrix", required=True)
@@ -142,6 +172,8 @@ subset.add_argument('--subset', dest='subset', type=str,
                     help="Location of a table defining "
                     "cell names which to retain for the output count matrix.",
                     required=True)
+subset.add_argument('--barcodecolumn', dest='barcodecolumn', type=int,
+                    help='Column index of barcode column (Zero-based) in the subset table. Default=0', default=0) 
 
 # score a model from scratch
 fsegment = subparsers.add_parser('fit_segment', description='Fit a Scregseg segmentation model.')
@@ -215,9 +247,9 @@ seg2bed.add_argument('--storage', dest='storage', type=str, help="Location of th
 seg2bed.add_argument('--output', dest='output', type=str, help='Output BED file containing the state calls.', required=True)
 seg2bed.add_argument('--method', dest='method', type=str, default='rarest',
                      help='Method for selecting states for exporting:'
-                     'rarest exports the --nsmallest states, '
+                     'rarest exports the --nstates states, '
                      'manuelselect exports a list of manually specified states given by --statenames,'
-                     'nucfree exports the --nlargest states most enriched for nucleosome free reads (<=150bp),'
+                     'nucfree exports the --nstates states most enriched for nucleosome free reads (<=150bp),'
                      'abundancethreshold selects the states with maximum state abundance given by --max_state_abundance. Default: rarest',
                      choices=['rarest', 'nucfree', 'tvdist', 'manuelselect', 'abundancethreshold'])
 seg2bed.add_argument('--individual', dest='individualbeds', action='store_true', default=False,
@@ -238,16 +270,30 @@ seg2bed.add_argument('--max_state_abundance', dest='max_state_abundance', type=f
          'A good choice for this is a value that is slightly lower than 1./n_state. Default=1.')
 seg2bed.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name. Default: dirmulhmm')
 
-seg2bed.add_argument('--nsmallest', dest='nsmallest', type=int, default=-1,
-                     help='Number of most rare states to export. Default: -1 (all states are considered).')
-seg2bed.add_argument('--nlargest', dest='nlargest', type=int, default=-1,
-                     help='Number of most nucleosome-free fragment enriched '
-                     'states to export. Default: -1 (all states are considered).')
+seg2bed.add_argument('--nstates', dest='nstates', type=int, default=-1,
+                     help='Number of states to export. Default: -1 (all states are considered).')
 seg2bed.add_argument('--nregsperstate', dest='nregsperstate', type=int, default=-1,
                      help='Number of regions per state to export. Usually, only a subset of representative state calls'
                      'need to be exported to achieve satisfying results for the downstream clustering.')
 seg2bed.add_argument('--statenames', dest='statenames', nargs='*',
                      help='List of states to export.')
+seg2bed.add_argument('--counts', dest='counts', nargs='+', type=str,
+                      help="Location of one or more input count matrices. Must span the same regions.")
+seg2bed.add_argument('--mincount', dest='mincounts', type=int,
+                      default=0, help='Minimum number of counts per cell. Default: 0')
+seg2bed.add_argument('--maxcount', dest='maxcounts', type=int, default=sys.maxsize,
+                      help='Maximum number of counts per cell. Default: maxint')
+seg2bed.add_argument('--minregioncount', dest='minregioncounts', type=int, default=0,
+                      help='Minimum number of counts per region. Default: 0')
+seg2bed.add_argument('--trimcount', dest='trimcounts', type=int,
+                      default=sys.maxsize,
+                      help='Maximum number of counts per matrix element. '
+                      'For instance, trimcount 1 amounts to binarization. Default: maxint')
+seg2bed.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format")
+seg2bed.add_argument('--labels', dest='labels', nargs='*', type=str,
+                      help="Label names for the countmatrices")
+#fsegment.add_argument('--topfrac', dest='topfrac', type=float, default=1., help='Fraction of top most covered regions to use.')
+
 
 
 
@@ -364,6 +410,11 @@ fragmentsize.add_argument('--output', dest='output', type=str,
 
 
 
+def _get_labels(mtx, labels):
+    if len(labels)==len(mtx):
+        return labels
+    else:
+        return [str(i) for i in range(len(mtx))]
 
 def make_folders(output):
     """ Create folder """
@@ -376,17 +427,29 @@ def save_score(scmodel, data, output):
     with open(os.path.join(output, "summary", "score.txt"), 'w') as f:
         f.write('{}\n'.format(score))
 
-def get_cell_grouping(table):
+def get_cells(table, barcodecolumn=0):
     """ Extract cell-group mapping"""
     if table.endswith('.csv'):
-        group2cellmap = pd.read_csv(table, sep=',', usecols=[0,1])
+        group2cellmap = pd.read_csv(table, sep=',')
     elif table.endswith('.tsv'):
-        group2cellmap = pd.read_csv(table, sep='\t', usecols=[0,1])
+        group2cellmap = pd.read_csv(table, sep='\t')
+    elif table.endswith('.bct'):
+        group2cellmap = pd.read_csv(table, sep='\t')
 
-    group2cellmap.columns = ['cells', 'groups']
+    cell = group2cellmap[group2cellmap.columns[barcodecolumn]].values
+    return cell
 
-    cell = group2cellmap.cells.values
-    groups = group2cellmap.groups.values
+def get_cell_grouping(table, barcodecolumn=0, groupcolumn=1):
+    """ Extract cell-group mapping"""
+    if table.endswith('.csv'):
+        group2cellmap = pd.read_csv(table, sep=',')
+    elif table.endswith('.tsv'):
+        group2cellmap = pd.read_csv(table, sep='\t')
+    elif table.endswith('.bct'):
+        group2cellmap = pd.read_csv(table, sep='\t')
+
+    cell = group2cellmap[group2cellmap.columns[barcodecolumn]].values
+    group = group2cellmap[group2cellmap.columns[groupcolumn]].values
 
     return cell, groups
 
@@ -472,7 +535,7 @@ def local_main(args):
                                     mode=args.mode)
 
         if args.cellgroup is not None:
-            cells,  groups = get_cell_grouping(args.cellgroup)
+            cells,  groups = get_cell_grouping(args.cellgroup, args.barcodecolumn, args.groupcolumn)
             cm = cm.pseudobulk(cells, groups)
 
         cm.export_counts(args.counts)
@@ -489,15 +552,26 @@ def local_main(args):
 
         cm.export_counts(args.counts)
 
+    elif args.program == 'make_pseudobulk_bam':
+
+        logging.debug('Make pseudobulk bam-files')
+
+        cells, groups = get_cell_grouping(args.cellgroup, args.barcodecolumn, args.groupcolumn)
+
+        make_pseudobulk_bam(args.bamfile, args.outdir,
+                            cells, group,
+                            tag=args.barcodetag)
+                           
     elif args.program == "make_tile":
-        make_counting_bins(args.bamfile, args.binsize, args.regions)
+        make_counting_bins(args.bamfile, args.binsize, args.regions,
+                           args.keep_nonstandard)
 
     elif args.program == 'filter_counts':
         logging.debug('Filter counts ...')
         cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
         cm = cm.filter(args.mincounts, args.maxcounts,
                   args.minregioncounts, binarize=False,
-                  maxcount=args.trimcounts)
+                  trimcount=args.trimcounts)
         cm.export_counts(args.outcounts)
 
     elif args.program == 'batchannot':
@@ -512,7 +586,7 @@ def local_main(args):
         logging.debug('Group cells (pseudobulk)...')
         cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
 
-        cells,  groups = get_cell_grouping(args.cellgroup)
+        cells,  groups = get_cell_grouping(args.cellgroup, args.barcodecolumn, args.groupcolumn)
         pscm = cm.pseudobulk(cells, groups)
         pscm.export_counts(args.outcounts)
 
@@ -521,7 +595,7 @@ def local_main(args):
         logging.debug('Subset cells ...')
         cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
 
-        cells,  _ = get_cell_grouping(args.subset)
+        cells = get_cells(args.subset, args.barcodecolumn)
         pscm = cm.subset(cells)
         pscm.export_counts(args.outcounts)
 
@@ -546,7 +620,7 @@ def local_main(args):
                                                args.mincounts, args.maxcounts,
                                                args.trimcounts, args.minregioncounts)
 
-        scmodel = run_segmentation(data, args.nstates,
+        scmodel, models = run_segmentation(data, args.nstates,
                                    args.niter, args.randomseed,
                                    args.n_jobs)
 
@@ -561,7 +635,9 @@ def local_main(args):
 
         scmodel.segment(data, args.regions)
         scmodel.save(outputpath)
-
+        for s, m in zip(args.randomseed, models):
+           scmodel.save(outputpath + f'_rseed{s}')
+            
         logging.debug('summarize results ...')
         make_state_summary(scmodel, outputpath, args.labels)
         plot_normalized_emissions(scmodel, outputpath, args.labels)
@@ -602,21 +678,21 @@ def local_main(args):
                 raise ValueError("--method manuelselect also requires --statenames <list state names>")
             query_states = args.statenames
         elif args.method == "rarest":
-            if args.nsmallest <= 0:
-                raise ValueError("--method rarest also requires --nsmallest <int>")
+            if args.nstates <= 0:
+                raise ValueError("--method rarest also requires --nstates <int>")
             query_states = pd.Series(scmodel.model.get_stationary_distribution(), index=['state_{}'.format(i) for i in range(scmodel.n_components)])
-            query_states = query_states.nsmallest(args.nsmallest).index.tolist()
+            query_states = query_states.nsmallest(args.nstates).index.tolist()
         elif args.method == "abundancethreshold":
             query_states = ['state_{}'.format(i) for i, p in enumerate(scmodel.model.get_stationary_distribution()) \
                             if p<=args.max_state_abundance]
         elif args.method == "nucfree":
             if 'nf_prop' not in scmodel._segments.columns:
                 raise ValueError("'scregseg fragmentsize' must be run before.")
-            if args.nlargest <= 0:
-                raise ValueError("--method nucfree also requires --nlargest <int>")
+            if args.nstates <= 0:
+                raise ValueError("--method nucfree also requires --nstates <int>")
             sdf.nf_prop = sdf.nf_prop.fillna(0.0)
             nrdf = sdf[['name', 'nf_prop']].groupby('name').mean()
-            query_states = nrdf.nlargest(args.nlargest,
+            query_states = nrdf.nlargest(args.nstates,
                                          'nf_prop').index.tolist()
 
             sdf.readdepth = sdf.readdepth*sdf.nf_prop
@@ -630,7 +706,7 @@ def local_main(args):
             query_states = pd.Series(tvdist,
                                      index=['state_{}'.format(i) \
                                             for i in range(scmodel.n_components)])
-            query_states = query_states.nlargest(args.nlargest).index.tolist()
+            query_states = query_states.nlargest(args.nstates).index.tolist()
             
         logging.debug("method={}: {}".format(args.method,query_states))
 
@@ -654,6 +730,22 @@ def local_main(args):
         # export the state calls as a bed file
         export_bed(subset, output,
                    individual_beds=args.individualbeds)
+
+        if len(args.counts)>0:
+            labels = _get_labels(args.counts, args.labels)
+            data = load_count_matrices(args.counts,
+                                       args.regions,
+                                       args.mincounts,
+                                       args.maxcounts, args.trimcounts,
+                                       0)
+            print(subset.head(), subset.shape)
+            for mat, datum in zip(labels, data):
+                print(datum)
+                datum.adata = datum.adata[subset.ridx.values.tolist(),:]
+                #datum.regions = datum.regions.iloc[subset.ridx.values.tolist(),:]
+                print(datum)
+                datum.export_counts(output[:-4] + f'_{mat}.mtx')
+             
 
     elif args.program == 'annotate':
         outputpath = os.path.join(args.storage, args.modelname)
