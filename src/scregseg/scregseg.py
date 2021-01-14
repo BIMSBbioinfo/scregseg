@@ -11,6 +11,8 @@ from pybedtools import Interval
 from pybedtools.helpers import cleanup
 from scregseg.hmm import DirMulHMM
 from scregseg.countmatrix import CountMatrix
+from scipy.sparse import coo_matrix
+from scipy.sparse import diags
 from scipy.sparse import csc_matrix
 from scipy.sparse import lil_matrix
 from scipy.stats import zscore
@@ -162,13 +164,16 @@ def get_statecalls(segments, query_states,
 
     if not isinstance(query_states, list):
         query_states = [query_states]
+
     segments.loc[:, "ridx"] = np.arange(segments.shape[0])
     subset = segments[(segments.name.isin(query_states))
                       & (segments.Prob_max >= state_prob_threshold)
                       & (segments.readdepth >= minreads)].copy()
-    #subset = self._segments[(self._segments.name.isin(query_states))
-    #                         & (self._segments.Prob_max >= state_prob_threshold)].copy()
 
+    perm_matrix1 = coo_matrix((np.ones(subset.shape[0]),
+                              (np.arange(subset.shape[0]), subset.ridx.values)),
+                              shape=(subset.shape[0], segments.shape[0]))
+    #print(perm_matrix1)
     if collapse_neighbors:
         # determine neighboring bins that can be merged together
         prevind = -2
@@ -183,7 +188,6 @@ def get_statecalls(segments, query_states,
             mapelem.append(nelem - 1)
             prevind = i
             prevstate = curstate
-
 
         subset['common'] = mapelem
 
@@ -201,22 +205,40 @@ def get_statecalls(segments, query_states,
 
         processing['readdepth'] = 'sum'
 
+        perm_matrix = coo_matrix((np.ones(subset.shape[0]),
+                                 (subset['common'].values, np.arange(subset.shape[0]))),
+                                 shape=(nelem, subset.shape[0])).tocsr()
+
         subset = subset.groupby(['common', 'name']).aggregate(processing)
+        #print(subset.head())
+        #print(perm_matrix.shape)
+        assert perm_matrix.shape[0] == subset.shape[0]
+    else:
+        perm_matrix = diags(np.ones(subset.shape[0])).tocsr()
+        assert perm_matrix.shape[0] == subset.shape[0]
+
 
     dfs = []
-
+    ids = []
     for process_state in query_states:
-        sdf = subset.copy()
+        sdf = subset.copy().reset_index(drop=True)
         #sdf['pscore'] = sdf['Prob_{}'.format(process_state)] * sdf['readdepth']
         sdf['pscore'] = sdf.query("name == '{}'".format(process_state))['readdepth']
         if ntop < 0:
+            print('export all')
             dfs.append(sdf.copy())
+            ids += sdf.index.tolist()
         else:
             dfs.append(sdf.nlargest(ntop, 'pscore').copy())
+        ids += dfs[-1].index.tolist()
 
+    ids = sorted(list(dict.fromkeys(ids)))
+    perm_matrix = perm_matrix[ids,:].tocsc()
+    perm_matrix = perm_matrix.dot(perm_matrix1)
     subset_merged = pd.concat(dfs, axis=0)
     subset_merged = subset_merged.drop_duplicates(subset=['chrom', 'start', 'end'], ignore_index=True)
-    return subset_merged
+    assert perm_matrix.shape[0] == subset_merged.shape[0]
+    return subset_merged, perm_matrix
 
 def get_statecalls_posteriorprob(segments, query_states,
                    collapse_neighbors=True,
@@ -532,7 +554,6 @@ class Scregseg(object):
         adf = df.groupby('name').aggregate('mean')
         fig, ax =  plt.subplots()
         sns.heatmap(sdf, ax=ax)
-
 
     def plot_readdepth(self):
         """

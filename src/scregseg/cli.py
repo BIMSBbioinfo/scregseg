@@ -697,7 +697,7 @@ def local_main(args):
         # subset and merge the state calls
         #subset = scmodel.get_statecalls(scmodel._segments, query_states, collapse_neighbors=args.merge_neighbors,
         #                                state_prob_threshold=args.threshold)
-        subset = get_statecalls(sdf, query_states, ntop=args.nregsperstate,
+        subset, perm_matrix = get_statecalls(sdf, query_states, ntop=args.nregsperstate,
                                 collapse_neighbors=not args.no_bookended_merging,
                                          state_prob_threshold=args.threshold)
 
@@ -721,9 +721,13 @@ def local_main(args):
             print(subset.head(), subset.shape)
             for mat, datum in zip(labels, data):
                 print(datum)
-                datum.adata = datum.adata[subset.ridx.values.tolist(),:]
-                print(datum)
-                datum.export_counts(output[:-4] + f'_{mat}.mtx')
+                x = perm_matrix.dot(datum.adata.X).tocsr()
+                dat = CountMatrix(x, subset, datum.cannot)
+                #datum.adata = datum.adata[subset.ridx.values.tolist(),:]
+                #datum.export_counts(output[:-4] + f'_{mat}.mtx')
+                print(dat)
+                #dat.adata = datum.adata[subset.ridx.values.tolist(),:]
+                dat.export_counts(output[:-4] + f'_{mat}.mtx')
              
 
     elif args.program == 'annotate':
