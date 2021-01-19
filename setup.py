@@ -101,6 +101,11 @@ setup(
                 #'janggu',
                 'pandas',
                 'numba',
+                'anndata',
+                'pybedtools',
+                'pysam',
+                'matplotlib',
+                'seaborn',
     ],
     extras_require={
         'janggu' : ['janggu', 'tensorflow==2.2', 'keras==2.4.3'],
