@@ -6,21 +6,19 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 import tempfile
 import pandas as pd
 try:
-    from keras import layers
+    import keras
 except:
-    layers = None
-    
+    keras = None
+
 try:
     import janggu
 except:
     janggu = None
-    
+
 import numpy as np
 from scipy.special import logsumexp
 
 from sklearn.metrics import r2_score
-from keras import Model
-from keras.callbacks import EarlyStopping
 
 from scregseg import Scregseg
 
@@ -74,19 +72,19 @@ if janggu is not None:
         with inputs.use('dna') as dna_in:
             layer = dna_in
         #layer = Dropout(.2)(layer)
-        layer = janggu.DnaConv2D(layers.Conv2D(100, (21, 1), activation='sigmoid'))(layer)
-        layer = layers.GlobalMaxPooling2D()(layer)
-        layer = layers.Dropout(.5)(layer)
+        layer = janggu.DnaConv2D(keras.layers.Conv2D(100, (21, 1), activation='sigmoid'))(layer)
+        layer = keras.layers.GlobalMaxPooling2D()(layer)
+        layer = keras.layers.Dropout(.5)(layer)
         return inputs, layer
-    
+
     @janggu.inputlayer
     @janggu.outputdense('sigmoid')
     def cnn_model_binary(inputs, inp, oup, params):
         with inputs.use('dna') as dna_in:
             layer = dna_in
-        layer = janggu.DnaConv2D(layers.Conv2D(100, (21, 1), activation='sigmoid'))(layer)
-        layer = layers.GlobalMaxPooling2D()(layer)
-        layer = layers.Dropout(.5)(layer)
+        layer = janggu.DnaConv2D(keras.layers.Conv2D(100, (21, 1), activation='sigmoid'))(layer)
+        layer = keras.layers.GlobalMaxPooling2D()(layer)
+        layer = keras.layers.Dropout(.5)(layer)
         return inputs, layer
 
 
@@ -179,11 +177,11 @@ class MotifExtractor:
             hist = model.fit(DNA, LABELS,
                              epochs=300, batch_size=32,
                              validation_data=['chr1', 'chr5'],
-                             callbacks=[EarlyStopping(patience=20, restore_best_weights=True)])
+                             callbacks=[keras.callacks.EarlyStopping(patience=20, restore_best_weights=True)])
 
             # extract motifs
             W, b = model.kerasmodel.layers[1].get_weights()
-            fmodel = Model(model.kerasmodel.inputs,
+            fmodel = keras.Model(model.kerasmodel.inputs,
                            model.kerasmodel.layers[1].output)
             featureacts = fmodel.predict(DNA).max(axis=(1,2))
 
@@ -264,7 +262,7 @@ class MotifExtractor2:
                 sdf = sdf.nlargest(2*self.ntop//self.scmodel.n_components, 'pscore')
                 sdf.pscore = sdf.pscore * sdf['Prob_{}'.format(process_state)]
                 sneg.append(sdf)
-                
+
             sdf = pd.concat([spos] + sneg, ignore_index=True)
 
             sdf[['chrom', 'start', 'end', 'pscore']].to_csv(roi, sep='\t',
@@ -295,12 +293,12 @@ class MotifExtractor2:
             hist = model.fit(DNA, LABELS,
                              epochs=300, batch_size=32,
                              validation_data=['chr1', 'chr5'],
-                             callbacks=[EarlyStopping(patience=20, restore_best_weights=True)])
+                             callbacks=[keras.callbacks.EarlyStopping(patience=20, restore_best_weights=True)])
 
             model.summary()
             # extract motifs
             W, b = model.kerasmodel.layers[1].get_weights()
-            fmodel = Model(model.kerasmodel.inputs,
+            fmodel = keras.Model(model.kerasmodel.inputs,
                            model.kerasmodel.layers[1].output)
             featureacts = fmodel.predict(DNA).max(axis=(1,2))
 
