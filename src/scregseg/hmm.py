@@ -266,7 +266,7 @@ class DirMulHMM(_BaseHMM):
                 # prior
                 x = np.array(X[modi].sum(0)) + 1.
                 normalize(x)
-                x *= self.prior_obs
+                x *= self.emission_prior
 
                 self.emission_prior_.append(x)
 

@@ -148,7 +148,7 @@ class _BaseHMM(BaseEstimator):
         self.n_jobs = n_jobs
         self.monitor_ = MinibatchMonitor(self.tol, self.n_iter, self.verbose)
         self.check_fitted = "transmat_"
-        self.prior_obs = emission_prior
+        self.emission_prior = emission_prior
         self.replicate = replicate
 
     def get_stationary_distribution(self):
