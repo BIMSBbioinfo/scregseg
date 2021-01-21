@@ -30,6 +30,7 @@ from scregseg import Scregseg
 from scregseg.scregseg import run_segmentation
 from scregseg.scregseg import get_statecalls
 from scregseg.utils import fragmentlength_by_state
+from scregseg.utils import make_folders
 from scregseg.bam_utils import make_pseudobulk_bam
 from scregseg.scregseg import export_bed
 from scregseg.motifs import MotifExtractor
@@ -417,10 +418,6 @@ def _get_labels(mtx, labels):
         return labels
     else:
         return [str(i) for i in range(len(mtx))]
-
-def make_folders(output):
-    """ Create folder """
-    os.makedirs(output, exist_ok=True)
 
 def save_score(scmodel, data, output):
     """ Save log-likelihood score to file."""

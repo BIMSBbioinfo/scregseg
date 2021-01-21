@@ -21,6 +21,7 @@ from scipy.special import logsumexp
 from sklearn.metrics import r2_score
 
 from scregseg import Scregseg
+from scregseg.utils import make_folders
 
 class Meme:
     """Class maintains motifs and exports them to MEME format."""
@@ -197,7 +198,7 @@ class MotifExtractor:
         os.remove(roi)
 
     def save_motifs(self, output):
-        os.makedirs(os.path.dirname(output), exist_ok=True)
+        make_folders(os.path.dirname(output))
         self.meme.save(output)
 
 class MotifExtractor2:
@@ -314,5 +315,5 @@ class MotifExtractor2:
         os.remove(roi)
 
     def save_motifs(self, output):
-        os.makedirs(os.path.dirname(output), exist_ok=True)
+        make_folders(os.path.dirname(output))
         self.meme.save(output)

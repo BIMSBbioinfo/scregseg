@@ -11,6 +11,7 @@ from pybedtools import Interval
 from pybedtools.helpers import cleanup
 from scregseg.hmm import DirMulHMM
 from scregseg.countmatrix import CountMatrix
+from scregseg.utils import make_folders
 from scipy.sparse import coo_matrix
 from scipy.sparse import diags
 from scipy.sparse import csc_matrix
@@ -50,7 +51,7 @@ def export_segmentation(segments, filename, prob_max_threshold=0.99):
     Exports the segmentation results table.
     """
 
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    make_folders(os.path.dirname(filename))
 
     segments[(segments.Prob_max >= prob_max_threshold)].to_csv(filename, sep='\t', index=False)
 
@@ -60,7 +61,7 @@ def export_bed(subset, filename, individual_beds=False):
     Exports the segmentation results in bed format.
     """
 
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    make_folders(os.path.dirname(filename))
 
     if individual_beds:
         f = filename.split('.bed')[0]

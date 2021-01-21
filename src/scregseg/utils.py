@@ -77,3 +77,15 @@ def fit_mixture(args):
     model, data = args
     model.fit(data)
     return model
+
+def _dirname(dirname):
+    dirn = os.path.dirname(dirname)
+    if dirn == '':
+        dirn = '.'
+    return dirn
+
+def make_folders(output):
+    if output != '':
+        """ Create folder """
+        os.makedirs(output, exist_ok=True)
+
