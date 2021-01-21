@@ -2,6 +2,7 @@
 # in order to enable sparse matrix support.
 """ Helper Functions
 """
+import os
 import numpy as np
 import pandas as pd
 from scipy.special import logsumexp
