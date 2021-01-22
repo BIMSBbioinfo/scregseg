@@ -57,8 +57,9 @@ counts = subparsers.add_parser('make_tile', description='Make genome-wide tile')
 counts.add_argument('--bamfile', '--fragmentfile', dest='bamfile', type=str, help="Location of an indexed BAM-file or a fragments.tsv.gz file (from CellRanger)", required=True)
 counts.add_argument('--regions', dest='regions', type=str, help="Output location of regions in BED format. ", required=True)
 counts.add_argument('--binsize', dest='binsize', type=int, help="Binsize in bp. ", required=True)
-counts.add_argument('--keep_nonstandard', dest='keep_nonstandard', action='store_true',
-                        default=False, help='Whether to keep non-standard chromosomes (e.g. contigs). Default: False')
+counts.add_argument('--remove_chroms', dest='remove_chroms', nargs='*',
+                    default=['chrM', 'chrY', 'chrX'], 
+                    help='List of chromosome names (or patterns) to remove from the tile. Default: chrM chrY chrX')
 
 counts = subparsers.add_parser('fragments_to_counts', description='Make countmatrix')
 counts.add_argument('--fragmentfile', dest='fragmentfile', type=str, help="Location of a fragments.tsv.gz file (output by cellranger)", required=True)
@@ -563,7 +564,7 @@ def local_main(args):
                            
     elif args.program == "make_tile":
         make_counting_bins(args.bamfile, args.binsize, args.regions,
-                           args.keep_nonstandard)
+                           args.remove_chroms)
 
     elif args.program == 'filter_counts':
         logging.debug('Filter counts ...')

@@ -104,8 +104,7 @@ def get_genome_size(file):
     return gs
 
     
-def make_counting_bins(file, binsize, storage=None,
-                       keep_nonstandard=True):
+def make_counting_bins(file, binsize, storage=None, remove_chroms=[]):
     """ Genome intervals for binsize.
 
     For a given bam-file and binsize,
@@ -129,26 +128,16 @@ def make_counting_bins(file, binsize, storage=None,
        Output BED file is returned as BedTool object.
     """
     genomesize = get_genome_size(file)
-    ## Obtain the header information
-    #afile = AlignmentFile(bamfile, 'rb')
-
-    ## extract genome size
-
-    #genomesize = {}
-    #for chrom, length in zip(afile.references, afile.lengths):
-    #    genomesize[chrom] = length
     bed_content = [] #pd.DataFrame(columns=['chr', 'start', 'end'])
 
     for chrom in genomesize:
-        if not keep_nonstandard:
-            #if 'chrX' in chrom:
-            #    continue
-            #if 'chrY' in chrom:
-            #    continue
-            if 'chrM' in chrom:
-                continue
-            if '_' in chrom:
-                continue
+        ignore_chr=False
+        for rmchr in remove_chroms:
+            if rmchr in chrom:
+                ignore_chr=True
+        if ignore_chr:
+            continue
+
         nbins = genomesize[chrom]//binsize + 1 if (genomesize[chrom] % binsize > 0) else 0
         starts = [int(i*binsize) for i in range(nbins)]
         ends = [min(int((i+1)*binsize), genomesize[chrom]) for i in range(nbins)]
