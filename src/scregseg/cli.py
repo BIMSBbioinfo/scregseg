@@ -54,7 +54,7 @@ subparsers = parser.add_subparsers(dest='program')
 
 # dataset preprocessing and rearrangements
 counts = subparsers.add_parser('make_tile', description='Make genome-wide tile')
-counts.add_argument('--bamfile', dest='bamfile', type=str, help="Location of an indexed BAM-file", required=True)
+counts.add_argument('--bamfile', '--fragmentfile', dest='bamfile', type=str, help="Location of an indexed BAM-file or a fragments.tsv.gz file (from CellRanger)", required=True)
 counts.add_argument('--regions', dest='regions', type=str, help="Output location of regions in BED format. ", required=True)
 counts.add_argument('--binsize', dest='binsize', type=int, help="Binsize in bp. ", required=True)
 counts.add_argument('--keep_nonstandard', dest='keep_nonstandard', action='store_true',

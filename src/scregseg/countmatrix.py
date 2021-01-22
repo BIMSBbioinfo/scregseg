@@ -72,7 +72,39 @@ def load_count_matrices(countfiles, bedfile, mincounts,
             data[i].regions = data[i].regions.iloc[keepregions]
     return data
 
-def make_counting_bins(bamfile, binsize, storage=None,
+
+def get_genome_size_from_bam(file):
+    afile = AlignmentFile(bamfile, 'rb')
+
+    # extract genome size
+
+    genomesize = {}
+    for chrom, length in zip(afile.references, afile.lengths):
+        genomesize[chrom] = length
+    afile.close()
+    return genomesize
+
+
+def get_genome_size_from_tsv(file):
+    df = BedTool(file).to_dataframe()
+    chroms = df.chrom.unique()
+    genomesize = {}
+    for chrom in chroms:
+        genomesize[chrom] = df[df.chrom==chrom].end.max()
+    return genomesize
+ 
+
+def get_genome_size(file):
+    if file.endswith('.bam'):
+        gs = get_genome_size_from_bam(file)
+    elif file.endswith('.tsv.gz') or file.endswith('.tsv'):
+        gs = get_genome_size_from_tsv(file)
+    else:
+        raise ValueError(f'Unknown file type for: {file}')
+    return gs
+
+    
+def make_counting_bins(file, binsize, storage=None,
                        keep_nonstandard=True):
     """ Genome intervals for binsize.
 
@@ -82,8 +114,8 @@ def make_counting_bins(bamfile, binsize, storage=None,
 
     Parameters
     ----------
-    bamfile : str
-       Path to bamfile
+    file : str
+       Path to bamfile or a fragments.tsv file
     binsize : int
        Bin size
     storage : path or None
@@ -96,14 +128,15 @@ def make_counting_bins(bamfile, binsize, storage=None,
     BedTool object:
        Output BED file is returned as BedTool object.
     """
-    # Obtain the header information
-    afile = AlignmentFile(bamfile, 'rb')
+    genomesize = get_genome_size(file)
+    ## Obtain the header information
+    #afile = AlignmentFile(bamfile, 'rb')
 
-    # extract genome size
+    ## extract genome size
 
-    genomesize = {}
-    for chrom, length in zip(afile.references, afile.lengths):
-        genomesize[chrom] = length
+    #genomesize = {}
+    #for chrom, length in zip(afile.references, afile.lengths):
+    #    genomesize[chrom] = length
     bed_content = [] #pd.DataFrame(columns=['chr', 'start', 'end'])
 
     for chrom in genomesize:
