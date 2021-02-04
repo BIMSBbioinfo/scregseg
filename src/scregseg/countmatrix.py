@@ -19,6 +19,7 @@ from scipy.sparse import lil_matrix
 from scipy.sparse import coo_matrix
 from anndata import AnnData
 from anndata import read_h5ad
+import anndata as ad
 
 from scregseg.bam_utils import Barcoder
 from scregseg.bam_utils import fragmentlength_in_regions
@@ -74,7 +75,7 @@ def load_count_matrices(countfiles, bedfile, mincounts,
 
 
 def get_genome_size_from_bam(file):
-    afile = AlignmentFile(bamfile, 'rb')
+    afile = AlignmentFile(file, 'rb')
 
     # extract genome size
 
@@ -845,7 +846,7 @@ class CountMatrix:
                     cm.adata.var.loc[:,'sample'] = 'sample_{}'.format(i)
         
         adata = ad.concat([cm.adata for cm in cms], axis=1)
-        return cls(adata.X, obs=adata.obs, var=adata.var)
+        return cls(adata.X, adata.obs, adata.var)
 
     def filter(self, minreadsincell=None, maxreadsincell=None,
                             minreadsinregion=None, maxreadsinregion=None,

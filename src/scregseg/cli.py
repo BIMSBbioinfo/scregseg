@@ -451,7 +451,7 @@ def get_cell_grouping(table, barcodecolumn=0, groupcolumn=1):
     cell = group2cellmap[group2cellmap.columns[barcodecolumn]].values
     group = group2cellmap[group2cellmap.columns[groupcolumn]].values
 
-    return cell, groups
+    return cell, group
 
 def make_state_summary(model, output, labels):
     """ Make and save summary statistics."""
