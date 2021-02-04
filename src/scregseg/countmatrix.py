@@ -342,6 +342,137 @@ def sparse_count_reads_in_regions(bamfile, regions,
     return sdokmat.tocsr(), pd.DataFrame({'cell': barcode_string.split(';')})
 
 
+def sparse_count_reads_in_regions2(bamfile, regions,
+                                  barcodetag, flank=0, log=None, mapq=30,
+                                  mode='midpoint', only_with_barcode=True,
+                                  maxfraglen=2000):
+    """ This function obtains the counts per bins of equal size
+    across the genome.
+
+    The function automatically extracts the genome size from the
+    bam file header.
+    If group tags are available, they will be used to extract
+    the indices from.
+    Finally, the function autmatically detects whether the bam-file
+    contains paired-end or single-end reads.
+    Paired-end reads are counted once at the mid-point between the two
+    pairs while single-end reads are counted at the 5' end.
+    For paired-end reads it is optionally possible to count both read ends
+    by setting mode='both' or mode='eitherend'.
+
+    Parameters
+    ----------
+    bamfile :  str
+        Path to a bamfile. The bamfile must be indexed.
+    regions : str
+        BED or GFF file containing the regions of interest.
+    storage : str
+        Path to the output hdf5 file, which contains the counts per chromsome.
+    flank : int
+        Extension of the regions in base pairs. Default: 0
+    template_length : int
+        Assumed template length. This is used when counting paired-end reads
+        at the mid-point and the individual reads do not overlap with
+        the given region, but the mid-point does.
+    mapq : int
+        Minimum mapping quality
+    mode : str
+        For paired-end sequences reads can be counted at the midpoint,
+        by counting both ends (like they came from single-ended sequencing)
+        or by counting if either 5'-end is in the bin.
+        These options are indicated by mode=['midpoint', 'countboth', 'eitherend'].
+        Default: mode='midpoint'
+    only_with_barcode : bool
+        This indicates that reads without barcodes should be skipped.
+        Use False for bulk or pseudobulk aggregation.
+        Default: True.
+    maxfraglen : int
+        Maximum fragment length to consider. Default: 2000 [bp]
+
+    Returns
+    -------
+        Sparse matrix and cell annotation as pd.DataFrame
+    """
+
+    # Obtain the header information
+    afile = AlignmentFile(bamfile, 'rb')
+
+    # extract genome size
+
+    regfile = BedTool(regions).to_dataframe()
+    nreg = regfile.shape[0]
+    regfile.name = [str(x) for x in range(nreg)]
+    regfile = BedTool.from_dataframe(regfile)
+
+    print(f'found {nreg} regions')
+    barcoder = Barcoder(barcodetag)
+
+    barcodemap = OrderedDict()
+
+    chroms = []
+    starts =  []
+    ends = []
+    barcodes = []
+    for i, aln in enumerate(afile.fetch()):
+        bar = barcoder(aln)
+        if bar not in barcodemap:
+            barcodemap[bar] = len(barcodemap)
+        if abs(aln.template_length) > maxfraglen:
+            continue
+        if only_with_barcode and bar == 'dummy':
+            continue
+        if aln.mapping_quality < mapq:
+            continue
+
+        if aln.is_proper_pair and aln.is_read1 and mode == 'midpoint':
+
+            chroms.append(aln.reference_name)
+            barcodes.append(barcodemap[bar])
+
+            pos = min(aln.reference_start, aln.next_reference_start)
+
+            # count paired end reads at midpoint
+            midpoint = pos + abs(aln.template_length)//2
+            pos = midpoint
+            starts.append(pos)
+
+        if not aln.is_paired or mode == 'countboth':
+            # count single-end reads at 5p end
+            if not aln.is_reverse:
+                pos = aln.reference_start
+            else:
+                pos = aln.reference_start + aln.inferred_length - 1
+            chroms.append(aln.reference_name)
+            barcodes.append(barcodemap[bar])
+            starts.append(pos)
+
+    afile.close()
+    print(f'parsed {i} reads from bam')
+    print(f'found {len(barcodemap)} barcodes')
+
+    df = pd.DataFrame({'chrom':chroms, 'start':starts})
+    df.loc[:,'end'] = df.start+1
+    df.loc[:,'name'] = barcodes
+
+    reads=BedTool.from_dataframe(df)
+    
+    nfreg = len(regfile[0].fields)
+    counts = regfile.intersect(reads, wo=True)
+    print(counts[0].fields)
+
+    rows = np.asarray([[int(c.fields[3]), int(c.fields[nfreg+3])] for c in counts])
+    print(rows.max(0))
+
+    smat = coo_matrix((np.ones(rows.shape[0]), (rows[:,0], rows[:,1])),
+                      shape=(len(regfile), len(barcodemap)),
+                      dtype='int32')
+
+    print(f'made countmatrix {smat.shape}')
+    barcode_string = ';'.join([bar for bar in barcodemap])
+
+    return smat.tocsr(), pd.DataFrame({'cell': barcode_string.split(';')})
+
+
 def sparse_count_reads_in_regions_fast(bamfile, regions,
                                   barcodetag, flank=0, log=None, mapq=30,
                                   mode='midpoint', only_with_barcode=True,
@@ -747,7 +878,7 @@ class CountMatrix:
 
         """
         rannot = get_regions_from_bed_(regions)
-        cmat, cannot = sparse_count_reads_in_regions(bamfile, regions,
+        cmat, cannot = sparse_count_reads_in_regions2(bamfile, regions,
                                                      barcodetag,
                                                      flank=0, log=None,
                                                      mapq=mapq,
