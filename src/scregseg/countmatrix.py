@@ -62,8 +62,6 @@ def load_count_matrices(countfiles, bedfile, mincounts,
         for datum in data:
             regioncounts += np.asarray(datum.cmat.sum(axis=1)).flatten()
         maxregioncounts = regioncounts.max()
-        #minregioncounts = np.median(regioncounts)
-        #maxregioncounts = np.quantile(regioncounts, 0.99)
         logging.debug('removing region with x < {} and x >= {}'.format(minregioncounts, maxregioncounts))
         for i, _ in enumerate(data):
             keepregions = np.where((regioncounts >= minregioncounts) & (regioncounts <= maxregioncounts))[0]
@@ -92,7 +90,7 @@ def get_genome_size_from_tsv(file):
     for chrom in chroms:
         genomesize[chrom] = df[df.chrom==chrom].end.max()
     return genomesize
- 
+
 
 def get_genome_size(file):
     if file.endswith('.bam'):
@@ -103,7 +101,7 @@ def get_genome_size(file):
         raise ValueError(f'Unknown file type for: {file}')
     return gs
 
-    
+
 def make_counting_bins(file, binsize, storage=None, remove_chroms=[]):
     """ Genome intervals for binsize.
 
@@ -178,7 +176,7 @@ def sparse_count_fragments_in_regions(fragmentfile, regions):
     """
 
     regionbed = BedTool([Interval(chrom=iv.chrom, start=iv.start, end=iv.end, name=str(i)) for i, iv in enumerate(BedTool(regions))])
-    
+
     fragments = BedTool(fragmentfile)
 
     mapping = Counter()
@@ -195,7 +193,9 @@ def sparse_count_fragments_in_regions(fragmentfile, regions):
                       shape=(len(regionbed), len(mapping)),
                       dtype='int32')
 
-    return smat.tocsr(), pd.DataFrame({'cell': [k for k in mapping]})
+    barcodes = pd.DataFrame({'barcode': [k for k in mapping]})
+    barcodes.set_index('barcode', inplace=True)
+    return smat.tocsr(), barcodes
 
 def sparse_count_reads_in_regions(bamfile, regions,
                                   barcodetag, flank=0, log=None, mapq=30,
@@ -338,7 +338,9 @@ def sparse_count_reads_in_regions(bamfile, regions,
 
     afile.close()
 
-    return sdokmat.tocsr(), pd.DataFrame({'cell': barcode_string.split(';')})
+    barcodes = pd.DataFrame({'barcode': barcode_string.split(';')})
+    barcodes.set_index('barcode', inplace=True)
+    return sdokmat.tocsr(), barcodes
 
 
 def sparse_count_reads_in_regions_fast(bamfile, regions,
@@ -464,7 +466,9 @@ def sparse_count_reads_in_regions_fast(bamfile, regions,
         sdokmat[idx,:] += temp_smats[iv.chrom][iv.start:iv.end, :].sum(0)
 
 
-    return sdokmat.tocsr(), pd.DataFrame({'cell': barcode_string.split(';')})
+    barcodes = pd.DataFrame({'barcode': barcode_string.split(';')})
+    barcodes.set_index('barcode', inplace=True)
+    return sdokmat.tocsr(), barcodes
 
 def save_cellannotation(filename, barcodes):
     """ Save cell annotation
@@ -484,8 +488,9 @@ def save_cellannotation(filename, barcodes):
     if isinstance(barcodes, pd.DataFrame):
         df = barcodes
     else:
-        df = pd.DataFrame({'cell': barcodes})
-    df.to_csv(filename + '.bct', sep='\t', header=True, index=False)
+        df = pd.DataFrame({'barcode': barcodes})
+        df.set_index('barcode', inplace=True)
+    df.to_csv(filename + '.bct', sep='\t', header=True, index=True)
 
 
 def save_sparsematrix(filename, mat, barcodes):
@@ -551,7 +556,11 @@ def get_cell_annotation(filename, suffix='.bct'):
     -------
         Cell annotation as pd.DataFrame
     """
-    return pd.read_csv(filename + suffix, sep='\t')
+    df = pd.read_csv(filename + suffix, sep='\t')
+    if 'barcode' not in df.columns:
+        df.rename(columns={df.columns[0]: 'barcode'}, inplace=True)
+    df.set_index('barcode', inplace=True)
+    return df
 
 def get_regions_from_bed_(filename):
     """
@@ -569,12 +578,10 @@ def get_regions_from_bed_(filename):
     regions = pd.read_csv(filename, sep='\t',
                           names=['chrom', 'start', 'end'],
                           usecols=[0,1,2])
+    regions.loc[:, 'name'] = regions.apply(lambda row: f'{row.chrom}_{row.start}_{row.end}', axis=1)
+    regions.set_index('name', inplace=True)
     return regions
 
-
-def write_cannot_table(filename, table):
-    """ Save cell annotation to file."""
-    table.to_csv(filename + '.bct', sep='\t', index=False)
 
 class CountMatrix:
 
@@ -594,27 +601,8 @@ class CountMatrix:
         return cls(adata.X, adata.obs, adata.var)
 
     @classmethod
-    def from_mtx(cls, countmatrixfile, regionannotation=None, cellannotation=None):
-        """ Load Countmatrix from matrix market format file.
-
-        Parameters
-        ----------
-        countmatrixfile : str
-            Matrix market file
-        regionannotation : str or None
-            Region anntation in bed format
-        cellannotation : str or None
-            Cell anntation in tsv format
-
-        Returns
-        -------
-        CountMatrix object
-        """
-        return cls.create_from_countmatrix(countmatrixfile, regionannotation=regionannotation,
-                                           cellannotation=cellannotation)
-
-    @classmethod
-    def create_from_countmatrix(cls, countmatrixfile, regionannotation=None, cellannotation=None):
+    def from_mtx(cls, countmatrixfile,
+                 regionannotation=None, cellannotation=None):
         """ Load Countmatrix from matrix market format file.
 
         Parameters
@@ -636,8 +624,8 @@ class CountMatrix:
         else:
             cannot = get_cell_annotation(cellannotation, suffix='')
 
-        if 'cell' not in cannot.columns:
-            cannot['cell'] = cannot[cannot.columns[0]]
+        #if 'cell' not in cannot.columns:
+        #    cannot['cell'] = cannot[cannot.columns[0]]
 
         if regionannotation is None:
             # try to infer region annotation file
@@ -647,6 +635,30 @@ class CountMatrix:
 
         cmat = get_count_matrix_(countmatrixfile)
         return cls(cmat, rannot, cannot)
+
+    @classmethod
+    def create_from_countmatrix(cls, countmatrixfile,
+                                regionannotation=None, cellannotation=None):
+        """ Load Countmatrix from matrix market format file.
+
+        Parameters
+        ----------
+        countmatrixfile : str
+            Matrix market file
+        regionannotation : str or None
+            Region anntation in bed format
+        cellannotation : str or None
+            Cell anntation in tsv format
+
+        Returns
+        -------
+        CountMatrix object
+        """
+        warnings.warn('create_from_countmatrix deprecated. Please use from_mtx',
+                      category=DeprecationWarning)
+        return cls.from_mtx(countmatrixfile,
+                            regionannotation=regionannotation,
+                            cellannotation=cellannotation)
 
     @classmethod
     def from_bam(cls, bamfile, regions, barcodetag='CB',
@@ -686,8 +698,15 @@ class CountMatrix:
         CountMatrix object
 
         """
-        return cls.create_from_bam(bamfile, regions, barcodetag,
-                                   mode, mapq, no_barcode, maxfraglen)
+        rannot = get_regions_from_bed_(regions)
+        cmat, cannot = sparse_count_reads_in_regions(bamfile, regions,
+                                                     barcodetag,
+                                                     flank=0, log=None,
+                                                     mapq=mapq,
+                                                     mode=mode,
+                                                     only_with_barcode=not no_barcode,
+                                                     maxfraglen=maxfraglen)
+        return cls(cmat.tocsr(), rannot, cannot)
 
     @classmethod
     def create_from_fragments(cls, fragmentfile, regions):
@@ -745,15 +764,10 @@ class CountMatrix:
         CountMatrix object
 
         """
-        rannot = get_regions_from_bed_(regions)
-        cmat, cannot = sparse_count_reads_in_regions(bamfile, regions,
-                                                     barcodetag,
-                                                     flank=0, log=None,
-                                                     mapq=mapq,
-                                                     mode=mode,
-                                                     only_with_barcode=not no_barcode,
-                                                     maxfraglen=maxfraglen)
-        return cls(cmat.tocsr(), rannot, cannot)
+        warnings.warn('create_from_bam deprecated. Please use from_bam',
+                      category=DeprecationWarning)
+        return cls.from_bam(bamfile, regions, barcodetag,
+                            mode, mapq, no_barcode, maxfraglen)
 
 
     @classmethod
@@ -793,8 +807,6 @@ class CountMatrix:
             countmatrix = csr_matrix(countmatrix)
 
         self.adata = AnnData(countmatrix.tocsr(), obs=regionannotation, var=cellannotation)
-        assert self.cmat.shape[0] == len(self.regions)
-        assert self.cmat.shape[1] == len(self.cannot)
 
     @property
     def cmat(self):
@@ -843,45 +855,11 @@ class CountMatrix:
                     cm.adata.var.loc[:,'sample'] = samplelabel[i]
                 else:
                     cm.adata.var.loc[:,'sample'] = 'sample_{}'.format(i)
-        
+
         adata = ad.concat([cm.adata for cm in cms], axis=1)
         return cls(adata.X, obs=adata.obs, var=adata.var)
 
     def filter(self, minreadsincell=None, maxreadsincell=None,
-                            minreadsinregion=None, maxreadsinregion=None,
-                            binarize=True, trimcount=None):
-        """
-        Applies in-place quality filtering to the count matrix.
-
-        Parameters
-        ----------
-        minreadsincell : int or None
-            Minimum counts in cells to remove poor quality cells with too few reads.
-            Default: None
-        maxreadsincell : int or None
-            Maximum counts in cells to remove poor quality cells with too many reads.
-            Default: None
-        minreadsinregion : int or None
-            Minimum counts in region to remove low coverage regions.
-            Default: None
-        maxreadsinregion : int or None
-            Maximum counts in region to remove low coverage regions.
-            Default: None
-        binarize : bool
-            Whether to binarize the count matrix. Default: True
-        trimcounts : int or None
-            Whether to trim the maximum number of reads per cell and region.
-            This is a generalization to the binarize option.
-            Default: None (No trimming performed)
-
-        """
-        return self.filter_count_matrix(minreadsincell=minreadsincell,
-                                        maxreadsincell=maxreadsincell,
-                                        minreadsinregion=minreadsinregion,
-                                        maxreadsinregion=maxreadsinregion,
-                                        binarize=binarize, trimcount=trimcount)
-
-    def filter_count_matrix(self, minreadsincell=None, maxreadsincell=None,
                             minreadsinregion=None, maxreadsinregion=None,
                             binarize=True, trimcount=None):
         """
@@ -937,13 +915,47 @@ class CountMatrix:
                          (adata.var.cell != 'dummy')].copy()
 
         regioncounts = np.asarray(adata.X.sum(axis=1)).flatten()
-        print(regioncounts)
         adata.obs.loc[:,'nFrags'] = regioncounts
-        print(adata.obs.head())
 
         adata = adata[(adata.obs.nFrags >= minreadsinregion) &
                       (adata.obs.nFrags <= maxreadsinregion), :].copy()
         return CountMatrix(adata.X, adata.obs, adata.var)
+
+    def filter_count_matrix(self, minreadsincell=None, maxreadsincell=None,
+                            minreadsinregion=None, maxreadsinregion=None,
+                            binarize=True, trimcount=None):
+        """
+        Applies in-place quality filtering to the count matrix.
+
+        Parameters
+        ----------
+        minreadsincell : int or None
+            Minimum counts in cells to remove poor quality cells with too few reads.
+            Default: None
+        maxreadsincell : int or None
+            Maximum counts in cells to remove poor quality cells with too many reads.
+            Default: None
+        minreadsinregion : int or None
+            Minimum counts in region to remove low coverage regions.
+            Default: None
+        maxreadsinregion : int or None
+            Maximum counts in region to remove low coverage regions.
+            Default: None
+        binarize : bool
+            Whether to binarize the count matrix. Default: True
+        trimcounts : int or None
+            Whether to trim the maximum number of reads per cell and region.
+            This is a generalization to the binarize option.
+            Default: None (No trimming performed)
+
+        """
+        warnings.warn('filter_count_matrix deprecated. Please use filter',
+                      category=DeprecationWarning)
+        return self.filter(minreadsincell=minreadsincell,
+                           maxreadsincell=maxreadsincell,
+                           minreadsinregion=minreadsinregion,
+                           maxreadsinregion=maxreadsinregion,
+                           binarize=binarize, trimcount=trimcount)
 
     def pseudobulk(self, cell, group):
         """ Compute pseudobulk counts.
@@ -966,13 +978,17 @@ class CountMatrix:
 
         cnts = np.zeros((self.n_regions, len(grouplabels)))
 
+        if not isinstance(cell, np.ndarray):
+            cell = np.asarray(cell)
+        if not isinstance(group, np.ndarray):
+            group = np.asarray(group)
         for i, glab in enumerate(grouplabels):
-            ids = self.adata.var.cell.isin(cell[group == glab])
-            ids = np.arange(self.adata.shape[1])[ids]
-            cnts[:, i:(i+1)] = self.cmat[:, ids].sum(1)
+            adata = self.adata[:, self.adata.var.index.isin(cell[group == glab])]
+            cnts[:, i:(i+1)] = adata.X.sum(1)
 
-        cannot = pd.DataFrame(grouplabels, columns=['cell'])
-        return CountMatrix(csr_matrix(cnts), self.regions, cannot)
+        cannot = pd.DataFrame(grouplabels, columns=['barcode'])
+        cannot.set_index('barcode', inplace=True)
+        return CountMatrix(csr_matrix(cnts), adata.obs, cannot)
 
     def subset(self, cell):
         """ Subset countmatrix
@@ -988,15 +1004,11 @@ class CountMatrix:
         -------
         CountMatrix object
         """
-        ids = self.cannot.cell.isin(cell)
-        ids = np.arange(self.cannot.shape[0])[ids]
+        if not isinstance(cell, np.ndarray):
+            cell = np.asarray(cell)
+        adata = self.adata[:, self.adata.var.index.isin(cell)]
 
-        cannot = self.cannot[self.cannot.cell.isin(cell)]
-
-        cmat = self.cmat.tocsc()
-        cnts = cmat[:, ids]
-
-        return CountMatrix(csr_matrix(cnts), self.regions, cannot)
+        return CountMatrix(adata.X.tocsr(), adata.obs, adata.var)
 
     def split(self, samplename):
         cms = []
