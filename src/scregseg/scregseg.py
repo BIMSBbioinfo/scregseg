@@ -105,7 +105,7 @@ def get_labeled_data(X):
     for i, cm in enumerate(X):
        if isinstance(cm, CountMatrix):
            X_.append(cm.cmat.tocsr())
-           labels_.append(pd.DataFrame({'label': cm.cannot.cell,
+           labels_.append(pd.DataFrame({'label': cm.cannot.index,
                                         'matrixid': i}))
        else:
            X_.append(cm)
@@ -550,7 +550,7 @@ class Scregseg(object):
         return fig
 
     def plot_fragmentsize(self, frag):
-        df =  pd.DataFrame(frag.cmat.toarray(), columns=frag.cannot.cell)
+        df =  pd.DataFrame(frag.cmat.toarray(), columns=frag.cannot.index)
         df['name'] = self._segments.name
         adf = df.groupby('name').aggregate('mean')
         fig, ax =  plt.subplots()

@@ -67,11 +67,11 @@ def iter_from_X_lengths(X, lengths, state=None):
             yield start[i], end[i]
 
 def fragmentlength_by_state(model, fmat):
-    df =  pd.DataFrame(fmat.cmat.toarray(), columns=fmat.cannot.cell)
+    df =  pd.DataFrame(fmat.cmat.toarray(), columns=fmat.cannot.barcode)
 
     df['name'] = model._segments.name
     adf = df.groupby('name').aggregate('sum')
-    adf = adf.div(adf.sum(axis=1), axis=0).rename({'cell': 'Fragment size'})
+    adf = adf.div(adf.sum(axis=1), axis=0).rename({'barcode': 'Fragment size'})
 
     return adf
 
