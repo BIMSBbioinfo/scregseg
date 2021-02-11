@@ -471,7 +471,9 @@ def sparse_count_reads_in_regions2(bamfile, regions,
     print(f'made countmatrix {smat.shape}')
     barcode_string = ';'.join([bar for bar in barcodemap])
 
-    return smat.tocsr(), pd.DataFrame({'cell': barcode_string.split(';')})
+    barcodes = pd.DataFrame({'barcode': barcode_string.split(';')})
+    barcodes.set_index('barcode', inplace=True)
+    return smat.tocsr(), barcodes
 
 
 def sparse_count_reads_in_regions_fast(bamfile, regions,
