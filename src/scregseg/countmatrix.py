@@ -738,8 +738,7 @@ class CountMatrix:
         CountMatrix object
         """
         adata = read_h5ad(countmatrixfile)
-        cl = cls(adata.X, adata.obs, adata.var)
-        cl.adata = adata
+        cl = cls(adata.X, adata.obs, adata.var, adata.uns, adata.obsm, adata.varm)
         return cl
 
     @classmethod
@@ -942,12 +941,12 @@ class CountMatrix:
         return cls(csr_matrix(cmat), rannot, cannot)
 
 
-    def __init__(self, countmatrix, regionannotation, cellannotation):
+    def __init__(self, countmatrix, regionannotation, cellannotation, uns=None, obsm=None, varm=None):
 
         if not issparse(countmatrix):
             countmatrix = csr_matrix(countmatrix)
 
-        self.adata = AnnData(countmatrix.tocsr(), obs=regionannotation, var=cellannotation)
+        self.adata = AnnData(countmatrix.tocsr(), regionannotation, cellannotation, uns, obsm, varm)
 
     @property
     def cmat(self):
@@ -998,7 +997,7 @@ class CountMatrix:
                     cm.adata.var.loc[:,'sample'] = 'sample_{}'.format(i)
 
         adata = ad.concat([cm.adata for cm in cms], axis=1)
-        return cls(adata.X, adata.obs, adata.var)
+        return cls(adata.X, adata.obs, adata.var, adata.uns, adata.obsm, adata.varm)
 
     def filter(self, minreadsincell=None, maxreadsincell=None,
                             minreadsinregion=None, maxreadsinregion=None,
@@ -1060,7 +1059,7 @@ class CountMatrix:
 
         adata = adata[(adata.obs.nFrags >= minreadsinregion) &
                       (adata.obs.nFrags <= maxreadsinregion), :].copy()
-        return CountMatrix(adata.X, adata.obs, adata.var)
+        return CountMatrix(adata.X, adata.obs, adata.var, adata.uns, adata.obsm, adata.varm)
 
     def filter_count_matrix(self, minreadsincell=None, maxreadsincell=None,
                             minreadsinregion=None, maxreadsinregion=None,
@@ -1149,14 +1148,14 @@ class CountMatrix:
             cell = np.asarray(cell)
         adata = self.adata[:, self.adata.var.index.isin(cell)]
 
-        return CountMatrix(adata.X.tocsr(), adata.obs, adata.var)
+        return CountMatrix(adata.X.tocsr(), adata.obs, adata.var, adata.uns, adata.obsm, adata.varm)
 
     def split(self, samplename):
         cms = []
         names = self.adata.var.loc[:,samplename].unique()
         for name in names:
             ada = self.adata[:, self.adata.var[samplename]==name]
-            cms.append(CountMatrix(ada.X, ada.obs, ada.var))
+            cms.append(CountMatrix(ada.X, ada.obs, ada.var, ada.uns, ada.obsm, ada.varm))
         return cms
 
     def __getitem__(self, ireg):
