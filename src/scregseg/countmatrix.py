@@ -598,7 +598,9 @@ class CountMatrix:
         CountMatrix object
         """
         adata = read_h5ad(countmatrixfile)
-        return cls(adata.X, adata.obs, adata.var)
+        cl = cls(adata.X, adata.obs, adata.var)
+        cl.adata = adata
+        return cl
 
     @classmethod
     def from_mtx(cls, countmatrixfile,
