@@ -48,7 +48,6 @@ def load_count_matrices(countfiles, bedfile, mincounts,
             cm = CountMatrix.from_h5ad(cnt)
         else:
             cm = CountMatrix.create_from_countmatrix(cnt, bedfile)
-        #cm = CountMatrix.create_from_countmatrix(cnt, bedfile)
         cm = cm.filter(mincounts, maxcounts,
                   binarize=False, trimcount=trimcounts)
 
@@ -709,6 +708,13 @@ def write_cannot_table(filename, table):
     table.to_csv(filename + '.bct', sep='\t', index=False)
 
 class CountMatrix:
+
+    @classmethod
+    def load(clt, countfile, *args, **kwargs):
+        if countfile.endswith('.h5ad'):
+            return clt.from_h5ad(countfile)
+        else:
+            return clt.from_mtx(countfile, *args,**kwargs)
 
     @classmethod
     def from_h5ad(cls, countmatrixfile):
