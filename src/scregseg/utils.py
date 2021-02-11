@@ -5,6 +5,7 @@
 import os
 import numpy as np
 import pandas as pd
+import subprocess
 from scipy.special import logsumexp
 from sklearn.utils import check_array
 from sklearn.utils import check_random_state
@@ -89,4 +90,12 @@ def make_folders(output):
     if output != '':
         """ Create folder """
         os.makedirs(output, exist_ok=True)
+
+def run_commandline(args): 
+    cmd = args[0]
+    options = args[1:]
+    output = args[-1]
+    print(cmd.format(*options))
+    subprocess.run([cmd.format(*options)], shell=True)
+    return output
 

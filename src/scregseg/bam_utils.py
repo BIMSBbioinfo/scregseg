@@ -6,6 +6,8 @@ from pysam import AlignmentFile
 from pybedtools import BedTool
 import numpy as np
 import pandas as pd
+from multiprocessing import Pool
+from scregseg.utils import run_commandline
 
 
 class Barcoder:
@@ -126,7 +128,10 @@ def remove_chroms(bamin, bamout, rmchroms):
 
 
 def make_pseudobulk_bam(inbamfile, outputdir,
-                        cells, grouplabels, tag='CB'):
+                        cells, grouplabels,
+                        tag='CB',
+                        threads=10,
+                        make_bigwigs=True):
     """ Generates pseudo-bulk tracks.
 
     Parameters
@@ -141,6 +146,10 @@ def make_pseudobulk_bam(inbamfile, outputdir,
        List of group/cluster associations corresponding to the cells.
     tag : str or callable
        Barcode tag or callable to extract barcode from the alignments. Default: 'CB'
+    threads : int
+       Number of threads
+    make_bigwigs : bool
+       Whether to also prepare bigwig-files. This will require deeptools to be installed.
     """
 
     os.makedirs(outputdir, exist_ok=True)
@@ -169,6 +178,19 @@ def make_pseudobulk_bam(inbamfile, outputdir,
     bamreader.close()
     for b in bam_writer:
         bam_writer[b].close()
+    for group in groups:
+        pysam.index(os.path.join(outputdir,'{}.bam'.format(group)))
+
+    if not make_bigwigs:
+        return
+
+    bwfiles = {os.path.join(outputdir,'{}.bam'.format(group)):
+               os.path.join(outputdir,'{}.bigwig'.format(group)) for group in groups}
+
+    pool = Pool(threads)
+    cmd = 'bamCoverage --normalizeUsing CPM -b {} -o {}'
+    results = pool.map(run_commandline, ((cmd, k, bwfiles[k]) for k in bwfiles))
+
 
 def fragmentlength_in_regions(bamfile, regions, mapq, maxlen, resolution):
     """ Extract fragment lengths per region.
