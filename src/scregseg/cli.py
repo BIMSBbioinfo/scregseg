@@ -568,10 +568,7 @@ def local_main(args):
 
     elif args.program == 'filter_counts':
         logging.debug('Filter counts ...')
-        if args.incounts.endswith('.h5ad'):
-            cm = CountMatrix.from_h5ad(args.incounts)
-        else:
-            cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
+        cm = CountMatrix.load(args.incounts, args.regions)
         cm = cm.filter(args.mincounts, args.maxcounts,
                   args.minregioncounts, binarize=False,
                   trimcount=args.trimcounts)
@@ -587,7 +584,7 @@ def local_main(args):
 
     elif args.program == 'groupcells':
         logging.debug('Group cells (pseudobulk)...')
-        cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
+        cm = CountMatrix.load(args.incounts, args.regions)
 
         cells,  groups = get_cell_grouping(args.cellgroup, args.barcodecolumn, args.groupcolumn)
         pscm = cm.pseudobulk(cells, groups)
@@ -596,7 +593,7 @@ def local_main(args):
     elif args.program == 'subset':
 
         logging.debug('Subset cells ...')
-        cm = CountMatrix.create_from_countmatrix(args.incounts, args.regions)
+        cm = CountMatrix.load(args.incounts, args.regions)
 
         cells = get_cells(args.subset, args.barcodecolumn)
         pscm = cm.subset(cells)
@@ -606,7 +603,7 @@ def local_main(args):
         logging.debug('Merge count matrices ...')
         cms = []
         for incount in args.incounts:
-            cm = CountMatrix.create_from_countmatrix(incount, args.regions)
+            cm = CountMatrix.load(args.incounts, args.regions)
             cms.append(cm)
 
 
