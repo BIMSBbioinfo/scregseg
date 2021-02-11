@@ -20,7 +20,7 @@ import os
 import sys
 import glob
 from scregseg.countmatrix import CountMatrix
-from scregseg.countmatrix import write_cannot_table
+from scregseg.countmatrix import save_cellannotation
 from scregseg.countmatrix import get_cell_annotation
 from scregseg.countmatrix import make_counting_bins
 from scregseg.countmatrix import load_count_matrices
@@ -583,7 +583,7 @@ def local_main(args):
         for batch in args.batches:
             name, value = batch.split(':')
             cannot[name] = value
-        write_cannot_table(args.counts, cannot)
+        save_cellannotation(args.counts, cannot)
 
     elif args.program == 'groupcells':
         logging.debug('Group cells (pseudobulk)...')
