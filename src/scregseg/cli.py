@@ -559,7 +559,7 @@ def local_main(args):
         cells, groups = get_cell_grouping(args.cellgroup, args.barcodecolumn, args.groupcolumn)
 
         make_pseudobulk_bam(args.bamfile, args.outdir,
-                            cells, group,
+                            cells, groups,
                             tag=args.barcodetag)
                            
     elif args.program == "make_tile":
