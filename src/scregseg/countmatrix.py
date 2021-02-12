@@ -1049,7 +1049,7 @@ class CountMatrix:
 
         adata = adata[:, (adata.var.nFrags >= minreadsincell) &
                          (adata.var.nFrags <= maxreadsincell) &
-                         (adata.var.cell != 'dummy')].copy()
+                         (~adata.var.index.isin(['dummy']))].copy()
 
         regioncounts = np.asarray(adata.X.sum(axis=1)).flatten()
         adata.obs.loc[:,'nFrags'] = regioncounts

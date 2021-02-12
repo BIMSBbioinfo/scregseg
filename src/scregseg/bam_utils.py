@@ -234,7 +234,7 @@ def fragmentlength_in_regions(bamfile, regions, mapq, maxlen, resolution):
 
     afile.close()
     cmat = fragments
-    cannot = pd.DataFrame({'cell':
+    cannot = pd.DataFrame({'barcode':
                            ['{}bp'.format(bp*resolution) \
                             for bp in range(maxlen// resolution)]})
 
