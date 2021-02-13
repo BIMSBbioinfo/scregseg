@@ -802,7 +802,7 @@ class CountMatrix:
     @classmethod
     def from_bam(cls, bamfile, regions, barcodetag='CB',
                         mode='eitherend', mapq=30, no_barcode=False,
-                        maxfraglen=2000):
+                        maxfraglen=2000, with_fraglens=False):
         """ Creates a countmatrix from a given bam file and pre-specified target regions.
 
         Parameters
@@ -831,7 +831,8 @@ class CountMatrix:
             contains a bulk sample. Default: False.
         maxfraglen : int
             Maximum fragment length to consider. Default: 2000 [bp]
-
+        with_fraglen : bool
+            Load fragment lengths in addtion. Default=False.
         Returns
         -------
         CountMatrix object
@@ -847,13 +848,13 @@ class CountMatrix:
                                                      maxfraglen=maxfraglen)
 
         obj = cls(cmat.tocsr(), rannot, cannot)
-
-        fragments = read_fragmentlength(bamfile, regions, maxfraglen)
-        obj.adata.obsm['frag_lens'] = fragments.tocsr()
+        if with_fraglen:
+            fragments = read_fragmentlength(bamfile, regions, maxfraglen)
+            obj.adata.obsm['frag_lens'] = fragments.tocsr()
         return obj
 
     @classmethod
-    def create_from_fragments(cls, fragmentfile, regions):
+    def from_fragments(cls, fragmentfile, regions, with_fraglen=False):
         """ Creates a countmatrix from a given fragments file (output by cellranger) and pre-specified target regions.
 
         Parameters
@@ -862,6 +863,8 @@ class CountMatrix:
             Path to the input bed files with the target regions.
         regions : str
             BED file containing features for which to obtain the counts
+        with_fraglen : bool
+            Load fragment lengths in addtion. Default=False.
 
         Returns
         -------
@@ -872,9 +875,14 @@ class CountMatrix:
         cmat, cannot = sparse_count_fragments_in_regions(fragmentfile, regions)
         obj = cls(csr_matrix(cmat), rannot, cannot)
 
-        fragments = read_fragmentlength(fragmentfile, regions, 2000)
-        obj.adata.obsm['frag_lens'] = fragments.tocsr()
+        if with_fraglen:
+            fragments = read_fragmentlength(fragmentfile, regions, 2000)
+            obj.adata.obsm['frag_lens'] = fragments.tocsr()
         return obj
+
+    @classmethod
+    def create_from_fragments(cls, fragmentfile, regions, with_fraglen=False):
+        return cls.from_fragments(fragmentfile, regions, with_fraglen)
 
     @classmethod
     def create_from_bam(cls, bamfile, regions, barcodetag='CB',

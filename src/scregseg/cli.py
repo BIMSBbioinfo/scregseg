@@ -73,6 +73,9 @@ counts.add_argument('--cellgroup', dest='cellgroup', type=str,
                          "If specified, a pseudo-bulk count matrix will be created. "
                          "The table must have at least two columns, the first specifying the barcode name "
                          " and the second specifying the group label.")
+counts.add_argument('--with-fraglen', dest='with_fraglen', type=bool,
+                    action='store_true', default=False,
+                    help='Load fragment lengths in addition.') 
 
 counts = subparsers.add_parser('bam_to_counts', description='Make countmatrix')
 counts.add_argument('--bamfile', dest='bamfile', type=str, help="Location of an indexed BAM-file", required=True)
@@ -101,6 +104,9 @@ counts.add_argument('--barcodecolumn', dest='barcodecolumn', type=int,
                     help='Column index of barcode column (Zero-based) in the cellgroup table. Default=0', default=0) 
 counts.add_argument('--groupcolumn', dest='groupcolumn', type=int,
                     help='Column index of cell group/cluster column (Zero-based) in the cellgroup table. Default=1', default=1) 
+counts.add_argument('--with-fraglen', dest='with_fraglen', type=bool,
+                    action='store_true', default=False,
+                    help='Load fragment lengths in addition.') 
 
 
 bampseudobulk = subparsers.add_parser('make_pseudobulk_bam', description='Make pseudobulk tracks in BAM format')
@@ -530,9 +536,9 @@ def local_main(args):
     if args.program == 'bam_to_counts':
 
         logging.debug('Make countmatrix ...')
-        cm = CountMatrix.create_from_bam(args.bamfile,
+        cm = CountMatrix.from_bam(args.bamfile,
                                     args.regions, barcodetag=args.barcodetag,
-                                    mode=args.mode)
+                                    mode=args.mode, with_fraglen=args.with_fraglen)
 
         if args.cellgroup is not None:
             cells,  groups = get_cell_grouping(args.cellgroup, args.barcodecolumn, args.groupcolumn)
@@ -543,8 +549,8 @@ def local_main(args):
     if args.program == 'fragments_to_counts':
 
         logging.debug('Make countmatrix ...')
-        cm = CountMatrix.create_from_fragments(args.fragmentfile,
-                                    args.regions)
+        cm = CountMatrix.from_fragments(args.fragmentfile,
+                                    args.regions, with_fraglen=args.with_fraglen)
 
         if args.cellgroup is not None:
             cells,  groups = get_cell_grouping(args.cellgroup)
