@@ -23,6 +23,7 @@ import anndata as ad
 
 from scregseg.bam_utils import Barcoder
 from scregseg.bam_utils import fragmentlength_in_regions
+from scregseg.bam_utils import read_fragmentlength
 
 def load_count_matrices(countfiles, bedfile, mincounts,
                         maxcounts, trimcounts, minregioncounts):
@@ -837,14 +838,19 @@ class CountMatrix:
 
         """
         rannot = get_regions_from_bed_(regions)
-        cmat, cannot = sparse_count_reads_in_regions(bamfile, regions,
+        cmat, cannot = sparse_count_reads_in_regions2(bamfile, regions,
                                                      barcodetag,
                                                      flank=0, log=None,
                                                      mapq=mapq,
                                                      mode=mode,
                                                      only_with_barcode=not no_barcode,
                                                      maxfraglen=maxfraglen)
-        return cls(cmat.tocsr(), rannot, cannot)
+
+        obj = cls(cmat.tocsr(), rannot, cannot)
+
+        fragments = read_fragmentlength(bamfile, regions, maxfraglen)
+        obj.adata.obsm['frag_lens'] = fragments.tocsr()
+        return obj
 
     @classmethod
     def create_from_fragments(cls, fragmentfile, regions):
@@ -864,7 +870,11 @@ class CountMatrix:
         """
         rannot = get_regions_from_bed_(regions)
         cmat, cannot = sparse_count_fragments_in_regions(fragmentfile, regions)
-        return cls(cmat.tocsr(), rannot, cannot)
+        obj = cls(csr_matrix(cmat), rannot, cannot)
+
+        fragments = read_fragmentlength(fragmentfile, regions, 2000)
+        obj.adata.obsm['frag_lens'] = fragments.tocsr()
+        return obj
 
     @classmethod
     def create_from_bam(cls, bamfile, regions, barcodetag='CB',
@@ -930,11 +940,12 @@ class CountMatrix:
         CountMatrix object
 
         """
+        warnings.warn('create_from_fragmentsize deprecated. Fragmentsize is determined automatically and stored along with the count matrix',
+                      category=DeprecationWarning)
         rannot = get_regions_from_bed_(regions)
         cmat, cannot = fragmentlength_in_regions(bamfile, regions,
                                                  mapq=mapq, maxlen=maxlen,
                                                  resolution=resolution)
-
         return cls(csr_matrix(cmat), rannot, cannot)
 
 

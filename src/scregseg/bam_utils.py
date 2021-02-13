@@ -192,7 +192,46 @@ def make_pseudobulk_bam(inbamfile, outputdir,
     results = pool.map(run_commandline, ((cmd, k, bwfiles[k]) for k in bwfiles))
 
 
-def fragmentlength_in_regions(bamfile, regions, mapq, maxlen, resolution):
+def fragmentlength_from_bed(bedfile, regions, maxlen):
+    if not isinstance(bedfile, BedTool):
+        bedfile = BedTool(bedfile)
+
+    roi = BedTool([Interval(iv.chrom, iv.start, iv.end, str(i)) for i, iv in enumerate(BedTool(regions))])
+
+    inter = roi.intersect(bedfile, wo=True)
+    rowids = []
+    colids = []
+    shape=(len(roi), maxlen+1)
+    for iv in inter:
+        rowids.append(int(iv.name))
+        colids.append(min(int(iv.fields[-1]) - int(iv.fields[-2]), maxlen))
+    mat = coo_matrix((np.ones(len(rowids)), (rowids, colids)), shape=shape)
+    return mat
+
+
+def fragmentlength_from_bam(bamfile, regions, mapq, maxlen):
+    chroms = []
+    starts = []
+    ends = []
+    tlens = []
+
+    afile = AlignmentFile(bamfile, "rb")
+    for aln in afile.fetch():
+        if aln.mapping_quality < mapq:
+            continue
+        if aln.is_proper_pair and aln.is_read1:
+            start = min(aln.reference_start, aln.next_reference_start)
+            end = abs(aln.tlen)
+            chroms.append(aln.reference_name)
+            starts.append(start)
+            ends.append(end)
+            #tlens.apppend(str(abs(aln.tlen)))
+    df = pd.DataFrame({'chrom':chroms, 'start':starts, 'end':ends})
+    fragments = BedTool.from_dataframe(df)
+
+    return fragmentlength_from_bedtool(fragments, regions, maxlen) 
+
+def read_fragmentlength(file, regions, mapq, maxlen, resolution):
     """ Extract fragment lengths per region.
 
     Parameters
@@ -213,6 +252,36 @@ def fragmentlength_in_regions(bamfile, regions, mapq, maxlen, resolution):
         CountMatrix and annotation as pd.DataFrame
     """
 
+    if file.endswith('.bam'):
+        return fragmentlength_from_bam(file, regions, mapq, maxlen)
+    else:
+        return fragmentlength_from_bed(file, regions, mapq, maxlen)
+
+
+
+def fragmentlength_in_regions(file, regions, mapq, maxlen, resolution):
+    """ Extract fragment lengths per region.
+
+    Parameters
+    ----------
+    bamfile : str
+       Indexed input bam file.
+    regions : str
+       Regions in bed format. Must be genome-wide bins.
+    mapq : int
+       Mapping quality
+    maxlen : int
+       Maximum fragment length.
+    resolution : int
+       Base pair resolution.
+
+    Return
+    -------
+        CountMatrix and annotation as pd.DataFrame
+    """
+    
+    warnings.warn('fragmentlength_in_regions deprecated.',
+                  category=DeprecationWarning)
     bed = BedTool(regions)
     binsize = bed[0].end - bed[0].start
     fragments = np.zeros((len(bed), maxlen//resolution))
