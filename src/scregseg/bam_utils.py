@@ -1,11 +1,15 @@
 import logging
 import os
+from collections import Counter, OrderedDict
 from copy import copy
 import pysam
 from pysam import AlignmentFile
-from pybedtools import BedTool
+from pybedtools import BedTool, Interval
 import numpy as np
 import pandas as pd
+from anndata import AnnData
+from scipy.sparse import coo_matrix
+from scipy.sparse import dia_matrix
 from multiprocessing import Pool
 from scregseg.utils import run_commandline
 
@@ -135,6 +139,120 @@ def remove_chroms(bamin, bamout, rmchroms):
 
     bam_writer.close()
     treatment.close()
+
+
+def cell_scaling_factors(inbamfile, tag='CB', mapq=10):
+    """ Generates pseudo-bulk tracks.
+
+    Parameters
+    ----------
+    bamin : str
+       Input bam file.
+    tag : str or callable
+       Barcode tag or callable to extract barcode from the alignments. Default: 'CB'
+    mapq : int
+       Minimum mapping quality. Default: 10
+
+    Returns
+    -------
+    pd.Series
+       Series containing the barcode counts per barcode.
+
+    """
+
+    barcodecount = Counter()
+    afile = AlignmentFile(inbamfile, 'rb')
+    barcoder = Barcoder(tag)
+    for aln in afile.fetch():
+        if aln.mapping_quality < mapq:
+            continue
+        bct = barcoder(aln)
+        barcodecount[bct] += 1
+    return pd.Series(barcodecount)
+
+def profile_counts(inbamfile, genomicregion,
+                   selected_barcodes=None,
+                   tag='CB', mapq=10, binsize=50):
+    """ Generates pseudo-bulk tracks.
+
+    Parameters
+    ----------
+    bamin : str
+       Input bam file.
+    genomicregion : str
+       Genomic coordinates. E.g. 'chr1:5000-10000'
+    selected_barcodes : list(str) or None
+       Contains a list of barcodes to consider for the profile.
+       If None, all barcodes are considered. Default=None.
+    tag : str or callable
+       Barcode tag or callable to extract barcode from the alignments. Default: 'CB'
+    mapq : int
+       Minimum mapping quality. Default: 10
+    binsize : int
+       Resolution of the signal track in bp. Default: 50
+
+    Returns
+    -------
+    anndata.AnnData
+       AnnData object containing the read counts for the given locus.
+
+    """
+
+    afile = AlignmentFile(inbamfile, 'rb')
+    
+    barcoder = Barcoder(tag)
+
+    def split_iv(gr):
+        chr_, res = gr.split(':')
+        start,end = res.split('-')
+        return chr_, int(start), int(end)
+
+    positions = []
+    cells = []
+    chrom, start, end = split_iv(genomicregion)
+    barcodemap = OrderedDict()
+
+    for aln in afile.fetch(chrom, start, end):
+        bar = barcoder(aln)
+        if aln.mapping_quality < mapq:
+            continue
+        if aln.is_unmapped:
+            continue
+        if selected_barcodes is not None:
+            if bar not in selected_barcodes:
+                # skip barcode if not in selected_barcodes list
+                continue
+        if not aln.is_reverse:
+            pos = aln.reference_start
+        else:
+            pos = aln.reference_start + aln.inferred_length
+        if pos > end or pos < start:
+            continue
+        positions.append(pos-start)
+        
+        if bar not in barcodemap:
+            barcodemap[bar] = len(barcodemap)
+        cells.append(barcodemap[bar])
+
+    afile.close()
+
+    smat = coo_matrix((np.ones(len(positions)), (positions, cells)),
+                      shape=(end-start, len(barcodemap)),
+                      dtype='int32')
+    data = np.ones((binsize,smat.shape[0]))
+    offsets = np.arange(binsize)
+    di = dia_matrix((data,offsets), shape=(smat.shape[0],smat.shape[0]))
+    smat = di.dot(smat).tocsr()
+    smat = smat[::binsize]
+
+    var = pd.DataFrame({'chrom':[chrom] *int(np.ceil((end-start)/binsize)),
+                        'start':np.arange(start,end, binsize),
+                        'end':np.arange(start+binsize,end+binsize, binsize)})
+                        
+    obs = pd.DataFrame(index=[bc for bc in barcodemap])
+    adata = AnnData(smat.T.tocsr(), obs=obs, var=var)
+    adata.raw = adata
+    return adata
 
 
 def make_pseudobulk_bam(inbamfile, outputdir,
