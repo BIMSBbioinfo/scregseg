@@ -1312,3 +1312,27 @@ class CountMatrix:
             Output file name.
         """
         self.adata.write(filename)
+
+
+def normalize_counts(adata, factors, scale=1e4):
+    adata.obs.loc[:, 'size_factor'] =  factors[adata.obs.index]
+    adata.X = diags(scale/adata.obs.size_factor).dot(adata.X)
+    return adata
+
+
+def collapse_cells(adata, group, target='X_collapsed'):
+    groups = adata.obs.loc[:,group].unique()
+    coverage = np.zeros((adata.shape[1], len(groups)))
+
+    for i, track in enumerate(groups):
+        coverage[:,i] = np.asarray(adata.X.sum(0)).flatten()
+
+    adata.varm[target] = coverage
+
+    return adata
+
+def merge_samples(adatalist):
+    adata = ad.concat(adatalist, axis=0)
+    adata.var = adatalist[0].var
+    return adata
+
