@@ -231,32 +231,6 @@ def fragmentlength_from_bam(bamfile, regions, mapq, maxlen):
 
     return fragmentlength_from_bedtool(fragments, regions, maxlen) 
 
-def read_fragmentlength(file, regions, mapq, maxlen, resolution):
-    """ Extract fragment lengths per region.
-
-    Parameters
-    ----------
-    bamfile : str
-       Indexed input bam file.
-    regions : str
-       Regions in bed format. Must be genome-wide bins.
-    mapq : int
-       Mapping quality
-    maxlen : int
-       Maximum fragment length.
-    resolution : int
-       Base pair resolution.
-
-    Return
-    -------
-        CountMatrix and annotation as pd.DataFrame
-    """
-
-    if file.endswith('.bam'):
-        return fragmentlength_from_bam(file, regions, mapq, maxlen)
-    else:
-        return fragmentlength_from_bed(file, regions, mapq, maxlen)
-
 
 
 def fragmentlength_in_regions(file, regions, mapq, maxlen, resolution):

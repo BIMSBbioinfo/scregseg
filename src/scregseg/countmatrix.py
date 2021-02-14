@@ -17,13 +17,14 @@ from collections import Counter, OrderedDict
 from scipy.sparse import dok_matrix
 from scipy.sparse import lil_matrix
 from scipy.sparse import coo_matrix
+from scipy.sparse import diags
 from anndata import AnnData
 from anndata import read_h5ad
 import anndata as ad
 
 from scregseg.bam_utils import Barcoder
 from scregseg.bam_utils import fragmentlength_in_regions
-from scregseg.bam_utils import read_fragmentlength
+from scregseg.bam_utils import fragmentlength_from_bam, fragmentlength_from_bed
 
 def load_count_matrices(countfiles, bedfile, mincounts,
                         maxcounts, trimcounts, minregioncounts):
@@ -849,7 +850,7 @@ class CountMatrix:
 
         obj = cls(cmat.tocsr(), rannot, cannot)
         if with_fraglen:
-            fragments = read_fragmentlength(bamfile, regions, maxfraglen)
+            fragments = fragmentlength_from_bam(bamfile, regions, mapq, maxfraglen)
             obj.adata.obsm['frag_lens'] = fragments.tocsr()
         return obj
 
@@ -876,7 +877,7 @@ class CountMatrix:
         obj = cls(csr_matrix(cmat), rannot, cannot)
 
         if with_fraglen:
-            fragments = read_fragmentlength(fragmentfile, regions, 2000)
+            fragments = fragmentlength_from_bed(fragmentfile, regions, 2000)
             obj.adata.obsm['frag_lens'] = fragments.tocsr()
         return obj
 
