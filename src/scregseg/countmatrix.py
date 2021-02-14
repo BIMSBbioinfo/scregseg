@@ -851,7 +851,7 @@ class CountMatrix:
     @classmethod
     def from_bam(cls, bamfile, regions, barcodetag='CB',
                         mode='eitherend', mapq=30, no_barcode=False,
-                        maxfraglen=2000, with_fraglens=False):
+                        maxfraglen=2000, with_fraglen=False):
         """ Creates a countmatrix from a given bam file and pre-specified target regions.
 
         Parameters
@@ -1038,7 +1038,7 @@ class CountMatrix:
         return self.cmat
 
     @classmethod
-    def merge(cls, cms, samplelabel=None):
+    def merge(cls, cms, samplenames=None):
         """ Merge several countmatices.
 
         Matrices must have the same row dimensionality
@@ -1047,21 +1047,29 @@ class CountMatrix:
         ----------
         cms : list(CountMatrix objects)
             List of count matrices
-        samplelabel : list(str) or None
+        samplenames : list(str) or None
             Associated sample labels. If None, a default sample name is used 'sample_x'.
 
         Returns
         -------
         CountMatrix object
         """
+
+        if samplenames is None:
+            samplenames = [f'sample_{i}' for i, _ in enumerate(cms)]
+
         for i, cm in enumerate(cms):
             if 'sample' not in cm.adata.var.columns:
-                if samplelabel is not None:
-                    cm.adata.var.loc[:,'sample'] = samplelabel[i]
-                else:
-                    cm.adata.var.loc[:,'sample'] = 'sample_{}'.format(i)
+                if samplenames is not None:
+                    cm.adata.var.loc[:,'sample'] = samplenames[i]
 
         adata = ad.concat([cm.adata for cm in cms], axis=1)
+        adata.obs = cms[0].adata.obs
+
+        for i, cm in enumerate(cms):
+            for k in dict(cm.adata.obsm):
+                adata.obsm[f'{k}_{samplenames[i]}'] = cm.adata.obsm[k]
+
         return cls(adata.X, adata.obs, adata.var, adata.uns, adata.obsm, adata.varm)
 
     def filter(self, minreadsincell=None, maxreadsincell=None,

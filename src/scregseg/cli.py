@@ -608,11 +608,12 @@ def local_main(args):
         logging.debug('Merge count matrices ...')
         cms = []
         for incount in args.incounts:
-            cm = CountMatrix.load(args.incounts, args.regions)
+            cm = CountMatrix.load(incount, args.regions)
             cms.append(cm)
 
+        #if len(args.names) 
 
-        merged_cm = CountMatrix.merge(cms)
+        merged_cm = CountMatrix.merge(cms, args.names)
         merged_cm.export_counts(args.outcounts)
 
     elif args.program == 'fit_segment':
