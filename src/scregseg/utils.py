@@ -95,7 +95,6 @@ def run_commandline(args):
     cmd = args[0]
     options = args[1:]
     output = args[-1]
-    print(cmd.format(*options))
     subprocess.run([cmd.format(*options)], shell=True)
     return output
 

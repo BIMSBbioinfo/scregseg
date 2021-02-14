@@ -256,10 +256,10 @@ seg2bed.add_argument('--output', dest='output', type=str, help='Output BED file 
 seg2bed.add_argument('--method', dest='method', type=str, default='rarest',
                      help='Method for selecting states for exporting:'
                      'rarest exports the --nstates states, '
-                     'manuelselect exports a list of manually specified states given by --statenames,'
+                     'manualselect exports a list of manually specified states given by --statenames,'
                      'nucfree exports the --nstates states most enriched for nucleosome free reads (<=150bp),'
                      'abundancethreshold selects the states with maximum state abundance given by --max_state_abundance. Default: rarest',
-                     choices=['rarest', 'nucfree', 'tvdist', 'manuelselect', 'abundancethreshold'])
+                     choices=['rarest', 'manualselect', 'abundancethreshold'])
 seg2bed.add_argument('--individual', dest='individualbeds', action='store_true', default=False,
                      help="Save segmentation in individual bed files. Default: False exports a single bed file containing all states.")
 seg2bed.add_argument('--threshold', dest='threshold', type=float, default=0.0,
@@ -300,7 +300,6 @@ seg2bed.add_argument('--trimcount', dest='trimcounts', type=int,
 seg2bed.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format")
 seg2bed.add_argument('--labels', dest='labels', nargs='*', type=str,
                       help="Label names for the countmatrices")
-#fsegment.add_argument('--topfrac', dest='topfrac', type=float, default=1., help='Fraction of top most covered regions to use.')
 
 
 
@@ -679,7 +678,7 @@ def local_main(args):
         scmodel = Scregseg.load(outputpath)
 
         sdf = scmodel._segments.copy()
-        if args.method == "manuelselect":
+        if args.method == "manualselect":
             if args.statenames is None:
                 raise ValueError("--method manuelselect also requires --statenames <list state names>")
             query_states = args.statenames
@@ -691,38 +690,13 @@ def local_main(args):
         elif args.method == "abundancethreshold":
             query_states = ['state_{}'.format(i) for i, p in enumerate(scmodel.model.get_stationary_distribution()) \
                             if p<=args.max_state_abundance]
-        elif args.method == "nucfree":
-            if 'nf_prop' not in scmodel._segments.columns:
-                raise ValueError("'scregseg fragmentsize' must be run before.")
-            if args.nstates <= 0:
-                raise ValueError("--method nucfree also requires --nstates <int>")
-            sdf.nf_prop = sdf.nf_prop.fillna(0.0)
-            nrdf = sdf[['name', 'nf_prop']].groupby('name').mean()
-            query_states = nrdf.nlargest(args.nstates,
-                                         'nf_prop').index.tolist()
-
-            sdf.readdepth = sdf.readdepth*sdf.nf_prop
-        elif args.method == 'tvdist':
-            params = np.concatenate(scmodel.model.emission_suffstats_, axis=1)
-            totp = params.sum(0, keepdims=True)
-            params /= params.sum(1, keepdims=True)
-            totp /= totp.sum(keepdims=True) 
-
-            tvdist = np.abs(params-totp).mean(1)
-            query_states = pd.Series(tvdist,
-                                     index=['state_{}'.format(i) \
-                                            for i in range(scmodel.n_components)])
-            query_states = query_states.nlargest(args.nstates).index.tolist()
             
         logging.debug("method={}: {}".format(args.method,query_states))
 
-        #get_query_states(model, method, 
         if args.exclude_states is not None:
             query_states = list(set(query_states).difference(set(args.exclude_states)))
 
         # subset and merge the state calls
-        #subset = scmodel.get_statecalls(scmodel._segments, query_states, collapse_neighbors=args.merge_neighbors,
-        #                                state_prob_threshold=args.threshold)
         subset, perm_matrix = get_statecalls(sdf, query_states, ntop=args.nregsperstate,
                                 collapse_neighbors=not args.no_bookended_merging,
                                          state_prob_threshold=args.threshold)

@@ -49,6 +49,11 @@ def deduplicate_reads(bamin, bamout, tag='CB'):
         Output file containing deduplicated reads.
     tag : str or callable
         Indicates the barcode tag or custom function to extract the barcode. Default: 'CB'
+
+    Returns
+    -------
+    None
+
     """
     bamfile = AlignmentFile(bamin, 'rb')
     output = AlignmentFile(bamout, 'wb', template=bamfile)
@@ -92,6 +97,11 @@ def remove_chroms(bamin, bamout, rmchroms):
        Output bam file.
     rmchroms : list(str)
        List of chromosome names or name patterns to be removed.
+
+    Returns
+    -------
+    None
+
     """
 
     treatment = AlignmentFile(bamin, 'rb')
@@ -139,7 +149,8 @@ def make_pseudobulk_bam(inbamfile, outputdir,
     bamin : str
        Input bam file.
     outputdir : str
-       Output folder in which the pseudo-bulk bam files are stored.
+       Output folder in which the pseudo-bulk bam files are stored. Optionally,
+       bigwig tracks will be stored there as well (see make_bigwigs).
     cells : list(str)
        List of cells/barcode identifiers.
     grouplabels : list
@@ -149,7 +160,11 @@ def make_pseudobulk_bam(inbamfile, outputdir,
     threads : int
        Number of threads
     make_bigwigs : bool
-       Whether to also prepare bigwig-files. This will require deeptools to be installed.
+       Whether to also prepare bigwig-files. This option will require deeptools to be installed.
+
+    Returns
+    -------
+    None
     """
 
     os.makedirs(outputdir, exist_ok=True)
@@ -193,23 +208,60 @@ def make_pseudobulk_bam(inbamfile, outputdir,
 
 
 def fragmentlength_from_bed(bedfile, regions, maxlen):
+    """ Compute fragment length per region from a bed-file or BedTool obj
+
+    Parameters
+    ----------
+    bedfile : str, BedTool
+        Bed-file or BedTool object containing the fragments.
+    regions : str, BedTool
+        Bed-file or BedTool object containing the regions.
+    maxlen : int
+        Maximum fragment length.
+
+    Returns
+    -------
+    scipy.sparse.coo_matrix
+        Sparse regions by maxlen matrix containing the fragment counts.
+    """
     if not isinstance(bedfile, BedTool):
         bedfile = BedTool(bedfile)
 
-    roi = BedTool([Interval(iv.chrom, iv.start, iv.end, str(i)) for i, iv in enumerate(BedTool(regions))])
+    if not isinstance(regions, BedTool):
+        regions = BedTool(regions)
 
+    roi = BedTool([Interval(iv.chrom, iv.start, iv.end, str(i)) for i, iv in enumerate(regions)])
+    n = len(roi[0].fields)
     inter = roi.intersect(bedfile, wo=True)
     rowids = []
     colids = []
     shape=(len(roi), maxlen+1)
     for iv in inter:
         rowids.append(int(iv.name))
-        colids.append(min(int(iv.fields[-1]) - int(iv.fields[-2]), maxlen))
+        colids.append(min(int(iv.fields[n+2]) - int(iv.fields[n+1]), maxlen))
     mat = coo_matrix((np.ones(len(rowids)), (rowids, colids)), shape=shape)
     return mat
 
 
 def fragmentlength_from_bam(bamfile, regions, mapq, maxlen):
+    """ Compute fragment length per region from a bam-file or
+
+    Parameters
+    ----------
+    bamfile : str
+        bam-file 
+    regions : str, BedTool
+        Bed-file or BedTool object containing the regions.
+    mapq : int
+        Minimum mapping quality.
+    maxlen : int
+        Maximum fragment length.
+
+    Returns
+    -------
+    scipy.sparse.coo_matrix
+        Sparse regions by maxlen matrix containing the fragment counts.
+    """
     chroms = []
     starts = []
     ends = []
@@ -225,16 +277,16 @@ def fragmentlength_from_bam(bamfile, regions, mapq, maxlen):
             chroms.append(aln.reference_name)
             starts.append(start)
             ends.append(end)
-            #tlens.apppend(str(abs(aln.tlen)))
     df = pd.DataFrame({'chrom':chroms, 'start':starts, 'end':ends})
     fragments = BedTool.from_dataframe(df)
 
-    return fragmentlength_from_bedtool(fragments, regions, maxlen) 
-
+    return fragmentlength_from_bed(fragments, regions, maxlen) 
 
 
 def fragmentlength_in_regions(file, regions, mapq, maxlen, resolution):
     """ Extract fragment lengths per region.
+
+    Deprecated.
 
     Parameters
     ----------

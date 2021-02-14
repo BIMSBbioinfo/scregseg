@@ -174,7 +174,6 @@ def get_statecalls(segments, query_states,
     perm_matrix1 = coo_matrix((np.ones(subset.shape[0]),
                               (np.arange(subset.shape[0]), subset.ridx.values)),
                               shape=(subset.shape[0], segments.shape[0]))
-    #print(perm_matrix1)
     if collapse_neighbors:
         # determine neighboring bins that can be merged together
         prevind = -2
@@ -211,8 +210,6 @@ def get_statecalls(segments, query_states,
                                  shape=(nelem, subset.shape[0])).tocsr()
 
         subset = subset.groupby(['common', 'name']).aggregate(processing)
-        #print(subset.head())
-        #print(perm_matrix.shape)
         assert perm_matrix.shape[0] == subset.shape[0]
     else:
         perm_matrix = diags(np.ones(subset.shape[0])).tocsr()
@@ -419,22 +416,16 @@ class Scregseg(object):
         if os.path.exists(path):
             self._segments = pd.read_csv(path, sep='\t')
 
-    def all_statenames(self):
-        """
-        converts list of state ids (integer) to list of state names (str)
-        """
-        return [self.to_statename(state) for state in range(self.n_components)]
+    def get_statenames(self):
+        """ Returns a list of statenames ordered by state frequency """
+        return list(self.get_state_frequency().index)
 
     def to_statenames(self, states):
-        """
-        converts list of state ids (integer) to list of state names (str)
-        """
+        """ converts list of state ids (integer) to list of state names (str) """
         return [self.to_statename(state) for state in states]
 
     def to_statename(self, state):
-        """
-        converts state id (integer) to state name (str)
-        """
+        """ converts state id (integer) to state name (str) """
         return '{}{}'.format(self._nameprefix, state)
 
     def to_stateid(self, statename):
@@ -501,11 +492,20 @@ class Scregseg(object):
         post : bool
             Whether to use posterior decoding probability (soft-decision) or categorical state calls (hard-decision).
             Default: False. categorical state calls are used.
+
+        Returns:
+        pd.DataFrame:
+            Dataframes containing the cell-to-state enrichment associations.
         """
 
         X_, _ = get_labeled_data(X)
 
         obs_seqfreqs = self.cell2state_counts(X_, prob_max_threshold, post)
+
+        if hasattr(self, "labels_"):
+            featurenames = self.labels_.label
+        else:
+            featurenames = [str(i) for i in range(lodds.shape[1])]
 
         enrs = []
 
@@ -629,8 +629,6 @@ class Scregseg(object):
             If None, the regions are extracted from the countmatrix object.
 
         """
-        if not isinstance(X, list):
-            X = [X]
         X_, _ = get_labeled_data(X)
         if isinstance(X[0], CountMatrix):
             regions_ = X[0].regions.copy()
@@ -919,7 +917,7 @@ class Scregseg(object):
 
         Returns
         -------
-        pd.DataFrame[n_features, n_states] :
+        np.array[n_features, n_states] :
            Table of enrichment test results
         """
         stateprob = self.model.get_stationary_distribution()
@@ -1068,9 +1066,6 @@ class Scregseg(object):
 
 
     def _make_broadregion_null_distribution(self, keep_lengths):
-#        if keep_lengths.max() in self._cnt_storage:
-#            # already computed, use cache
-#            return
 
         self._init_broadregion_null_distribution(keep_lengths.max())
         self._finalize_broadregion_null_distribution(keep_lengths)

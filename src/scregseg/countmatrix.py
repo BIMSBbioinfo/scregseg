@@ -71,6 +71,18 @@ def load_count_matrices(countfiles, bedfile, mincounts,
 
 
 def get_genome_size_from_bam(file):
+    """ Extract chromosome sizes from a bam-file.
+
+    Parameters
+    ----------
+    file : str
+       bam-file
+
+    Returns
+    -------
+    dict
+        Dict with keys and values corresponding to chromosome names and lengths, respectively.
+    """
     afile = AlignmentFile(file, 'rb')
 
     # extract genome size
@@ -83,6 +95,18 @@ def get_genome_size_from_bam(file):
 
 
 def get_genome_size_from_tsv(file):
+    """ Extract chromosome sizes from a bed-file.
+
+    Parameters
+    ----------
+    file : str
+       bed-file or table
+
+    Returns
+    -------
+    dict
+        Dict with keys and values corresponding to chromosome names and lengths, respectively.
+    """
     df = BedTool(file).to_dataframe()
     chroms = df.chrom.unique()
     genomesize = {}
@@ -92,6 +116,18 @@ def get_genome_size_from_tsv(file):
 
 
 def get_genome_size(file):
+    """ Extract chromosome sizes from a bed-file or bam-files.
+
+    Parameters
+    ----------
+    file : str
+       bam-file, bed-file or table
+
+    Returns
+    -------
+    dict
+        Dict with keys and values corresponding to chromosome names and lengths, respectively.
+    """
     if file.endswith('.bam'):
         gs = get_genome_size_from_bam(file)
     elif file.endswith('.tsv.gz') or file.endswith('.tsv'):
@@ -116,8 +152,8 @@ def make_counting_bins(file, binsize, storage=None, remove_chroms=[]):
        Bin size
     storage : path or None
        Output path of the BED file.
-    keep_nonstandard : bool
-       If True, non-standard chromosomes are kept.
+    remove_chroms : list
+       List of chromosomes to remove. Default=[]
 
     Returns
     -------
@@ -248,6 +284,8 @@ def sparse_count_reads_in_regions(bamfile, regions,
         Sparse matrix and cell annotation as pd.DataFrame
     """
 
+    warnings.warn('sparse_count_reads_in_regions deprecated. Please use sparse_count_reads_in_regions2',
+                  category=DeprecationWarning)
     # Obtain the header information
     afile = AlignmentFile(bamfile, 'rb')
 
@@ -393,7 +431,6 @@ def sparse_count_reads_in_regions2(bamfile, regions,
     -------
         Sparse matrix and cell annotation as pd.DataFrame
     """
-
     # Obtain the header information
     afile = AlignmentFile(bamfile, 'rb')
 
@@ -458,10 +495,8 @@ def sparse_count_reads_in_regions2(bamfile, regions,
     
     nfreg = len(regfile[0].fields)
     counts = regfile.intersect(reads, wo=True)
-    print(counts[0].fields)
 
     rows = np.asarray([[int(c.fields[3]), int(c.fields[nfreg+3])] for c in counts])
-    print(rows.max(0))
 
     smat = coo_matrix((np.ones(rows.shape[0]), (rows[:,0], rows[:,1])),
                       shape=(len(regfile), len(barcodemap)),
@@ -719,6 +754,21 @@ class CountMatrix:
 
     @classmethod
     def load(clt, countfile, *args, **kwargs):
+        """ Load Countmatrix from a h5ad or mtx file.
+
+        Parameters
+        ----------
+        countmatrixfile : str
+            h5ad or mtx file
+        regionannotation : str or None
+            Associated regions. Only required for mtx file.
+        cellannotation : str or None
+            Associated barcode annotation. Optionally used for mtx file only.
+
+        Returns
+        -------
+        CountMatrix object
+        """
         if countfile.endswith('.h5ad'):
             return clt.from_h5ad(countfile)
         else:
@@ -726,12 +776,13 @@ class CountMatrix:
 
     @classmethod
     def from_h5ad(cls, countmatrixfile):
-        """ Load Countmatrix from matrix market format file.
+        """ Load Countmatrix from h5ad file.
 
         Parameters
         ----------
         countmatrixfile : str
             anndata storage
+
         Returns
         -------
         CountMatrix object
@@ -763,9 +814,6 @@ class CountMatrix:
             cannot = get_cell_annotation(countmatrixfile)
         else:
             cannot = get_cell_annotation(cellannotation, suffix='')
-
-        #if 'cell' not in cannot.columns:
-        #    cannot['cell'] = cannot[cannot.columns[0]]
 
         if regionannotation is None:
             # try to infer region annotation file
@@ -1214,12 +1262,13 @@ class CountMatrix:
 
     def export_counts(self, filename):
         """
-        Exports the countmatrix in matrix market format
+        Exports the countmatrix
 
         Parameters
         ----------
         filename : str
             Output file name.
+            File format is determined by the ending: mtx, npz, h5ad.
         """
         if filename.endswith('.mtx'):
             self.to_mtx(filename)
@@ -1260,7 +1309,7 @@ class CountMatrix:
 
     def to_h5ad(self, filename):
         """
-        Exports the countmatrix in npz format
+        Exports the countmatrix in h5ad format
 
         Parameters
         ----------
