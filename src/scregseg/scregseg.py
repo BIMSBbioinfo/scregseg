@@ -1113,7 +1113,6 @@ class Scregseg(object):
     def _reset_broadregion_null_distribution(self):
         self._cnt_storage = {}
         self._cnt_conditional = {}
-        #self._fft_init_cnt_dist = {}
 
     def _init_broadregion_null_distribution(self, max_len):
         max_len = int(max_len)

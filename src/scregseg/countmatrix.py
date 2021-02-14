@@ -1223,37 +1223,24 @@ class CountMatrix:
 
         return CountMatrix(adata.X.tocsr(), adata.obs, adata.var, adata.uns, adata.obsm, adata.varm)
 
-    def split(self, samplename):
-        cms = []
-        names = self.adata.var.loc[:,samplename].unique()
-        for name in names:
-            ada = self.adata[:, self.adata.var[samplename]==name]
-            cms.append(CountMatrix(ada.X, ada.obs, ada.var, ada.uns, ada.obsm, ada.varm))
-        return cms
-
-    def __getitem__(self, ireg):
-        if issparse(cmat.cmat):
-            return cmat.cmat[idx]
-        return csr_matrix(cmat.cmat[idx])
-
+#    def split(self, samplename):
+#        cms = []
+#        names = self.adata.var.loc[:,samplename].unique()
+#        for name in names:
+#            ada = self.adata[:, self.adata.var[samplename]==name]
+#            cms.append(CountMatrix(ada.X, ada.obs, ada.var, ada.uns, ada.obsm, ada.varm))
+#        return cms
+#
     def __repr__(self):
         return "{} x {} CountMatrix with {} entries".format(self.adata.shape[0], self.adata.shape[1], self.adata.X.nnz)
 
     @property
-    def n_cells(self):
-        return self.adata.shape[1]
-
-    @property
-    def n_regions(self):
-        return self.adata.shape[0]
-
-    @property
     def shape(self):
-        return (self.n_regions, self.n_cells)
+        return self.adata.shape
 
     @property
     def __len__(self):
-        return self.n_regions
+        return self.shape[0]
 
     def export_regions(self, filename):
         """
