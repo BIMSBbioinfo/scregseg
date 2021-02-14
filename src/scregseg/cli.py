@@ -73,7 +73,7 @@ counts.add_argument('--cellgroup', dest='cellgroup', type=str,
                          "If specified, a pseudo-bulk count matrix will be created. "
                          "The table must have at least two columns, the first specifying the barcode name "
                          " and the second specifying the group label.")
-counts.add_argument('--with-fraglen', dest='with_fraglen', type=bool,
+counts.add_argument('--with-fraglen', dest='with_fraglen',
                     action='store_true', default=False,
                     help='Load fragment lengths in addition.') 
 
@@ -104,7 +104,7 @@ counts.add_argument('--barcodecolumn', dest='barcodecolumn', type=int,
                     help='Column index of barcode column (Zero-based) in the cellgroup table. Default=0', default=0) 
 counts.add_argument('--groupcolumn', dest='groupcolumn', type=int,
                     help='Column index of cell group/cluster column (Zero-based) in the cellgroup table. Default=1', default=1) 
-counts.add_argument('--with-fraglen', dest='with_fraglen', type=bool,
+counts.add_argument('--with-fraglen', dest='with_fraglen',
                     action='store_true', default=False,
                     help='Load fragment lengths in addition.') 
 
@@ -154,14 +154,16 @@ merge = subparsers.add_parser('merge', description='Merge count matrices across 
 merge.add_argument('--incounts', dest='incounts', type=str,
                    nargs='+', help="Location of one or more input count matrices", required=True)
 merge.add_argument('--regions', dest='regions', type=str,
-                   help="Location of regions in bed format", required=True)
+                   help="Location of regions in bed format")
 merge.add_argument('--outcounts', dest='outcounts', type=str,
                    help="Location of the merged output count matrix", required=True)
+merge.add_argument('--names', dest='names', nargs='*', type=str,
+                   help="Sample names")
 
 groupcells = subparsers.add_parser('groupcells', description='Collapse cells within pre-defined groups (make pseudo-bulk). '
                                                              'This function operates on countmatrices.')
 groupcells.add_argument('--incounts', dest='incounts', type=str, help="Location of an input count matrix", required=True)
-groupcells.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
+groupcells.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format")
 groupcells.add_argument('--outcounts', dest='outcounts', type=str,
                         help="Location of the collapsed output count matrix", required=True)
 groupcells.add_argument('--cellgroup', dest='cellgroup', type=str,
@@ -174,7 +176,7 @@ groupcells.add_argument('--groupcolumn', dest='groupcolumn', type=int,
 
 subset = subparsers.add_parser('subset', description='Subset cells by cell name.')
 subset.add_argument('--incounts', dest='incounts', type=str, help="Location of an input count matrix", required=True)
-subset.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
+subset.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format")
 subset.add_argument('--outcounts', dest='outcounts', type=str, help="Location of an output count matrix", required=True)
 subset.add_argument('--subset', dest='subset', type=str,
                     help="Location of a table defining "
@@ -187,7 +189,7 @@ subset.add_argument('--barcodecolumn', dest='barcodecolumn', type=int,
 fsegment = subparsers.add_parser('fit_segment', description='Fit a Scregseg segmentation model.')
 fsegment.add_argument('--counts', dest='counts', nargs='+', type=str,
                       help="Location of one or more input count matrices. Must span the same regions.", required=True)
-fsegment.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
+fsegment.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format")
 fsegment.add_argument('--storage', dest='storage', type=str, help="Location of the output folder.", required=True)
 fsegment.add_argument('--labels', dest='labels', nargs='*', type=str,
                       help="Label names for the countmatrices")
@@ -222,7 +224,7 @@ fsegment.add_argument('--modelname', dest='modelname', type=str,
 segment = subparsers.add_parser('segment', description='Re-runs state calling for an existing Scregseg model.')
 segment.add_argument('--counts', dest='counts', nargs='+', type=str,
                       help="Location of one or more input count matrices. Must span the same regions.", required=True)
-segment.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format", required=True)
+segment.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format")
 segment.add_argument('--storage', dest='storage', type=str, help="Location of the output folder.", required=True)
 segment.add_argument('--labels', dest='labels', nargs='*', type=str,
                       help="Label names for the countmatrices")
@@ -358,6 +360,8 @@ enrichment.add_argument('--noplot', dest='noplot', action='store_true',
                         default=False, help='Whether to skip plotting the heatmap. Default: False')
 enrichment.add_argument('--ntop', dest='ntop', type=int, default=5,
                         help='Report n top enriched features per state. Default: n=5')
+enrichment.add_argument('--figsize', dest='figsize', type=str, default='10,10',
+                        help='Figure size. Default: 10,10')
 enrichment.add_argument('--using_genebody', dest='using_genebody', action='store_true',
                         default=False, help='Uses state enrichment in gene body (+/- flank). '
                         'Otherwise, the state enrichment is determined around the TSS only (+/- flank)')
