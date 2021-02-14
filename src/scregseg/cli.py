@@ -728,16 +728,16 @@ def local_main(args):
                                        args.mincounts,
                                        args.maxcounts, args.trimcounts,
                                        0)
-            print(subset.head(), subset.shape)
-            for mat, datum in zip(labels, data):
-                print(datum)
+            for mat, datum, fname in zip(labels, data, args.counts):
                 x = perm_matrix.dot(datum.adata.X).tocsr()
                 dat = CountMatrix(x, subset, datum.cannot)
                 #datum.adata = datum.adata[subset.ridx.values.tolist(),:]
                 #datum.export_counts(output[:-4] + f'_{mat}.mtx')
-                print(dat)
                 #dat.adata = datum.adata[subset.ridx.values.tolist(),:]
-                dat.export_counts(output[:-4] + f'_{mat}.mtx')
+                if fname.endswith('.h5ad'):
+                    dat.export_counts(output[:-4] + f'_{mat}.h5ad')
+                else:
+                    dat.export_counts(output[:-4] + f'_{mat}.mtx')
              
 
     elif args.program == 'annotate':
