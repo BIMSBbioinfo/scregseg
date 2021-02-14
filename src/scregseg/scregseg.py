@@ -511,103 +511,256 @@ class Scregseg(object):
 
         for obs_seqfreq in obs_seqfreqs:
 
-            if mode == 'probability':
-                mat = obs_seqfreq / obs_seqfreq.sum(1, keepdims=True)
-            elif mode == 'raw':
-                mat = obs_seqfreq
-            elif mode == 'zscore':
-                mat = zscore(obs_seqfreq, axis=1)
-            elif mode in ['fold', 'logfold', 'chisqstat']:
-                mat = self.broadregion_enrichment(obs_seqfreq, obs_seqfreq.sum(1), mode=mode)
+            #if mode == 'probability':
+            #    mat = obs_seqfreq / obs_seqfreq.sum(1, keepdims=True)
+            #elif mode == 'raw':
+            #    mat = obs_seqfreq
+            #elif mode == 'zscore':
+            #    mat = zscore(obs_seqfreq, axis=1)
+            if mode in ['fold', 'logfold', 'chisqstat']:
+                df = self.broadregion_enrichment(obs_seqfreq, obs_seqfreq.sum(1), mode=mode)
             else:
                 raise ValueError('{} not supported for cell2state association'.format(mode))
-
-            enrs.append(mat)
+            
+            #df = pd.DataFrame(mat, columns=self.to_statenames(np.arange(self.n_components)),
+            #                  index=featurenames).T
+                         
+            enrs.append(df.T)
+        enrs = pd.concat(enrs, axis=0)
 
         return enrs
 
-    def get_state_stats(self):
+    def get_state_frequency(self):
+        """ get state frequency
+
+        Returns
+        -------
+        pd.Series :
+            Series containing the state frequencies per state.
+        """
         if self._segments is None:
             raise ValueError("No segmentation results available. Please run segment(data, regions) first.")
 
-        state_counts = pd.Series(self._segments.name).value_counts()
+        state_counts = pd.Series(self._segments.name).value_counts()[::-1]
         return state_counts
 
-    def plot_state_abundance(self):
-        """
-        plot state statistics
-        """
+    def plot_state_frequency(self, ax=None):
+        """ Plot state frequency
 
-        fig, ax = plt.subplots()
-        state_counts = self.get_state_stats()
+        Parameters
+        ----------
+        ax : None or matplotlib.axes.Axes
+        
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
+        if ax is None:
+            fig, ax = plt.subplots()
+        state_counts = self.get_state_frequency()
 
-        sns.barplot(y=[l for l in state_counts.index],
+        sns.barplot(y=self.get_statenames(),
                     x=state_counts,
                     ax=ax,
                     color="lightblue")
-                    #palette=[self.color[i] for i in state_counts.index])
+        ax.set_xlabel("Number of bins per state")
+        ax.set_ylabel("States")
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['bottom'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        return ax
 
-        return fig
+    def plot_state_abundance(self, ax=None):
+        """ Plot state frequency
 
-    def plot_fragmentsize(self, frag):
-        df =  pd.DataFrame(frag.cmat.toarray(), columns=frag.cannot.index)
-        df['name'] = self._segments.name
-        adf = df.groupby('name').aggregate('mean')
-        fig, ax =  plt.subplots()
-        sns.heatmap(sdf, ax=ax)
-
-    def plot_readdepth(self):
+        Parameters
+        ----------
+        ax : None or matplotlib.axes.Axes
+        
+        Returns
+        -------
+        matplotlib.axes.Axes
         """
-        plots read depths associated with states
-        """
-        fig, axes = plt.subplots()
-        segs = self._segments.copy()
-        segs['log_readdepth'] = np.log10(segs['readdepth'] + 1)
-        sns.violinplot(x="log_readdepth", y='name', data=segs, orient='h', ax=axes, color="lightblue")
-        fig.tight_layout()
-        return fig
+        warnings.warn('plot_state_abundance deprecated. Please use plot_state_frequency',
+                      category=DeprecationWarning)
+        return self.plot_state_frequency(ax)
 
-    def plot_normalized_emissions(self, idat=None, selectedstates=None):
-       """ Plot background normalized emission probabilities.
+    def plot_fragmentsize(self, adata, basis='frag_lens', bystate=True, ax=None, **kwargs):
+        """ Plots the fragment size distribution.
+
+        Parameters
+        ----------
+        adata : AnnData
+            AnnData with associated fragment lengths per region.
+            The number of regions in adata must be the same as in self._segments.
+            Fragment lengths can be obtained using the --with-fraglens option
+            when using scregseg bam_to_counts or scregseg fragment_to_counts.
+        basis : str
+            Key at which the fragment size is stored. Default: "frag_lens"
+        bystate : bool
+            Whether to plot per state distributions. Default: True.
+        ax : matplotlib.axes.Axes or None
+            matplotlib.axes.Axes object 
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
+        if basis not in adata.obsm:
+            raise ValueError(f'{basis} not in adata')
+        if ax is None:
+            fig, ax =  plt.subplots()
+        
+        states = self.get_statenames()
+        fragsizes = np.zeros((len(states), adata.obsm[basis].shape[1]))
+        for i, state in enumerate(states):
+           p=np.asarray(adata.obsm[basis][np.where(list(self._segments.name==state))].sum(0)).flatten()
+           fragsizes[i] = p
+
+        if not bystate:
+            fragsizes = fragsizes.sum(0, keepdims=True)
+            fragsizes /= fragsizes.sum(1, keepdims=True)
+            ax.plot(np.arange(fragsizes.shape[1]), fragsizes[0])
+            ax.set_xlabel("Fragment length")
+            ax.set_ylabel("Frequency")
+        else:
+            fragsizes /= fragsizes.sum(1, keepdims=True)
+            df = pd.DataFrame(fragsizes, index=states, columns=[f'{i}bp' for i in range(fragsizes.shape[1])])
+            sns.heatmap(df, ax=ax, **kwargs)
+            plt.tight_layout()
+            ax.set_xlabel("Fragment length")
+            ax.set_ylabel("States")
+        return ax
+
+    def plot_readdepth(self, log_count=True, ax=None):
+        """ Plots read depths associated with states
+
+        Parameters
+        ----------
+        log_count : bool
+            Whether to plot log10(count + 1). Default: True
+        ax : matplotlib.axes.Axes or None
+            matplotlib.axes.Axes object 
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+        """
+        if ax is None:
+            fig, ax = plt.subplots()
+
+        statenames = self.get_statenames()
+        if log_count:
+            segs = self._segments[['name', 'readdepth']].copy()
+            segs['log_readdepth'] = np.log10(segs['readdepth'] + 1)
+            sns.violinplot(x="log_readdepth", y='name',
+                           data=segs, orient='h', ax=ax, color="lightblue",
+                           order=statenames)
+            ax.set_xlabel("Log10(Read counts +1) per state")
+        else:
+            sns.violinplot(x="readdepth", y='name',
+                           data=segs, orient='h', ax=ax, color="lightblue",
+                           order=statenames)
+            ax.set_xlabel("Read counts per state")
+        ax.set_ylabel("States")
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['bottom'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        return ax
+
+    def log_fold_emission(self, selected_states):
+       """ Compute normalized and log transformed state emissions.
+
+       This function computes the log-transformed 
+       state emission probabilities normalized by sequencing depths across cells.
 
        Parameters
        ----------
-       idat : int
-           index of the idat's countmatrix
+       selected_states : list(state names) or None
+           If present, only these states are considered, otherwise, all states are computed.
 
        Returns
        -------
-       fig :
-           sns.clustermap figure object
+       pd.DataFrame :
+           DataFrame containing the log-normalized emission probabilities
        """
-       if idat is None:
-           em = np.concatenate([es + ep for es, ep in zip(self.model.emission_suffstats_, self.model.emission_prior_)], axis=1)
-       else:
-           em = self.model.emission_suffstats_[idat] + self.model.emission_prior_[idat]
+
+       em = np.concatenate([es + ep for es, ep in zip(self.model.emission_suffstats_, self.model.emission_prior_)], axis=1)
 
        nem = em / em.sum(1, keepdims=True)
        tem = em.sum(0, keepdims=True)/em.sum()
        lodds = np.log(nem) - np.log(tem)
 
        if hasattr(self, "labels_"):
-           if idat is None:
-               l = self.labels_.label
-           else:
-               l = self.labels_[self.labels_.matrixid == idat].label
+           l = self.labels_.label
        else:
            l = [str(i) for i in range(lodds.shape[1])]
 
-       df = pd.DataFrame(lodds, columns=l, index=self.to_statenames(np.arange(self.n_components))).T
+       df = pd.DataFrame(lodds, columns=l, index=self.get_statenames())
 
-       if selectedstates is not None:
-           df = df[selectedstates]
+       if selected_states is not None:
+           df = df.loc[selected_states,:]
+       return df
 
-       g = sns.clustermap(df, center=0., robust=True, cmap='RdBu_r', figsize=(15,15))
-       g.ax_heatmap.set_ylabel('Features')
-       g.ax_heatmap.set_xlabel('States')
+    def plot_emissions(self, selected_states=None,
+                       center=0., robust=True, cmap='RdBu_r',
+                       row_cluster=False, **kwargs):
+       """ Plot log-transformed normalized emission probabilities.
 
+       Parameters
+       ----------
+       selected_states : bool
+           Only plot selected states
+       **kwargs :
+           additional sns.clustermap parameters
+
+       Returns
+       -------
+       fig :
+           sns.clustermap figure object
+       """
+       df = self.log_fold_emission(selected_states)
+       g = sns.clustermap(df, center=center, robust=robust,
+                          cmap=cmap,
+                          row_cluster=row_cluster, **kwargs)
+       g.ax_heatmap.set_ylabel('States')
+       g.ax_heatmap.set_xlabel('Cells/clusters')
        return g
 
+    def plot_cell_state_association(self, adata,
+                                    mode='logfold', prob_max_threshold=0.0,
+                                    center=0., robust=True,
+                                    cmap='vlag', row_cluster=False, **kwargs):
+       """ Plot cell-to-state association.
+
+       Parameters
+       ----------
+       adata : anndata.AnnData
+           Count matrix
+       mode : str
+           Enrichment test variant. Default: logfold
+       prob_max_threshold : float
+           Posterior prob threshold. Default: 0.0
+       **kwargs :
+           additional sns.clustermap parameters
+
+       Returns
+       -------
+       fig :
+           sns.clustermap figure object
+       """
+        X = adata.X
+        df = self.cell2state(X,mode,prob_max_threshold)
+        df = df.loc[self.get_statenames(),:]
+        g = sns.clustermap(df, center=center, robust=robust,
+                           cmap=cmap,
+                           row_cluster=row_cluster, *kwargs)
+        g.ax_heatmap.set_ylabel('States')
+        g.ax_heatmap.set_xlabel('Cells')
+        return g
+        
     @property
     def color(self):
         return self._color
@@ -947,11 +1100,11 @@ class Scregseg(object):
 
                 null_dist, _ = self._get_broadregion_null_distribution(int(scnt))
 
-                for istate in range(self.n_components):
+                for istate, _ in enumerate(self.get_statenames()):
                     n_obs = int(state_counts[ireg, istate])
                     enr[ireg, istate] = -min(np.log10(max(0.0, null_dist[n_obs:, istate].sum())), 15)
 
-        enrdf = pd.DataFrame(enr, columns=self.to_statenames(np.arange(self.n_components)),
+        enrdf = pd.DataFrame(enr, columns=self.get_statenames(),
                              index=featurenames)
 
         return enrdf

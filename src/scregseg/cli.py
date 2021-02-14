@@ -466,14 +466,21 @@ def make_state_summary(model, output, labels):
     """ Make and save summary statistics."""
     make_folders(os.path.join(output, 'summary'))
     model.get_state_stats().to_csv(os.path.join(output, 'summary', 'statesummary.csv'))
-    model.plot_state_abundance().savefig(os.path.join(output, 'summary', 'state_abundance.svg'))
-    model.plot_readdepth().savefig(os.path.join(output, 'summary', 'state_readdepth.svg'))
+    fig, ax = plt.subplots()
+    model.plot_state_frequency(ax=ax)
+    fig.savefig(os.path.join(output, 'summary', 'state_abundance.svg'))
+    plt.close(fig)
+    fig, ax = plt.subplots()
+    model.plot_readdepth(ax)
+    fig.savefig(os.path.join(output, 'summary', 'state_readdepth.svg'))
+    plt.close(fig)
 
 def plot_normalized_emissions(model, output, labels):
     """ Save normalized emission probabilities"""
     make_folders(os.path.join(output, 'summary'))
-    for i, dataname in enumerate(labels):
-        model.plot_normalized_emissions(i).savefig(os.path.join(output, 'summary', 'emission_{}.png'.format(dataname)))
+    model.plot_emissions().savefig(os.path.join(output, 'summary', 'emission.png'.format(dataname)))
+    #for i, dataname in enumerate(labels):
+    #    model.plot_emissions().savefig(os.path.join(output, 'summary', 'emission_{}.png'.format(dataname)))
 
 def plot_state_annotation_relationship_heatmap(model, storage, labels,
                                        title, threshold=0.0, groupby=None):
@@ -522,8 +529,6 @@ def plot_state_annotation_relationship(model, storage, labels,
     logging.debug('writing {}'.format(os.path.join(storage, 'annotation', '{}.png'.format(title))))
     fig.tight_layout()
     fig.savefig(os.path.join(storage, 'annotation', '{}.png'.format(title)))
-
-
 
 
 def local_main(args):
@@ -783,25 +788,34 @@ def local_main(args):
             obs.to_csv(os.path.join(outputenr, 'state_counts_{}.tsv'.format(args.title)), sep='\t')
 
         enr = scmodel.broadregion_enrichment(obs, mode=args.method)
+        cats = []
+        for cluster in enr.columns:
+            cats += list(enr[cluster].nlargest(args.ntop).index)
+        cats = list(set(cats))
+
+        enr = enr.loc[cats, :]
+
+        def _getfigsize(s):
+            return tuple([int(x) for x in s.split(',')])
 
         if not args.noplot:
             if args.method == 'logfold':
-                g = sns.clustermap(enr, cmap="RdBu_r", figsize=(20,30), robust=True, **{'center':0.0, 'vmin':-1.5, 'vmax':1.5})
+                g = sns.clustermap(enr, cmap="RdBu_r", figsize=_getfigsize(args.figsize), robust=True, **{'center':0.0, 'vmin':-1.5, 'vmax':1.5})
 
             elif args.method == 'chisqstat':
-                g = sns.clustermap(enr, cmap="Reds", figsize=(20,30), robust=True)
+                g = sns.clustermap(enr, cmap="Reds", figsize=_getfigsize(args.figsize), robust=True)
 
             elif args.method == 'pvalue':
-                g = sns.clustermap(enr, cmap="Reds", figsize=(20,30), robust=True)
+                g = sns.clustermap(enr, cmap="Reds", figsize=_getfigsize(args.figsize), robust=True)
             g.savefig(os.path.join(outputenr, "state_enrichment_{}_{}.png".format(args.method, args.title)))
 
         enr.to_csv(os.path.join(outputenr, 'state_enrichment_{}_{}.tsv'.format(args.method, args.title)), sep='\t')
-        ntop = args.ntop
-        with open(os.path.join(outputenr, 'state_enrichment_top{}_{}_{}.tsv'.format(ntop, args.method, args.title)), 'w') as f:
-            for state in enr.columns:
-                x = enr.nlargest(ntop, state)
-                for i, row in x.iterrows():
-                    f.write('{}\t{}\t{}\n'.format(state, i, row[state]))
+#        ntop = args.ntop
+#        with open(os.path.join(outputenr, 'state_enrichment_top{}_{}_{}.tsv'.format(ntop, args.method, args.title)), 'w') as f:
+#            for state in enr.columns:
+#                x = enr.nlargest(ntop, state)
+#                for i, row in x.iterrows():
+#                    f.write('{}\t{}\t{}\n'.format(state, i, row[state]))
 
     elif args.program == 'extract_motifs':
         outputpath = os.path.join(args.storage, args.modelname)
@@ -843,42 +857,13 @@ def local_main(args):
                        for _, row in scmodel._segments.iterrows()])
 
         aggfmat = None
-        for bamfile in args.bamfiles:
-            fmat = CountMatrix.create_from_fragmentsize(bamfile,
-                                                        bed.TEMPFILES[-1],
-                                                        resolution=1,
-                                                        maxlen=args.maxfraglen)
+        for ile in args.files:
+            cmat = CountMatrix.load(file)
 
-            if aggfmat is None:
-                aggfmat = fmat
-            else:
-                aggfmat.cmat += fmat.cmat
-
-        nfr = np.asarray(aggfmat.cmat[:, :150].sum(1)).flatten()
-        total = np.asarray(aggfmat.cmat.sum(1)).flatten()
-
-        scmodel._segments['nf_prop'] = nfr / total
-        scmodel._segments['nf_prop'] = scmodel._segments['nf_prop'].fillna(0.0)
-
-        scmodel.save(outputpath)
-
-        aggfmat.export_counts(os.path.join(resultspath,
-                           'fragmentsize_per_state_{}.mtx'.format(args.label)))
-        adf = fragmentlength_by_state(scmodel, aggfmat)
-        adf.to_csv(os.path.join(resultspath,
-                   'fragmentsize_per_state_{}.csv'.format(args.label)))
-
-        fig, ax =  plt.subplots(figsize=(10,10))
-        sns.heatmap(adf, ax=ax)
-        fig.savefig(os.path.join(resultspath,
-                    'fragmentsize_per_state_{}.svg'.format(args.label)))
-
-        fig, ax =  plt.subplots(figsize=(10,10))
-        x = np.asarray(aggfmat.cmat.sum(0)).flatten()
-        ax.plot(np.arange(aggfmat.shape[1]), x)
-        fig.savefig(os.path.join(resultspath,
-                    'fragmentsize_{}.svg'.format(args.label)))
-
+            fig, ax =  plt.subplots(figsize=(10,10))
+            scmodel.plot_fragmentsize(cmat.adata, ax=None, **kwargs):
+            fig.savefig(os.path.join(resultspath, 
+                        'fragmentsize_per_state_{}.svg'.format(args.label)))
 
 
 def main():
