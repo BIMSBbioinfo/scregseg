@@ -221,14 +221,46 @@ def cell_scaling_factors_fragments(fragmentfile, selected_barcodes=None):
         barcodecount[bct] += 1
     return pd.Series(barcodecount)
 
-def profile_counts(inbamfile, genomicregion,
+def profile_counts(file, genomicregion,
                    selected_barcodes=None,
-                   tag='CB', mapq=10, binsize=50):
+                   binsize=50, **kwargs):
     """ Generates pseudo-bulk tracks.
 
     Parameters
     ----------
-    bamin : str
+    file : str
+       Input bam or fragments file.
+    genomicregion : str
+       Genomic coordinates. E.g. 'chr1:5000-10000'
+    selected_barcodes : list(str) or None
+       Contains a list of barcodes to consider for the profile.
+       If None, all barcodes are considered. Default=None.
+    tag : str or callable
+       Barcode tag or callable to extract barcode from the alignments. Default: 'CB'
+    **kwargs : 
+       Additional arguments passed to profile_counts_bam or profile_counts_fragments
+
+    Returns
+    -------
+    anndata.AnnData
+       AnnData object a cell by region matrix containing the read counts for the given locus.
+    """
+    if file.endswith('.bam'):
+        return profile_counts_bam(file, genomicregion, selected_barcodes,
+                                  binsize, **kwargs)
+    else:
+        return profile_counts_fragments(file, genomicregion, selected_barcodes,
+                                        binsize)
+
+def profile_counts_bam(file, genomicregion,
+                       selected_barcodes=None,
+                       binsize=50,
+                       tag='CB', mapq=10):
+    """ Generates pseudo-bulk tracks.
+
+    Parameters
+    ----------
+    file : str
        Input bam file.
     genomicregion : str
        Genomic coordinates. E.g. 'chr1:5000-10000'
@@ -249,7 +281,7 @@ def profile_counts(inbamfile, genomicregion,
 
     """
 
-    afile = AlignmentFile(inbamfile, 'rb')
+    afile = AlignmentFile(file, 'rb')
     
     barcoder = Barcoder(tag)
 
@@ -262,6 +294,9 @@ def profile_counts(inbamfile, genomicregion,
     cells = []
     chrom, start, end = split_iv(genomicregion)
     barcodemap = OrderedDict()
+    if selected_barcodes is not None:
+        for i, sb in enumerate(selected_barcodes):
+            barcodemap[sb] = i
 
     for aln in afile.fetch(chrom, start, end):
         bar = barcoder(aln)
@@ -303,6 +338,87 @@ def profile_counts(inbamfile, genomicregion,
     obs = pd.DataFrame(index=[bc for bc in barcodemap])
     adata = AnnData(smat.T.tocsr(), obs=obs, var=var)
     adata.raw = adata
+    print('from_bam', adata)
+    return adata
+
+
+def profile_counts_fragments(file, genomicregion,
+                       selected_barcodes=None,
+                       binsize=50):
+    """ Generates pseudo-bulk tracks.
+
+    Parameters
+    ----------
+    file : str
+       Input bam file.
+    genomicregion : str
+       Genomic coordinates. E.g. 'chr1:5000-10000'
+    selected_barcodes : list(str) or None
+       Contains a list of barcodes to consider for the profile.
+       If None, all barcodes are considered. Default=None.
+    binsize : int
+       Resolution of the signal track in bp. Default: 50
+
+    Returns
+    -------
+    anndata.AnnData
+       AnnData object containing the read counts for the given locus.
+
+    """
+
+    bed = BedTool(file)
+    
+    def split_iv(gr):
+        chr_, res = gr.split(':')
+        start,end = res.split('-')
+        return chr_, int(start), int(end)
+
+    chrom, start, end = split_iv(genomicregion)
+    intersect = bed.intersect(BedTool([Interval(chrom, start, end)]), wa=True)
+    if len(intersect) == 0:
+        raise ValueError(f'No data in {genomicregion}')
+
+    positions = []
+    cells = []
+    barcodemap = OrderedDict()
+    if selected_barcodes is not None:
+        for i, sb in enumerate(selected_barcodes):
+            barcodemap[sb] = i
+
+    for region in intersect:
+        bar = region.name
+        if selected_barcodes is not None:
+            if bar not in selected_barcodes:
+                # skip barcode if not in selected_barcodes list
+                continue
+        if bar not in barcodemap:
+            barcodemap[bar] = len(barcodemap)
+        if region.start >= start:
+            positions.append(region.start - start)
+            cells.append(barcodemap[bar])
+        if region.end < end:
+            positions.append(region.end - start)
+            cells.append(barcodemap[bar])
+    print(len(cells))
+    smat = coo_matrix((np.ones(len(positions)), (positions, cells)),
+                      shape=(end-start, len(barcodemap)),
+                      dtype='int32')
+
+    # smoothing with binsize resolution
+    data = np.ones((binsize,smat.shape[0]))
+    offsets = np.arange(binsize)
+    di = dia_matrix((data,offsets), shape=(smat.shape[0],smat.shape[0]))
+    smat = di.dot(smat).tocsr()
+    smat = smat[::binsize]
+
+    var = pd.DataFrame({'chrom':[chrom] *int(np.ceil((end-start)/binsize)),
+                        'start':np.arange(start,end, binsize),
+                        'end':np.arange(start+binsize,end+binsize, binsize)})
+                        
+    obs = pd.DataFrame(index=[bc for bc in barcodemap])
+    adata = AnnData(smat.T.tocsr(), obs=obs, var=var)
+    adata.raw = adata
+    print('from_fragments', adata)
     return adata
 
 
