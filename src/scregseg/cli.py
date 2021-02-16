@@ -860,8 +860,8 @@ def local_main(args):
         for ile in args.files:
             cmat = CountMatrix.load(file)
 
-            fig, ax =  plt.subplots(figsize=(10,10))
-            scmodel.plot_fragmentsize(cmat.adata, ax=None, **kwargs):
+            fig, ax =  plt.subplots(figsize=(7,7))
+            scmodel.plot_fragmentsize(cmat.adata, ax, cmap='Blues')
             fig.savefig(os.path.join(resultspath, 
                         'fragmentsize_per_state_{}.svg'.format(args.label)))
 
