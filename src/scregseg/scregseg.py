@@ -707,50 +707,50 @@ class Scregseg(object):
     def plot_emissions(self, selected_states=None,
                        center=0., robust=True, cmap='RdBu_r',
                        row_cluster=False, **kwargs):
-       """ Plot log-transformed normalized emission probabilities.
+        """ Plot log-transformed normalized emission probabilities.
 
-       Parameters
-       ----------
-       selected_states : bool
-           Only plot selected states
-       **kwargs :
-           additional sns.clustermap parameters
+        Parameters
+        ----------
+        selected_states : bool
+            Only plot selected states
+        **kwargs :
+            additional sns.clustermap parameters
 
-       Returns
-       -------
-       fig :
-           sns.clustermap figure object
-       """
-       df = self.log_fold_emission(selected_states)
-       g = sns.clustermap(df, center=center, robust=robust,
-                          cmap=cmap,
-                          row_cluster=row_cluster, **kwargs)
-       g.ax_heatmap.set_ylabel('States')
-       g.ax_heatmap.set_xlabel('Cells/clusters')
-       return g
+        Returns
+        -------
+        fig :
+            sns.clustermap figure object
+        """
+        df = self.log_fold_emission(selected_states)
+        g = sns.clustermap(df, center=center, robust=robust,
+                           cmap=cmap,
+                           row_cluster=row_cluster, **kwargs)
+        g.ax_heatmap.set_ylabel('States')
+        g.ax_heatmap.set_xlabel('Cells/clusters')
+        return g
 
     def plot_cell_state_association(self, adata,
                                     mode='logfold', prob_max_threshold=0.0,
                                     center=0., robust=True,
                                     cmap='vlag', row_cluster=False, **kwargs):
-       """ Plot cell-to-state association.
+        """ Plot cell-to-state association.
 
-       Parameters
-       ----------
-       adata : anndata.AnnData
-           Count matrix
-       mode : str
-           Enrichment test variant. Default: logfold
-       prob_max_threshold : float
-           Posterior prob threshold. Default: 0.0
-       **kwargs :
-           additional sns.clustermap parameters
+        Parameters
+        ----------
+        adata : anndata.AnnData
+            Count matrix
+        mode : str
+            Enrichment test variant. Default: logfold
+        prob_max_threshold : float
+            Posterior prob threshold. Default: 0.0
+        **kwargs :
+            additional sns.clustermap parameters
 
-       Returns
-       -------
-       fig :
-           sns.clustermap figure object
-       """
+        Returns
+        -------
+        fig :
+            sns.clustermap figure object
+        """
         X = adata.X
         df = self.cell2state(X,mode,prob_max_threshold)
         df = df.loc[self.get_statenames(),:]
