@@ -1314,9 +1314,9 @@ class CountMatrix:
         self.adata.write(filename)
 
 
-def normalize_counts(adata, factors, scale=1e4):
-    adata.obs.loc[:, 'size_factor'] =  factors[adata.obs.index]
-    adata.X = diags(scale/adata.obs.size_factor).dot(adata.X)
+def normalize_counts(adata, size_factor, scale=1e4):
+    #adata.obs.loc[:, 'size_factor'] =  factors[adata.obs.index]
+    adata.X = diags(scale/adata.obs[size_factor]).dot(adata.X)
     return adata
 
 
