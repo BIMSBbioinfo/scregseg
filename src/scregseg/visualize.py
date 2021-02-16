@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 import scanpy as sc
 from coolbox.core.track.base import Track
-from coolbox.core.track.hist.plot import PlotHist
 from coolbox.core.track.hist.base import HistBase
 from scregseg.bam_utils import cell_scaling_factors
 from scregseg.bam_utils import profile_counts
@@ -13,70 +12,39 @@ import coolbox
 from coolbox.api import *
 from coolbox.utilities import split_genome_range
 
-class SingleCellTrack(HistBase):
-
-    @classmethod
-    def create_pseudobulk(cls, adata, groupby, maxcells=None, palettes=sc.pl.palettes.vega_20_scanpy,
-                          **kwargs):
-        names = adata.obs[groupby].unique()
-        print(names)
-        
-        colorname = groupby + '_colors'
-        if colorname not in adata.uns:
-            adata.uns[colorname] = palettes[:len(names)]
-        frame = None
-        for i, name in enumerate(names):
-            sadata = adata[adata.obs[groupby]==name,:]
-            if maxcells is not None:
-                sadata = sadata[:min(maxcells, sadata.shape[0]),:]
-            barcodes = sadata.obs.index
-
-            f = cls(adata, barcodes, title=f'{groupby}_{name}',
-                    color=adata.uns[colorname][i], **kwargs)
-            if frame is None:
-                frame = f
-            else:
-                frame += f
-            frame += HLine()
-        return frame
-
-
-    def __init__(self, adata, barcodes, **kwargs):
+class SingleTrack(HistBase):
+    def __init__(self, data, **kwargs):
         properties = HistBase.DEFAULT_PROPERTIES.copy()
         properties.update({
             'type': properties['style'],
             "file": 'dummy',
+            'style': 'fill',
             **kwargs,
         })
 
         super().__init__(**properties)
-        self.adata = adata[barcodes,:]
+        self.data = data
 
     def fetch_data(self, gr, **kwargs):
         chrom, start, end = split_genome_range(gr)
-        adata = self.adata
-        sdata = adata[:, (adata.var.chrom==chrom) & (adata.var.start>= start) &
-                      (adata.var.end<=end)]
+        sdata = self.data
+
         if self.properties['style'] == 'heatmap':
-            return np.asarray(sdata.X.todense())
-        data = np.asarray(sdata.X.sum(1)).flatten()
-        #data *= 1000/data.sum()
+            return sdata.todense()
+
+        data = np.asarray(sdata.mean(0)).flatten()
         return data
 
-class SingleCellBAMPlotter:
-    def __init__(self, bamfiles, labels, celltable, tag='RG'):
-        if not isinstance(bamfiles, list):
-            bamfiles = [bamfiles]
-        if not isinstance(labels, list):
-            labels = [labels]
-        self.factors = [cell_scaling_factors(bamfile, tag='RG') for bamfile in bamfiles]
-        self.bamfiles = bamfiles
-        if not isinstance(celltable, pd.DataFrame):
-            self.celltable = pd.read_csv(celltable)
-            self.celltable.set_index('barcode', inplace=True)
-        self.celltable = celltable
+
+class SingleCellTracks:
+    def __init__(self, cellannot, files, size_factor='rdepth', tag='RG', mapq=10):
+        if not isinstance(files, list):
+            files = [files]
+        self.size_factor = size_factor
+        self.files = files
+        self.cellannot = cellannot
         self.tag = tag
-        self.labels = labels
+        self.mapq = mapq
 
     def _split_iv(self, iv):
         chr_, res = gr.split(':')
@@ -85,24 +53,65 @@ class SingleCellBAMPlotter:
 
     def plot(self, grange, groupby, frames_before=None, 
              frames_after=None, normalize=True,
+             palettes=sc.pl.palettes.vega_20_scanpy,
+             add_total=True, style='fill',
              **kwargs):
-        adatas = [profile_counts(bamfile, grange, tag=self.tag) for bamfile in self.bamfiles]
-        df = self.celltable
-        for label, adata, factor in zip(self.labels, adatas, self.factors):
-            adata.obs.loc[:,"sample"]=label
+
+        adatas = [profile_counts(file,
+                                 grange,
+                                 selected_barcodes=self.cellannot.index.tolist(),
+                                 tag=self.tag, mapq=self.mapq) for file in self.files]
+
+        df = self.cellannot
+        for adata in adatas:
             adata.obs.loc[list(set(adata.obs.index).intersection(set(df.index))),df.columns] = df.loc[list(set(adata.obs.index).intersection(set(df.index))), :]
             
             if normalize:
-                _ = normalize_counts(adata, factor)
+                _ = normalize_counts(adata, self.size_factor)
         adata = merge_samples(adatas)
         adata = adata[adata.obs.index.isin(df.index)]
-        print(adata.X.sum())
+
         frame = XAxis()
+
         if frames_before:
             frame = frames_before
 
-        frame += SingleCellTrack.create_pseudobulk(adata, groupby, **kwargs)
+        if add_total:
+
+            frame += SingleTrack(adata.X,
+                                 #max_value=ymax if normalize else 'auto',
+                                 title='total',
+                                 color='black',
+                                 style='fill',
+                                 **kwargs)
+
+        if groupby in adata.obs.columns:
+            cats = adata.obs[groupby].cat.categories
+        else:
+            cats = {}
+        
+        datasets = {}
+        ymax = 0.0
+        colors = {}
+
+        for i, cat in enumerate(cats):
+            sdata = adata[adata.obs[groupby]==cat,:]
+            datasets[cat]=sdata.X
+            ymax = max(ymax, sdata.X.mean(0).max())
+            colors[cat] = palettes[i%len(palettes)]
+
+        for cat in cats:
+            frame += SingleTrack(datasets[cat],
+                                 max_value=ymax if normalize else 'auto',
+                                 title=str(cat),
+                                 color=colors[cat],
+                                 style=style,
+                                 **kwargs)
 
         if frames_after:
+            
+            print('len before adding genes', len(frame.tracks))
             frame += frames_after
+        print(len(frame.tracks))
         return frame.plot(grange)
+
