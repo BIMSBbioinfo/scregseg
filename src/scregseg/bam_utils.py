@@ -141,12 +141,35 @@ def remove_chroms(bamin, bamout, rmchroms):
     treatment.close()
 
 
-def cell_scaling_factors(inbamfile, tag='CB', mapq=10):
+def cell_scaling_factors(file, selected_barcodes=None, *args, **kwargs):
     """ Generates pseudo-bulk tracks.
 
     Parameters
     ----------
-    bamin : str
+    file : str
+       Input bam file.
+    tag : str or callable
+       Barcode tag or callable to extract barcode from the alignments. Default: 'CB'
+    mapq : int
+       Minimum mapping quality. Default: 10
+
+    Returns
+    -------
+    pd.Series
+       Series containing the barcode counts per barcode.
+
+    """
+    if file.endswith('.bam'):
+        return cell_scaling_factors_bam(file, selected_barcodes=selected_barcodes, *args, **kwargs)
+    else:
+        return cell_scaling_factors_fragments(file, selected_barcodes=selected_barcodes)
+
+def cell_scaling_factors_bam(file, selected_barcodes=None, tag='CB', mapq=10):
+    """ Generates pseudo-bulk tracks.
+
+    Parameters
+    ----------
+    file : str
        Input bam file.
     tag : str or callable
        Barcode tag or callable to extract barcode from the alignments. Default: 'CB'
@@ -161,12 +184,40 @@ def cell_scaling_factors(inbamfile, tag='CB', mapq=10):
     """
 
     barcodecount = Counter()
-    afile = AlignmentFile(inbamfile, 'rb')
+    afile = AlignmentFile(file, 'rb')
     barcoder = Barcoder(tag)
     for aln in afile.fetch():
         if aln.mapping_quality < mapq:
             continue
         bct = barcoder(aln)
+        if selected_barcodes is not None:
+            if bct not in selected_barcodes:
+               continue
+        barcodecount[bct] += 1
+    return pd.Series(barcodecount)
+
+def cell_scaling_factors_fragments(fragmentfile, selected_barcodes=None):
+    """ Generates pseudo-bulk tracks.
+
+    Parameters
+    ----------
+    fragmentfile : str
+       Input fragments file.
+
+    Returns
+    -------
+    pd.Series
+       Series containing the barcode counts per barcode.
+
+    """
+
+    barcodecount = Counter()
+    bed = BedTool(fragmentfile)
+    for region in bed:
+        bct = region.name
+        if selected_barcodes is not None:
+            if bct not in selected_barcodes:
+               continue
         barcodecount[bct] += 1
     return pd.Series(barcodecount)
 
