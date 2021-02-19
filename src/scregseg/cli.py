@@ -109,10 +109,6 @@ counts.add_argument('--mode', dest='mode', type=str, default='midpoint',
                     'independently or once if either end is located in the interval.'
                     ' Options are midpoint, countboth and eitherend. '
                     ' Default: mode=midpoint', choices=['eitherend', 'midpoint', 'countboth'])
-counts.add_argument('--barcodecolumn', dest='barcodecolumn', type=int,
-                    help='Column index of barcode column (Zero-based) in the cellgroup table. Default=0', default=0) 
-counts.add_argument('--groupcolumn', dest='groupcolumn', type=int,
-                    help='Column index of cell group/cluster column (Zero-based) in the cellgroup table. Default=1', default=1) 
 counts.add_argument('--with-fraglen', dest='with_fraglen',
                     action='store_true', default=False,
                     help='Load fragment lengths in addition.') 
@@ -131,10 +127,6 @@ bampseudobulk.add_argument('--cellgroup', dest='cellgroup', type=str,
                          "If specified, a pseudo-bulk count matrix will be created. "
                          "The table must have two columns, the first specifying the barcode name "
                          " and the second specifying the group label.")
-bampseudobulk.add_argument('--barcodecolumn', dest='barcodecolumn', type=int,
-                           help='Column index of barcode column (Zero-based) in the cellgroup table. Default=0', default=0) 
-bampseudobulk.add_argument('--groupcolumn', dest='groupcolumn', type=int,
-                           help='Column index of cell group/cluster column (Zero-based) in the cellgroup table. Default=1', default=1) 
 
 
 filtering = subparsers.add_parser('filter_counts', description='Filter countmatrix to remove poor quality cells')
@@ -445,7 +437,7 @@ def get_cells(table, barcodecolumn=0):
     cell = group2cellmap[group2cellmap.columns[barcodecolumn]].values
     return cell
 
-def get_cell_grouping(table, barcodecolumn=0, groupcolumn=1):
+def get_cell_grouping(countmatrix, table, barcodecolumn=0, groupcolumn=1):
     """ Extract cell-group mapping"""
     if table.endswith('.csv'):
         group2cellmap = pd.read_csv(table, sep=',')
@@ -453,6 +445,11 @@ def get_cell_grouping(table, barcodecolumn=0, groupcolumn=1):
         group2cellmap = pd.read_csv(table, sep='\t')
     elif table.endswith('.bct'):
         group2cellmap = pd.read_csv(table, sep='\t')
+    else:
+        #table refers to a column in the matrix
+        cell = countmatrix.cannot.index.values
+        group = countmatrix.cannot[table].values
+        return cell, group
 
     cell = group2cellmap[group2cellmap.columns[barcodecolumn]].values
     group = group2cellmap[group2cellmap.columns[groupcolumn]].values
@@ -562,7 +559,7 @@ def local_main(args):
                                   mode=args.mode, with_fraglen=args.with_fraglen)
         cm.adata.var.loc[:, "sample"] = args.samplename if args.samplename is not None else args.bamfile
         if args.cellgroup is not None:
-            cells,  groups = get_cell_grouping(args.cellgroup, args.barcodecolumn, args.groupcolumn)
+            cells,  groups = get_cell_grouping(cm, args.cellgroup)
             cm = cm.pseudobulk(cells, groups)
 
         cm.export_counts(args.counts)
@@ -575,7 +572,7 @@ def local_main(args):
 
         cm.adata.var.loc[:, "sample"] = args.samplename if args.samplename is not None else args.fragmentfile
         if args.cellgroup is not None:
-            cells,  groups = get_cell_grouping(args.cellgroup)
+            cells,  groups = get_cell_grouping(cm, args.cellgroup)
             cm = cm.pseudobulk(cells, groups)
 
         cm.export_counts(args.counts)
@@ -584,7 +581,7 @@ def local_main(args):
 
         logging.debug('Make pseudobulk bam-files')
 
-        cells, groups = get_cell_grouping(args.cellgroup, args.barcodecolumn, args.groupcolumn)
+        cells, groups = get_cell_grouping(cm, args.cellgroup)
 
         make_pseudobulk_bam(args.bamfile, args.outdir,
                             cells, groups,
@@ -606,7 +603,7 @@ def local_main(args):
         logging.debug('Group cells (pseudobulk)...')
         cm = CountMatrix.load(args.incounts, args.regions)
 
-        cells,  groups = get_cell_grouping(args.cellgroup, args.barcodecolumn, args.groupcolumn)
+        cells,  groups = get_cell_grouping(cm, args.cellgroup)
         pscm = cm.pseudobulk(cells, groups)
         pscm.export_counts(args.outcounts)
 
