@@ -130,7 +130,9 @@ bampseudobulk.add_argument('--cellgroup', dest='cellgroup', type=str,
                          " and the second specifying the group label.")
 
 
-filtering = subparsers.add_parser('filter_counts', description='Filter countmatrix to remove poor quality cells')
+
+
+filtering = subparsers.add_parser('filter', description='Filter countmatrix to remove poor quality cells and low-coverage regions.')
 filtering.add_argument('--incounts', dest='incounts', type=str, help="Location of input count matrix", required=True)
 filtering.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format")
 filtering.add_argument('--outcounts', dest='outcounts', type=str, 
@@ -592,7 +594,7 @@ def local_main(args):
         make_counting_bins(args.bamfile, args.binsize, args.regions,
                            args.remove_chroms)
 
-    elif args.program == 'filter_counts':
+    elif args.program == 'filter':
         logging.debug('Filter counts ...')
         cm = CountMatrix.load(args.incounts, args.regions)
         cm = cm.filter(args.mincounts, args.maxcounts,
