@@ -114,7 +114,8 @@ counts.add_argument('--with-fraglen', dest='with_fraglen',
                     help='Load fragment lengths in addition.') 
 
 
-bampseudobulk = subparsers.add_parser('make_pseudobulk_bam', description='Make pseudobulk tracks in BAM format')
+
+bampseudobulk = subparsers.add_parser('pseudobulk_tracks', description='Make pseudobulk tracks in BAM and optionally BigWig format')
 bampseudobulk.add_argument('--bamfile', dest='bamfile', type=str, help="Location of an indexed BAM-file", required=True)
 bampseudobulk.add_argument('--barcodetag', dest='barcodetag', type=str,
                     help="Barcode encoding tag. For instance, CB or RG depending on which tag represents "
@@ -577,7 +578,7 @@ def local_main(args):
 
         cm.export_counts(args.counts)
 
-    elif args.program == 'make_pseudobulk_bam':
+    elif args.program == 'pseudobulk_tracks':
 
         logging.debug('Make pseudobulk bam-files')
 
