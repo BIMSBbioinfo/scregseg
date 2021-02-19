@@ -607,7 +607,7 @@ class Scregseg(object):
         matplotlib.axes.Axes
         """
         basis = 'frag_lens'
-        if not has_fragmentlength(adata)
+        if not has_fragmentlength(adata):
             raise ValueError(f'{basis} not in adata')
         if ax is None:
             fig, ax =  plt.subplots()
