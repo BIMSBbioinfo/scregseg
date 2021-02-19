@@ -56,51 +56,54 @@ subparsers = parser.add_subparsers(dest='program')
 
 # dataset preprocessing and rearrangements
 counts = subparsers.add_parser('make_tile', description='Make genome-wide tile')
-counts.add_argument('--bamfile', '--fragmentfile', dest='bamfile', type=str, help="Location of an indexed BAM-file or a fragments.tsv.gz file (from CellRanger)", required=True)
+counts.add_argument('--bamfile', '--fragmentfile', dest='bamfile', type=str, help="Location of an indexed BAM-file or a fragments.tsv.gz file (from CellRanger). It is used to obtain the chromosome lengths.", required=True)
 counts.add_argument('--regions', dest='regions', type=str, help="Output location of regions in BED format. ", required=True)
 counts.add_argument('--binsize', dest='binsize', type=int, help="Binsize in bp. ", required=True)
 counts.add_argument('--remove_chroms', dest='remove_chroms', nargs='*',
                     default=['chrM', 'chrY', 'chrX'], 
                     help='List of chromosome names (or patterns) to remove from the tile. Default: chrM chrY chrX')
 
+
 counts = subparsers.add_parser('fragments_to_counts', description='Make countmatrix')
-counts.add_argument('--fragmentfile', dest='fragmentfile', type=str, help="Location of a fragments.tsv.gz file (output by cellranger)", required=True)
-counts.add_argument('--regions', dest='regions', type=str, help="Location of regions in BED format. ", required=True)
+counts.add_argument('--fragmentfile', '--file', '-f', dest='fragmentfile', type=str, help="Location of a fragments.tsv.gz file (output by cellranger)", required=True)
+counts.add_argument('--regions', dest='regions', type=str,
+                    help="Location of regions in BED format. ", required=True)
 counts.add_argument('--name', '--samplename', dest='samplename', type=str,
                     help='Sample name.')
 counts.add_argument('--counts', dest='counts', type=str,
                     help="Location of the output count matrix. "
-                    "The matrix will be in matrix market format. Another file will be stored with ending '.bct'"
-                    " holding information associated with the barcode names.", required=True)
+                    "Depending on the file ending, the matrix is stored in .h5ad or .mtx format. "
+                    "For .mtx files, an additional .bct file will be generated that holds the barcode names.",
+                    required=True)
 counts.add_argument('--cellgroup', dest='cellgroup', type=str,
-                    help="(Optional) Location of table (csv or tsv) defining groups of cells. "
+                    help="(Optional) Location of table (csv or tsv) defining groups of cells or a column name in the cell annotation. "
                          "If specified, a pseudo-bulk count matrix will be created. "
-                         "The table must have at least two columns, the first specifying the barcode name "
+                         "The table must have two columns, the first specifying the barcode name "
                          " and the second specifying the group label.")
 counts.add_argument('--with-fraglen', dest='with_fraglen',
                     action='store_true', default=False,
                     help='Load fragment lengths in addition.') 
 
+
 counts = subparsers.add_parser('bam_to_counts', description='Make countmatrix')
-counts.add_argument('--bamfile', dest='bamfile', type=str, help="Location of an indexed BAM-file", required=True)
+counts.add_argument('--bamfile', '--file', dest='bamfile', type=str, help="Location of an indexed BAM-file", required=True)
 counts.add_argument('--regions', dest='regions', type=str, help="Location of regions in BED format. ", required=True)
 counts.add_argument('--name', '--samplename', dest='samplename', type=str,
                     help='Sample name.')
 counts.add_argument('--counts', dest='counts', type=str,
                     help="Location of the output count matrix. "
-                    "The matrix will be in matrix market format. Another file will be stored with ending '.bct'"
-                    " holding information associated with the barcode names.", required=True)
+                    "Depending on the file ending, the matrix is stored in .h5ad or .mtx format. "
+                    "For .mtx files, an additional .bct file will be generated that holds the barcode names.",
+                    required=True)
 counts.add_argument('--barcodetag', dest='barcodetag', type=str,
                     help="Barcode encoding tag. For instance, CB or RG depending on which tag represents "
              "the barcode. If the barcode is encoded as prefix in the read name "
              "separated by '.' or ':' use '.' or ':'.", default='CB')
-
 counts.add_argument('--cellgroup', dest='cellgroup', type=str,
-                    help="(Optional) Location of table (csv or tsv) defining groups of cells. "
+                    help="(Optional) Location of table (csv or tsv) defining groups of cells or a column name in the cell annotation. "
                          "If specified, a pseudo-bulk count matrix will be created. "
-                         "The table must have at least two columns, the first specifying the barcode name "
+                         "The table must have two columns, the first specifying the barcode name "
                          " and the second specifying the group label.")
-
 counts.add_argument('--mode', dest='mode', type=str, default='midpoint',
                     help='Indicates whether to count mid-points, both ends '
                     'independently or once if either end is located in the interval.'
@@ -121,13 +124,12 @@ bampseudobulk.add_argument('--barcodetag', dest='barcodetag', type=str,
                     help="Barcode encoding tag. For instance, CB or RG depending on which tag represents "
              "the barcode. If the barcode is encoded as prefix in the read name "
              "separated by '.' or ':' use '.' or ':'.", default='CB')
-
 bampseudobulk.add_argument('--outdir', dest='outdir', type=str,
                    help="Output directory in which the pseudobulk BAM files are stored.", required=True)
 bampseudobulk.add_argument('--cellgroup', dest='cellgroup', type=str,
-                    help="(Optional) Location of table (csv or tsv) defining groups of cells. "
+                    help="(Optional) Location of table (csv or tsv) defining groups of cells or a column name in the cell annotation. "
                          "If specified, a pseudo-bulk count matrix will be created. "
-                         "The table must have at least two columns, the first specifying the barcode name "
+                         "The table must have two columns, the first specifying the barcode name "
                          " and the second specifying the group label.")
 bampseudobulk.add_argument('--barcodecolumn', dest='barcodecolumn', type=int,
                            help='Column index of barcode column (Zero-based) in the cellgroup table. Default=0', default=0) 
@@ -138,7 +140,11 @@ bampseudobulk.add_argument('--groupcolumn', dest='groupcolumn', type=int,
 filtering = subparsers.add_parser('filter_counts', description='Filter countmatrix to remove poor quality cells')
 filtering.add_argument('--incounts', dest='incounts', type=str, help="Location of input count matrix", required=True)
 filtering.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format")
-filtering.add_argument('--outcounts', dest='outcounts', type=str, help="Location of output count matrix", required=True)
+filtering.add_argument('--outcounts', dest='outcounts', type=str, 
+                    help="Location of output count matrix. "
+                    "Depending on the file ending, the matrix is stored in .h5ad or .mtx format. "
+                    "For .mtx files, an additional .bct file will be generated that holds the barcode names.",
+                    required=True)
 filtering.add_argument('--mincount', dest='mincounts', type=int,
                        default=0, help='Minimum number of counts per cell. Default: 0')
 filtering.add_argument('--minregioncount', dest='minregioncounts', type=int,
@@ -152,40 +158,57 @@ filtering.add_argument('--trimcount', dest='trimcounts', type=int,
                        '(e.g. high read counts in a single cell at some region).'
                        '--trimcount 1 amounts to binarization. Default: no trimming')
 
+
+
+
+
 merge = subparsers.add_parser('merge', description='Merge count matrices across cells')
 merge.add_argument('--incounts', dest='incounts', type=str,
                    nargs='+', help="Location of one or more input count matrices", required=True)
 merge.add_argument('--regions', dest='regions', type=str,
                    help="Location of regions in bed format")
 merge.add_argument('--outcounts', dest='outcounts', type=str,
-                   help="Location of the merged output count matrix", required=True)
-merge.add_argument('--names', dest='names', nargs='*', type=str,
-                   help="Sample names")
+                    help="Location of output count matrix. "
+                    "Depending on the file ending, the matrix is stored in .h5ad or .mtx format. "
+                    "For .mtx files, an additional .bct file will be generated that holds the barcode names.",
+                    required=True)
 
-groupcells = subparsers.add_parser('groupcells', description='Collapse cells within pre-defined groups (make pseudo-bulk). '
+groupcells = subparsers.add_parser('collapse', description='Collapse cells within pre-defined groups (make pseudo-bulk). '
                                                              'This function operates on countmatrices.')
 groupcells.add_argument('--incounts', dest='incounts', type=str, help="Location of an input count matrix", required=True)
 groupcells.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format")
 groupcells.add_argument('--outcounts', dest='outcounts', type=str,
-                        help="Location of the collapsed output count matrix", required=True)
+                    help="Location of output count matrix. "
+                    "Depending on the file ending, the matrix is stored in .h5ad or .mtx format. "
+                    "For .mtx files, an additional .bct file will be generated that holds the barcode names.",
+                    required=True)
 groupcells.add_argument('--cellgroup', dest='cellgroup', type=str,
-                        help="Location of a table defining cell groups within which to aggregate the reads.",
+                    help="Location of table (csv or tsv) defining groups of cells or a column name in the cell annotation. "
+                         "If specified, a pseudo-bulk count matrix will be created. "
+                         "The table must have two columns, the first specifying the barcode name "
+                         " and the second specifying the group label.")
                         required=True)
-groupcells.add_argument('--barcodecolumn', dest='barcodecolumn', type=int,
-                    help='Column index of barcode column (Zero-based) in the cellgroup table. Default=0', default=0) 
-groupcells.add_argument('--groupcolumn', dest='groupcolumn', type=int,
-                    help='Column index of cell group/cluster column (Zero-based) in the cellgroup table. Default=1', default=1) 
+
+
+
 
 subset = subparsers.add_parser('subset', description='Subset cells by cell name.')
 subset.add_argument('--incounts', dest='incounts', type=str, help="Location of an input count matrix", required=True)
 subset.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format")
-subset.add_argument('--outcounts', dest='outcounts', type=str, help="Location of an output count matrix", required=True)
+subset.add_argument('--outcounts', dest='outcounts', type=str, 
+                    help="Location of output count matrix. "
+                    "Depending on the file ending, the matrix is stored in .h5ad or .mtx format. "
+                    "For .mtx files, an additional .bct file will be generated that holds the barcode names.",
+                    required=True)
 subset.add_argument('--subset', dest='subset', type=str,
                     help="Location of a table defining "
                     "cell names which to retain for the output count matrix.",
                     required=True)
 subset.add_argument('--barcodecolumn', dest='barcodecolumn', type=int,
                     help='Column index of barcode column (Zero-based) in the subset table. Default=0', default=0) 
+
+
+
 
 # score a model from scratch
 fsegment = subparsers.add_parser('fit_segment', description='Fit a Scregseg segmentation model.')
@@ -201,7 +224,6 @@ fsegment.add_argument('--maxcount', dest='maxcounts', type=int, default=sys.maxs
                       help='Maximum number of counts per cell. Default: maxint')
 fsegment.add_argument('--minregioncount', dest='minregioncounts', type=int, default=0,
                       help='Minimum number of counts per region. Default: 0')
-#fsegment.add_argument('--topfrac', dest='topfrac', type=float, default=1., help='Fraction of top most covered regions to use.')
 fsegment.add_argument('--trimcount', dest='trimcounts', type=int,
                       default=sys.maxsize,
                       help='Maximum number of counts per matrix element. '
