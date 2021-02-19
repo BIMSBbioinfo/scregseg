@@ -25,6 +25,7 @@ from scregseg.countmatrix import get_cell_annotation
 from scregseg.countmatrix import make_counting_bins
 from scregseg.countmatrix import load_count_matrices
 from scregseg.countmatrix import sparse_count_reads_in_regions
+from scregseg.countmatrix import has_fragmentlength
 from scregseg.hmm import DirMulHMM
 from scregseg import Scregseg
 from scregseg.scregseg import run_segmentation
@@ -445,6 +446,22 @@ def make_state_summary(model, output, labels):
     fig.savefig(os.path.join(output, 'summary', 'state_readdepth.svg'))
     plt.close(fig)
 
+def plot_fragmentsize(scmodel, output, labels, cmats):
+    resultspath = os.path.join(output, 'summary')
+    make_folders(resultspath)
+
+    bed = BedTool([Interval(row.chrom, row.start, row.end) \
+                   for _, row in scmodel._segments.iterrows()])
+
+    aggfmat = None
+    for label, cmat in zip(labels, cmats):
+        if not has_fragmentlength(cmat.adata):
+            continue
+        fig, ax =  plt.subplots(figsize=(7,7))
+        scmodel.plot_fragmentsize(cmat.adata, ax, cmap='Blues')
+        fig.savefig(os.path.join(resultspath, 
+                    'fragmentsize_per_state_{}.svg'.format(label)))
+
 def plot_normalized_emissions(model, output, labels):
     """ Save normalized emission probabilities"""
     make_folders(os.path.join(output, 'summary'))
@@ -619,6 +636,7 @@ def local_main(args):
         make_state_summary(scmodel, outputpath, args.labels)
         plot_normalized_emissions(scmodel, outputpath, args.labels)
         save_score(scmodel, data, outputpath)
+        plot_fragmentsize(scmodel, outputpath, args.labels, data)
 
     elif args.program == 'segment':
         assert len(args.labels) == len(args.counts)

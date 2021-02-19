@@ -11,6 +11,7 @@ from pybedtools import Interval
 from pybedtools.helpers import cleanup
 from scregseg.hmm import DirMulHMM
 from scregseg.countmatrix import CountMatrix
+from scregseg.countmatrix import has_fragmentlength
 from scregseg.utils import make_folders
 from scipy.sparse import coo_matrix
 from scipy.sparse import diags
@@ -586,7 +587,7 @@ class Scregseg(object):
                       category=DeprecationWarning)
         return self.plot_state_frequency(ax)
 
-    def plot_fragmentsize(self, adata, basis='frag_lens', bystate=True, ax=None, **kwargs):
+    def plot_fragmentsize(self, adata, ax=None, **kwargs):
         """ Plots the fragment size distribution.
 
         Parameters
@@ -596,18 +597,17 @@ class Scregseg(object):
             The number of regions in adata must be the same as in self._segments.
             Fragment lengths can be obtained using the --with-fraglens option
             when using scregseg bam_to_counts or scregseg fragment_to_counts.
-        basis : str
-            Key at which the fragment size is stored. Default: "frag_lens"
-        bystate : bool
-            Whether to plot per state distributions. Default: True.
         ax : matplotlib.axes.Axes or None
             matplotlib.axes.Axes object 
+        **kwargs : 
+           additional arguments passed on to seaborn.heatmap
 
         Returns
         -------
         matplotlib.axes.Axes
         """
-        if basis not in adata.obsm:
+        basis = 'frag_lens'
+        if not has_fragmentlength(adata)
             raise ValueError(f'{basis} not in adata')
         if ax is None:
             fig, ax =  plt.subplots()
@@ -615,22 +615,15 @@ class Scregseg(object):
         states = self.get_statenames()
         fragsizes = np.zeros((len(states), adata.obsm[basis].shape[1]))
         for i, state in enumerate(states):
-           p=np.asarray(adata.obsm[basis][np.where(list(self._segments.name==state))].sum(0)).flatten()
-           fragsizes[i] = p
+            p=np.asarray(adata.obsm[basis][np.where(list(self._segments.name==state))].sum(0)).flatten()
+            fragsizes[i] = p
 
-        if not bystate:
-            fragsizes = fragsizes.sum(0, keepdims=True)
-            fragsizes /= fragsizes.sum(1, keepdims=True)
-            ax.plot(np.arange(fragsizes.shape[1]), fragsizes[0])
-            ax.set_xlabel("Fragment length")
-            ax.set_ylabel("Frequency")
-        else:
-            fragsizes /= fragsizes.sum(1, keepdims=True)
-            df = pd.DataFrame(fragsizes, index=states, columns=[f'{i}bp' for i in range(fragsizes.shape[1])])
-            sns.heatmap(df, ax=ax, **kwargs)
-            plt.tight_layout()
-            ax.set_xlabel("Fragment length")
-            ax.set_ylabel("States")
+        fragsizes /= fragsizes.sum(1, keepdims=True)
+        df = pd.DataFrame(fragsizes, index=states, columns=[f'{i}bp' for i in range(fragsizes.shape[1])])
+        sns.heatmap(df, ax=ax, **kwargs)
+        plt.tight_layout()
+        ax.set_xlabel("Fragment length")
+        ax.set_ylabel("States")
         return ax
 
     def plot_readdepth(self, log_count=True, ax=None):

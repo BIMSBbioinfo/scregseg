@@ -115,3 +115,37 @@ class SingleCellTracks:
         print(len(frame.tracks))
         return frame.plot(grange)
 
+
+def plot_fragmentsize(adata, ax=None, **kwargs):
+    """ Plots the fragment size distribution.
+
+    Parameters
+    ----------
+    adata : AnnData
+        AnnData with associated fragment lengths per region.
+        The number of regions in adata must be the same as in self._segments.
+        Fragment lengths can be obtained using the --with-fraglens option
+        when using scregseg bam_to_counts or scregseg fragment_to_counts.
+    basis : str
+        Key at which the fragment size is stored. Default: "frag_lens"
+    ax : matplotlib.axes.Axes or None
+        matplotlib.axes.Axes object 
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+    """
+    basis='frag_lens'
+    if basis not in adata.obsm:
+        raise ValueError(f'{basis} not in adata')
+    if ax is None:
+        fig, ax =  plt.subplots()
+    
+    fragsizes = adata.obsm[basis]
+    fragsizes = fragsizes.sum(0, keepdims=True)
+    fragsizes /= fragsizes.sum(1, keepdims=True)
+    ax.plot(np.arange(fragsizes.shape[1]), fragsizes[0])
+    ax.set_xlabel("Fragment length")
+    ax.set_ylabel("Frequency")
+    return ax
+

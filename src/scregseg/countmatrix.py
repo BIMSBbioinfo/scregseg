@@ -1336,3 +1336,5 @@ def merge_samples(adatalist):
     adata.var = adatalist[0].var
     return adata
 
+def has_fragmentlength(adata):
+    return 'frag_lens' in adata.obsm
