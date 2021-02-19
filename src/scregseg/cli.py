@@ -46,6 +46,7 @@ from pybedtools import Interval
 import argparse
 import logging
 
+modelname = 'dirmulhmm'
 
 parser = argparse.ArgumentParser(description='Scregseg - Single-Cell REGulatory landscape SEGmentation.')
 
@@ -217,10 +218,11 @@ fsegment.add_argument('--niter', dest='niter', type=int, default=100,
                       help='Number of EM iterations. Default: 100')
 fsegment.add_argument('--n_jobs', dest='n_jobs', type=int, default=1,
                       help='Number jobs to use for parallel processing. Default: 1')
-fsegment.add_argument('--modelname', dest='modelname', type=str,
-                      default='dirmulhmm', help='Model name. Default: dirmulhmm')
 
-# fitting a model from scratch
+
+
+
+
 segment = subparsers.add_parser('segment', description='Re-runs state calling for an existing Scregseg model.')
 segment.add_argument('--counts', dest='counts', nargs='+', type=str,
                       help="Location of one or more input count matrices. Must span the same regions.", required=True)
@@ -234,12 +236,10 @@ segment.add_argument('--maxcount', dest='maxcounts', type=int, default=sys.maxsi
                       help='Maximum number of counts per cell. Default: maxint')
 segment.add_argument('--minregioncount', dest='minregioncounts', type=int, default=0,
                       help='Minimum number of counts per region. Default: 0')
-#fsegment.add_argument('--topfrac', dest='topfrac', type=float, default=1., help='Fraction of top most covered regions to use.')
 segment.add_argument('--trimcount', dest='trimcounts', type=int,
                       default=sys.maxsize,
                       help='Maximum number of counts per matrix element. '
                       'For instance, trimcount 1 amounts to binarization. Default: maxint')
-segment.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name. Default: dirmulhmm')
 
 plotannotate = subparsers.add_parser('plot_emission', description='Plot state-emissions.')
 plotannotate.add_argument('--output', dest='output', type=str,
@@ -278,8 +278,6 @@ seg2bed.add_argument('--max_state_abundance', dest='max_state_abundance', type=f
          'This parameters allows to report only rarely occurring states. '
          'Abundant states are filtered out as they usually reflect the genomic background distribution. '
          'A good choice for this is a value that is slightly lower than 1./n_state. Default=1.')
-seg2bed.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name. Default: dirmulhmm')
-
 seg2bed.add_argument('--nstates', dest='nstates', type=int, default=-1,
                      help='Number of states to export. Default: -1 (all states are considered).')
 seg2bed.add_argument('--nregsperstate', dest='nregsperstate', type=int, default=-1,
@@ -314,8 +312,9 @@ annotate.add_argument('--labels', dest='labels', nargs='+', type=str,
 annotate.add_argument('--storage', dest='storage', type=str,
                       help='Location for containing the pre-trained segmentation and '
                       'for storing the annotated segmentation results', required=True)
-annotate.add_argument('--modelname', dest='modelname', type=str,
-                      default='dirmulhmm', help='Model name. Default: dirmulhmm')
+
+
+
 
 plotannotate = subparsers.add_parser('plot_annot', description='Plot state-annotation associated.')
 plotannotate.add_argument('--labels', dest='labels', nargs='+', type=str,
@@ -329,12 +328,14 @@ plotannotate.add_argument('--threshold', dest='threshold', type=float, default=0
                           help="Threshold on posterior decoding probability. "
                                 "Only export results that exceed the posterior decoding threshold. "
                                 "This allows to adjust the stringency of state calls for down-stream analysis steps.")
-plotannotate.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name. Default: dirmulhmm')
 plotannotate.add_argument('--plottype', dest='plottype', type=str, default='boxplot',
                           choices=['boxplot', 'countplot', 'heatmap'],
                           help='Plot type')
 plotannotate.add_argument('--groupby', dest='groupby', type=str,
                           help="Annotation label.", default=None)
+
+
+
 
 enrichment = subparsers.add_parser('enrichment', description='Computes state abundance enrichment in and around the given feature sets')
 enrichment.add_argument('--storage', dest='storage', type=str,
@@ -355,7 +356,6 @@ enrichment.add_argument('--method', dest='method', type=str, default='chisqstat'
                         'chisqstat compute (o - e)^2 / e where o and e denote the observed and expected state number of state counts (faster than pvalue).'
                         'Default: chisqstat',
                         choices=['pvalue', 'logfold', 'chisqstat'])
-enrichment.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name. Default: dirmulhmm')
 enrichment.add_argument('--noplot', dest='noplot', action='store_true',
                         default=False, help='Whether to skip plotting the heatmap. Default: False')
 enrichment.add_argument('--ntop', dest='ntop', type=int, default=5,
@@ -370,6 +370,9 @@ enrichment.add_argument('--output', dest='output', type=str,
                         help='Alternative output directory. If not specified, '
                              'the results are stored in <storage>/<modelname>/annotation')
 
+
+
+
 motifextraction = subparsers.add_parser('extract_motifs', description='Extract motifs associated with states')
 motifextraction.add_argument('--storage', dest='storage', type=str,
                              help="Location for containing the pre-trained segmentation "
@@ -377,7 +380,6 @@ motifextraction.add_argument('--storage', dest='storage', type=str,
 motifextraction.add_argument('--refgenome', dest='refgenome', type=str, help="Reference genome.", required=True)
 motifextraction.add_argument('--ntop', dest='ntop', type=int,
                              help="Positive set size. Default: 15000", default=15000)
-motifextraction.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name. Default: dirmulhmm')
 motifextraction.add_argument('--ngap', dest='ngap', type=int,
                              help="Gap size between positive and negative set. Default: 70000",
                              default=70000)
@@ -628,7 +630,7 @@ def local_main(args):
     elif args.program == 'fit_segment':
         assert len(args.labels) == len(args.counts)
 
-        outputpath = os.path.join(args.storage, args.modelname)
+        outputpath = os.path.join(args.storage, modelname)
         logging.debug('Segmentation ...')
         # fit on subset of the data
         data = load_count_matrices(args.counts, args.regions,
@@ -667,7 +669,7 @@ def local_main(args):
     elif args.program == 'segment':
         assert len(args.labels) == len(args.counts)
 
-        outputpath = os.path.join(args.storage, args.modelname)
+        outputpath = os.path.join(args.storage, modelname)
         data = load_count_matrices(args.counts,
                                                args.regions,
                                                args.mincounts,
@@ -683,7 +685,7 @@ def local_main(args):
 
 
     elif args.program == 'seg_to_bed':
-        outputpath = os.path.join(args.storage, args.modelname)
+        outputpath = os.path.join(args.storage, modelname)
 
         scmodel = Scregseg.load(outputpath)
 
@@ -713,7 +715,7 @@ def local_main(args):
 
         logging.debug("Exporting {} states with {} regions".format(len(query_states), subset.shape[0]))
         if args.output == '':
-            output = outputpath = os.path.join(args.storage, args.modelname, 'summary', 'segments.bed')
+            output = outputpath = os.path.join(args.storage, modelname, 'summary', 'segments.bed')
         else:
             output = args.output
 
@@ -731,9 +733,6 @@ def local_main(args):
             for mat, datum, fname in zip(labels, data, args.counts):
                 x = perm_matrix.dot(datum.adata.X).tocsr()
                 dat = CountMatrix(x, subset, datum.cannot)
-                #datum.adata = datum.adata[subset.ridx.values.tolist(),:]
-                #datum.export_counts(output[:-4] + f'_{mat}.mtx')
-                #dat.adata = datum.adata[subset.ridx.values.tolist(),:]
                 if fname.endswith('.h5ad'):
                     dat.export_counts(output[:-4] + f'_{mat}.h5ad')
                 else:
@@ -741,7 +740,7 @@ def local_main(args):
              
 
     elif args.program == 'annotate':
-        outputpath = os.path.join(args.storage, args.modelname)
+        outputpath = os.path.join(args.storage, modelname)
         scmodel = Scregseg.load(outputpath)
 
         assert len(args.labels) == len(args.files), "Number of files and labels mismatching"
@@ -752,7 +751,7 @@ def local_main(args):
         scmodel.save(outputpath)
 
     elif args.program == 'plot_annot':
-        outputpath = os.path.join(args.storage, args.modelname)
+        outputpath = os.path.join(args.storage, modelname)
         logging.debug('Plot annotation ...')
         scmodel = Scregseg.load(outputpath)
 
@@ -766,7 +765,7 @@ def local_main(args):
                                            args.threshold, args.groupby)
 
     elif args.program == 'enrichment':
-        outputpath = os.path.join(args.storage, args.modelname)
+        outputpath = os.path.join(args.storage, modelname)
 
         logging.debug('enrichment analysis')
         scmodel = Scregseg.load(outputpath)
@@ -818,7 +817,7 @@ def local_main(args):
 #                    f.write('{}\t{}\t{}\n'.format(state, i, row[state]))
 
     elif args.program == 'extract_motifs':
-        outputpath = os.path.join(args.storage, args.modelname)
+        outputpath = os.path.join(args.storage, modelname)
 
         if args.output is None:
             motifoutput = os.path.join(outputpath, 'motifs')

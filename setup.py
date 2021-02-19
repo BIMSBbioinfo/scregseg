@@ -102,6 +102,7 @@ setup(
                 'pandas',
                 'numba',
                 'anndata',
+                'scanpy',
                 'pybedtools',
                 'pysam',
                 'matplotlib',
