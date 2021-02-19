@@ -129,10 +129,6 @@ bampseudobulk.add_argument('--barcodecolumn', dest='barcodecolumn', type=int,
 bampseudobulk.add_argument('--groupcolumn', dest='groupcolumn', type=int,
                            help='Column index of cell group/cluster column (Zero-based) in the cellgroup table. Default=1', default=1) 
 
-batchannot = subparsers.add_parser('sampleannot', description='Add sample annotation to a count matrix')
-batchannot.add_argument('--counts', dest='counts', type=str, help="Location of a count matrix.", required=True)
-batchannot.add_argument('--batches', dest='batches', type=str, nargs='+',
-                        help="Batch name:value pairs to attach", required=True)
 
 filtering = subparsers.add_parser('filter_counts', description='Filter countmatrix to remove poor quality cells')
 filtering.add_argument('--incounts', dest='incounts', type=str, help="Location of input count matrix", required=True)
@@ -241,15 +237,7 @@ segment.add_argument('--trimcount', dest='trimcounts', type=int,
                       help='Maximum number of counts per matrix element. '
                       'For instance, trimcount 1 amounts to binarization. Default: maxint')
 
-plotannotate = subparsers.add_parser('plot_emission', description='Plot state-emissions.')
-plotannotate.add_argument('--output', dest='output', type=str,
-                          help="Output figure.", required=True)
-plotannotate.add_argument('--storage', dest='storage', type=str,
-                          help="Location for containing the pre-trained segmentation "
-                          "and for storing the annotated segmentation results", required=True)
-plotannotate.add_argument('--modelname', dest='modelname', type=str, default='dirmulhmm', help='Model name. Default: dirmulhmm')
-plotannotate.add_argument('--states', dest='states', type=str, nargs='*',
-                          help='Selection of states to visualize. Default: all states are visualized')
+
 
 
 seg2bed = subparsers.add_parser('seg_to_bed', description='Export state calls in BED-format')
@@ -400,26 +388,6 @@ motifextraction.add_argument('--method', dest='method', type=str,
                         default='betweenstates',
                         help='Extraction method determines how to constitute the negative samples. betweenstates'
                              ' uses the other high-confidence state calls as contrast.')
-
-fragmentsize = subparsers.add_parser('fragmentsize',
-                                     description='Inspect fragment size distribution per state')
-fragmentsize.add_argument('--storage', dest='storage', type=str,
-                          help="Location for containing the pre-trained segmentation "
-                          "and for storing the annotated segmentation results",
-                          required=True)
-fragmentsize.add_argument('--bamfiles', dest='bamfiles', type=str, nargs='+',
-                          help="Location of one or more BAM file containing paired-end reads.",
-                          required=True)
-fragmentsize.add_argument('--label', dest='label', type=str, default='sample',
-                          help="(Optional) Sample labels. Default: sample")
-fragmentsize.add_argument('--modelname', dest='modelname',
-                          type=str, default='dirmulhmm', help='Model name. Default: dirmulhmm')
-fragmentsize.add_argument('--maxfraglen', dest='maxfraglen', type=int,
-                          default=1000, help="Maximum fragment length in bp.")
-fragmentsize.add_argument('--output', dest='output', type=str,
-                        default=None,
-                        help='Alternative output directory. If not specified, '
-                             'the results are stored in <storage>/<modelname>/summary')
 
 
 
@@ -590,14 +558,6 @@ def local_main(args):
                   trimcount=args.trimcounts)
         cm.export_counts(args.outcounts)
 
-    elif args.program == 'batchannot':
-        logging.debug('Adding annotation ...')
-        cannot = get_cell_annotation(args.counts)
-        for batch in args.batches:
-            name, value = batch.split(':')
-            cannot[name] = value
-        save_cellannotation(args.counts, cannot)
-
     elif args.program == 'groupcells':
         logging.debug('Group cells (pseudobulk)...')
         cm = CountMatrix.load(args.incounts, args.regions)
@@ -659,12 +619,6 @@ def local_main(args):
         make_state_summary(scmodel, outputpath, args.labels)
         plot_normalized_emissions(scmodel, outputpath, args.labels)
         save_score(scmodel, data, outputpath)
-
-    elif args.program == 'plot_emission':
-
-        outputpath = os.path.join(args.storage, args.modelname)
-        scmodel = Scregseg.load(outputpath)
-        scmodel.plot_normalized_emissions(selectedstates=args.states).savefig(args.output)
 
     elif args.program == 'segment':
         assert len(args.labels) == len(args.counts)
@@ -809,12 +763,6 @@ def local_main(args):
             g.savefig(os.path.join(outputenr, "state_enrichment_{}_{}.png".format(args.method, args.title)))
 
         enr.to_csv(os.path.join(outputenr, 'state_enrichment_{}_{}.tsv'.format(args.method, args.title)), sep='\t')
-#        ntop = args.ntop
-#        with open(os.path.join(outputenr, 'state_enrichment_top{}_{}_{}.tsv'.format(ntop, args.method, args.title)), 'w') as f:
-#            for state in enr.columns:
-#                x = enr.nlargest(ntop, state)
-#                for i, row in x.iterrows():
-#                    f.write('{}\t{}\t{}\n'.format(state, i, row[state]))
 
     elif args.program == 'extract_motifs':
         outputpath = os.path.join(args.storage, modelname)
@@ -839,30 +787,6 @@ def local_main(args):
         os.environ['JANGGU_OUTPUT'] = motifoutput
         motifextractor.extract_motifs()
         motifextractor.save_motifs(os.path.join(motifoutput, 'scregseg_motifs.meme'))
-
-    elif args.program == 'fragmentsize':
-        logging.debug('Extract fragment size distribution ...')
-        outputpath = os.path.join(args.storage, args.modelname)
-
-        if args.output is None:
-            resultspath = os.path.join(outputpath, 'summary')
-        else:
-            resultspath = args.output
-        make_folders(resultspath)
-
-        scmodel = Scregseg.load(outputpath)
-
-        bed = BedTool([Interval(row.chrom, row.start, row.end) \
-                       for _, row in scmodel._segments.iterrows()])
-
-        aggfmat = None
-        for ile in args.files:
-            cmat = CountMatrix.load(file)
-
-            fig, ax =  plt.subplots(figsize=(7,7))
-            scmodel.plot_fragmentsize(cmat.adata, ax, cmap='Blues')
-            fig.savefig(os.path.join(resultspath, 
-                        'fragmentsize_per_state_{}.svg'.format(args.label)))
 
 
 def main():
