@@ -602,8 +602,8 @@ def local_main(args):
                   trimcount=args.trimcounts)
         cm.export_counts(args.outcounts)
 
-    elif args.program == 'groupcells':
-        logging.debug('Group cells (pseudobulk)...')
+    elif args.program == 'collapse':
+        logging.debug('Collapse cells (pseudobulk)...')
         cm = CountMatrix.load(args.incounts, args.regions)
 
         cells,  groups = get_cell_grouping(cm, args.cellgroup)
