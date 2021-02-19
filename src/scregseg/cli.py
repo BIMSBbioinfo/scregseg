@@ -66,6 +66,8 @@ counts.add_argument('--remove_chroms', dest='remove_chroms', nargs='*',
 counts = subparsers.add_parser('fragments_to_counts', description='Make countmatrix')
 counts.add_argument('--fragmentfile', dest='fragmentfile', type=str, help="Location of a fragments.tsv.gz file (output by cellranger)", required=True)
 counts.add_argument('--regions', dest='regions', type=str, help="Location of regions in BED format. ", required=True)
+counts.add_argument('--name', '--samplename', dest='samplename', type=str,
+                    help='Sample name.')
 counts.add_argument('--counts', dest='counts', type=str,
                     help="Location of the output count matrix. "
                     "The matrix will be in matrix market format. Another file will be stored with ending '.bct'"
@@ -82,6 +84,8 @@ counts.add_argument('--with-fraglen', dest='with_fraglen',
 counts = subparsers.add_parser('bam_to_counts', description='Make countmatrix')
 counts.add_argument('--bamfile', dest='bamfile', type=str, help="Location of an indexed BAM-file", required=True)
 counts.add_argument('--regions', dest='regions', type=str, help="Location of regions in BED format. ", required=True)
+counts.add_argument('--name', '--samplename', dest='samplename', type=str,
+                    help='Sample name.')
 counts.add_argument('--counts', dest='counts', type=str,
                     help="Location of the output count matrix. "
                     "The matrix will be in matrix market format. Another file will be stored with ending '.bct'"
@@ -532,9 +536,9 @@ def local_main(args):
 
         logging.debug('Make countmatrix ...')
         cm = CountMatrix.from_bam(args.bamfile,
-                                    args.regions, barcodetag=args.barcodetag,
-                                    mode=args.mode, with_fraglen=args.with_fraglen)
-
+                                  args.regions, barcodetag=args.barcodetag,
+                                  mode=args.mode, with_fraglen=args.with_fraglen)
+        cm.adata.var.loc[:, "sample"] = args.samplename if args.samplename is not None else args.bamfile
         if args.cellgroup is not None:
             cells,  groups = get_cell_grouping(args.cellgroup, args.barcodecolumn, args.groupcolumn)
             cm = cm.pseudobulk(cells, groups)
@@ -547,6 +551,7 @@ def local_main(args):
         cm = CountMatrix.from_fragments(args.fragmentfile,
                                     args.regions, with_fraglen=args.with_fraglen)
 
+        cm.adata.var.loc[:, "sample"] = args.samplename if args.samplename is not None else args.fragmentfile
         if args.cellgroup is not None:
             cells,  groups = get_cell_grouping(args.cellgroup)
             cm = cm.pseudobulk(cells, groups)
@@ -599,9 +604,7 @@ def local_main(args):
             cm = CountMatrix.load(incount, args.regions)
             cms.append(cm)
 
-        #if len(args.names) 
-
-        merged_cm = CountMatrix.merge(cms, args.names)
+        merged_cm = CountMatrix.merge(cms)
         merged_cm.export_counts(args.outcounts)
 
     elif args.program == 'fit_segment':
