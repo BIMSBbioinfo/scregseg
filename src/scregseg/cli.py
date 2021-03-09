@@ -464,7 +464,7 @@ def get_cell_grouping(table, countmatrix=None, barcodecolumn=0, groupcolumn=1):
 def make_state_summary(model, output, labels):
     """ Make and save summary statistics."""
     make_folders(os.path.join(output, 'summary'))
-    model.get_state_stats().to_csv(os.path.join(output, 'summary', 'statesummary.csv'))
+    model.get_state_frequency().to_csv(os.path.join(output, 'summary', 'statesummary.csv'))
     fig, ax = plt.subplots()
     model.plot_state_frequency(ax=ax)
     fig.savefig(os.path.join(output, 'summary', 'state_abundance.svg'))
