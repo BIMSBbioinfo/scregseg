@@ -632,6 +632,8 @@ def local_main(args):
         merged_cm.export_counts(args.outcounts)
 
     elif args.program == 'fit_segment':
+        if args.labels is None:
+            args.labels = ["sample"]*len(args.counts)
         assert len(args.labels) == len(args.counts)
 
         outputpath = os.path.join(args.storage, modelname)
