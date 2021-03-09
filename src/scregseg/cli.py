@@ -440,7 +440,7 @@ def get_cells(table, barcodecolumn=0):
     cell = group2cellmap[group2cellmap.columns[barcodecolumn]].values
     return cell
 
-def get_cell_grouping(countmatrix, table, barcodecolumn=0, groupcolumn=1):
+def get_cell_grouping(table, countmatrix=None, barcodecolumn=0, groupcolumn=1):
     """ Extract cell-group mapping"""
     if table.endswith('.csv'):
         group2cellmap = pd.read_csv(table, sep=',')
@@ -448,11 +448,13 @@ def get_cell_grouping(countmatrix, table, barcodecolumn=0, groupcolumn=1):
         group2cellmap = pd.read_csv(table, sep='\t')
     elif table.endswith('.bct'):
         group2cellmap = pd.read_csv(table, sep='\t')
-    else:
+    elif countmatrix is not None:
         #table refers to a column in the matrix
         cell = countmatrix.cannot.index.values
         group = countmatrix.cannot[table].values
         return cell, group
+    else:
+        raise ValueError('unknown file type or missing countmatrix')
 
     cell = group2cellmap[group2cellmap.columns[barcodecolumn]].values
     group = group2cellmap[group2cellmap.columns[groupcolumn]].values
@@ -562,7 +564,7 @@ def local_main(args):
                                   mode=args.mode, with_fraglen=args.with_fraglen)
         cm.adata.var.loc[:, "sample"] = args.samplename if args.samplename is not None else args.bamfile
         if args.cellgroup is not None:
-            cells,  groups = get_cell_grouping(cm, args.cellgroup)
+            cells,  groups = get_cell_grouping(args.cellgroup, cm)
             cm = cm.pseudobulk(cells, groups)
 
         cm.export_counts(args.counts)
@@ -575,7 +577,7 @@ def local_main(args):
 
         cm.adata.var.loc[:, "sample"] = args.samplename if args.samplename is not None else args.fragmentfile
         if args.cellgroup is not None:
-            cells,  groups = get_cell_grouping(cm, args.cellgroup)
+            cells,  groups = get_cell_grouping(args.cellgroup, cm)
             cm = cm.pseudobulk(cells, groups)
 
         cm.export_counts(args.counts)
@@ -584,7 +586,7 @@ def local_main(args):
 
         logging.debug('Make pseudobulk bam-files')
 
-        cells, groups = get_cell_grouping(cm, args.cellgroup)
+        cells, groups = get_cell_grouping(args.cellgroup)
 
         make_pseudobulk_bam(args.bamfile, args.outdir,
                             cells, groups,
@@ -606,7 +608,7 @@ def local_main(args):
         logging.debug('Collapse cells (pseudobulk)...')
         cm = CountMatrix.load(args.incounts, args.regions)
 
-        cells,  groups = get_cell_grouping(cm, args.cellgroup)
+        cells,  groups = get_cell_grouping(args.cellgroup, cm)
         pscm = cm.pseudobulk(cells, groups)
         pscm.export_counts(args.outcounts)
 
