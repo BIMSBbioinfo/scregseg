@@ -152,9 +152,9 @@ def plot_fragmentsize(adata, ax=None, **kwargs):
         fig, ax =  plt.subplots()
     
     fragsizes = adata.obsm[basis]
-    fragsizes = fragsizes.sum(0, keepdims=True)
-    fragsizes /= fragsizes.sum(1, keepdims=True)
-    ax.plot(np.arange(fragsizes.shape[1]), fragsizes[0])
+    fragsizes = np.asarray(fragsizes.sum(0)).flatten()
+    fragsizes /= fragsizes.sum()
+    ax.plot(np.arange(fragsizes.shape[0]), fragsizes)
     ax.set_xlabel("Fragment length")
     ax.set_ylabel("Frequency")
     return ax
