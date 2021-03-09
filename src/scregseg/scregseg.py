@@ -810,6 +810,10 @@ class Scregseg(object):
         self._segments = regions_
         cleanup()
 
+    def to_bedtool(self):
+        return BedTool.from_dataframe(self._segments[['chrom', 'start', 'end',
+                                                      'name','score', 'strand',
+                                                      'thickStart', 'thickEnd', 'itemRbg']])
     def annotate(self, annotations):
         """Annotate the bins with BED, BAM or BIGWIG files.
 
