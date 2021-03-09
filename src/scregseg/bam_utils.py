@@ -338,7 +338,6 @@ def profile_counts_bam(file, genomicregion,
     obs = pd.DataFrame(index=[bc for bc in barcodemap])
     adata = AnnData(smat.T.tocsr(), obs=obs, var=var)
     adata.raw = adata
-    print('from_bam', adata)
     return adata
 
 
@@ -399,7 +398,6 @@ def profile_counts_fragments(file, genomicregion,
         if region.end < end:
             positions.append(region.end - start)
             cells.append(barcodemap[bar])
-    print(len(cells))
     smat = coo_matrix((np.ones(len(positions)), (positions, cells)),
                       shape=(end-start, len(barcodemap)),
                       dtype='int32')
@@ -418,7 +416,6 @@ def profile_counts_fragments(file, genomicregion,
     obs = pd.DataFrame(index=[bc for bc in barcodemap])
     adata = AnnData(smat.T.tocsr(), obs=obs, var=var)
     adata.raw = adata
-    print('from_fragments', adata)
     return adata
 
 
