@@ -181,7 +181,7 @@ groupcells.add_argument('--cellgroup', dest='cellgroup', type=str,
                     help="Location of table (csv or tsv) defining groups of cells or a column name in the cell annotation. "
                          "If specified, a pseudo-bulk count matrix will be created. "
                          "The table must have two columns, the first specifying the barcode name "
-                         " and the second specifying the group label.")
+                         " and the second specifying the group label.",
                         required=True)
 
 
