@@ -493,7 +493,7 @@ def plot_fragmentsize(scmodel, output, labels, cmats):
 def plot_normalized_emissions(model, output, labels):
     """ Save normalized emission probabilities"""
     make_folders(os.path.join(output, 'summary'))
-    model.plot_emissions().savefig(os.path.join(output, 'summary', 'emission.png'.format(dataname)))
+    model.plot_emissions().savefig(os.path.join(output, 'summary', 'emission.png'))
     #for i, dataname in enumerate(labels):
     #    model.plot_emissions().savefig(os.path.join(output, 'summary', 'emission_{}.png'.format(dataname)))
 
