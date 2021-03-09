@@ -442,7 +442,6 @@ def sparse_count_reads_in_regions2(bamfile, regions,
     regfile.name = [str(x) for x in range(nreg)]
     regfile = BedTool.from_dataframe(regfile)
 
-    print(f'found {nreg} regions')
     barcoder = Barcoder(barcodetag)
 
     barcodemap = OrderedDict()
@@ -485,8 +484,6 @@ def sparse_count_reads_in_regions2(bamfile, regions,
             starts.append(pos)
 
     afile.close()
-    print(f'parsed {i} reads from bam')
-    print(f'found {len(barcodemap)} barcodes')
 
     df = pd.DataFrame({'chrom':chroms, 'start':starts})
     df.loc[:,'end'] = df.start+1
@@ -503,7 +500,6 @@ def sparse_count_reads_in_regions2(bamfile, regions,
                       shape=(len(regfile), len(barcodemap)),
                       dtype='int32')
 
-    print(f'made countmatrix {smat.shape}')
     barcode_string = ';'.join([bar for bar in barcodemap])
 
     barcodes = pd.DataFrame({'barcode': barcode_string.split(';')})
