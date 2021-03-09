@@ -171,13 +171,14 @@ def make_counting_bins(file, binsize, storage=None, remove_chroms=[]):
         if ignore_chr:
             continue
 
-        nbins = genomesize[chrom]//binsize + 1 if (genomesize[chrom] % binsize > 0) else 0
+        nbins = genomesize[chrom]//binsize + (1 if (genomesize[chrom] % binsize > 0) else 0)
         starts = [int(i*binsize) for i in range(nbins)]
         ends = [min(int((i+1)*binsize), genomesize[chrom]) for i in range(nbins)]
         chr_ = [chrom] * nbins
 
         bed_content += [Interval(c, s, e) for c, s, e in zip(chr_, starts, ends)]
     regions = BedTool(bed_content)
+
     if storage is not None:
         regions.moveto(storage)
     return regions
