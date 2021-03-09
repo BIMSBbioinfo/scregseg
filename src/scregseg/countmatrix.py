@@ -1007,8 +1007,8 @@ class CountMatrix:
 
         if not issparse(countmatrix):
             countmatrix = csr_matrix(countmatrix)
-
-        self.adata = AnnData(countmatrix.tocsr(), regionannotation, cellannotation, uns, obsm, varm)
+        
+        self.adata = AnnData(countmatrix.tocsr().astype('int64'), regionannotation, cellannotation, uns, obsm, varm)
 
     @property
     def cmat(self):
