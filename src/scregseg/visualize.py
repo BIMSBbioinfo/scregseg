@@ -43,6 +43,10 @@ class SingleCellTracks:
         self.size_factor = size_factor
         self.files = files
         self.cellannot = cellannot
+        if size_factor not in cellannot.columns:
+            warnings.warn('Size-factor not known. Assuming constant size factor',
+                          category=UserWarning)
+            self.cellannot.loc[:,"rdepth"] = 1.
         self.tag = tag
         self.mapq = mapq
 
