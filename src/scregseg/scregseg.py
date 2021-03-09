@@ -505,8 +505,8 @@ class Scregseg(object):
 
         if hasattr(self, "labels_"):
             featurenames = self.labels_.label
-        else:
-            featurenames = [str(i) for i in range(lodds.shape[1])]
+        #else:
+        #    featurenames = [str(i) for i in range(obs_seqfreq.shape[1])]
 
         enrs = []
 

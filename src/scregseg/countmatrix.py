@@ -1184,7 +1184,7 @@ class CountMatrix:
         """
         grouplabels = list(set(group))
 
-        cnts = np.zeros((self.n_regions, len(grouplabels)))
+        cnts = np.zeros((self.shape[0], len(grouplabels)))
 
         if not isinstance(cell, np.ndarray):
             cell = np.asarray(cell)
