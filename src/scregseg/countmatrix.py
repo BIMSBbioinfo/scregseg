@@ -1052,13 +1052,11 @@ class CountMatrix:
         CountMatrix object
         """
 
-        if samplenames is None:
-            samplenames = [f'sample_{i}' for i, _ in enumerate(cms)]
-
         for i, cm in enumerate(cms):
-            if 'sample' not in cm.adata.var.columns:
-                if samplenames is not None:
-                    cm.adata.var.loc[:,'sample'] = samplenames[i]
+            if samplenames is not None:
+                cm.adata.var.loc[:,'sample'] = samplenames[i]
+            if 'sample' not in cm.adata.var:
+                cm.adata.var.loc[:,'sample'] = f'sample_{i}'
 
         adata = ad.concat([cm.adata for cm in cms], axis=1)
         adata.obs = cms[0].adata.obs
