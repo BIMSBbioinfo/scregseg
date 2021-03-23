@@ -1,10 +1,12 @@
 import copy
 import os
+import shutil
 import tempfile
 import numpy as np
 import pandas as pd
 import scanpy as sc
 from coolbox.core.track.base import Track
+from coolbox.core.track.bed import BED
 from coolbox.core.track.hist.base import HistBase
 from scregseg.bam_utils import cell_scaling_factors
 from scregseg.bam_utils import profile_counts
@@ -14,7 +16,16 @@ from scregseg.countmatrix import merge_samples
 import coolbox
 from coolbox.api import *
 from coolbox.utilities import split_genome_range
+from svgutils.compose import Figure, SVG
 
+class ScregsegTrack(BED):
+    def __init__(self, scregsegobj, **kwargs):
+        statecalls = scregsegobj.tobedtool().TEMPFILES[-1]
+        super().__init__(statecalls, display='collapsed',
+                         labels=False, bed_type='bed9',
+                         **kwargs)
+
+    
 class SingleTrack(HistBase):
     def __init__(self, data, **kwargs):
         properties = HistBase.DEFAULT_PROPERTIES.copy()
@@ -159,6 +170,10 @@ def plot_fragmentsize(adata, ax=None, **kwargs):
     ax.set_ylabel("Frequency")
     return ax
 
+def _extend(gr, window):
+    chrom, range_ = gr.split(':')
+    start, end = range_.split('-')
+    return f'{chrom}:{max(0,int(start)-window)}-{int(end)+window}'
 
 def plot_locus(grange, groupby,
                cellannot, files, 
@@ -169,7 +184,7 @@ def plot_locus(grange, groupby,
                add_total=True, style='fill', binsize=50,
                binarize=False, frame_width=40, add_labels=True,
                width_overlap=18.,
-               flanking_window=0,
+               extend_window=0,
                save=None,
                **kwargs):
 
@@ -185,6 +200,11 @@ def plot_locus(grange, groupby,
     elif isinstance(grange, list):
         names = ['']*len(grange)
         ranges = granges
+    if frames_before is None:
+        frames_before = Frame()
+
+    if extend_window > 0:
+       ranges = [_extend(gr, extend_window) for gr in ranges]
 
     with tempfile.TemporaryDirectory() as tmpdir:
         for i, (name, gr) in enumerate(zip(names,ranges)):
@@ -199,16 +219,19 @@ def plot_locus(grange, groupby,
                            add_total=add_total, style=style, binsize=binsize, 
                            add_labels=add_labels if i==(len(names)-1) else False,
                            binarize=binarize, **kwargs)
-            fig.savefig(os.path.join(tmpdir, f'{gr}.svg'))
+            fig.savefig(os.path.join(tmpdir, f'{name}_{gr}.svg'))
 
 
-        panel = SVG(os.path.join(tmpdir, f'{gr}.svg'))
+        panel = SVG(os.path.join(tmpdir, f'{name}_{gr}.svg'))
         width, height= panel.width, panel.height
 
         composite_figure = Figure(f"{(width-width_overlap)*len(names)+width_overlap}pt",f"{height}pt",
-                                  *[SVG(os.path.join(tmpdir, f'{gr}.svg')).move((width-width_overlap)*i,0) for i, gr in enumerate(ranges)])
+                                  *[SVG(os.path.join(tmpdir, f'{name}_{gr}.svg')).move((width-width_overlap)*i,0) for i, (name,gr) in enumerate(zip(names,ranges))])
         if save is not None:
             composite_figure.save(save)
+            os.makedirs(save.split('.')[0], exist_ok=True)
+            for name, gr in zip(names,ranges):
+                shutil.copy(os.path.join(tmpdir, f'{name}_{gr}.svg'), save.split('.')[0])
 
     return composite_figure
 
