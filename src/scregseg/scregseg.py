@@ -224,7 +224,6 @@ def get_statecalls(segments, query_states,
         #sdf['pscore'] = sdf['Prob_{}'.format(process_state)] * sdf['readdepth']
         sdf['pscore'] = sdf.query("name == '{}'".format(process_state))['readdepth']
         if ntop < 0:
-            print('export all')
             dfs.append(sdf.copy())
             ids += sdf.index.tolist()
         else:
@@ -817,10 +816,6 @@ class Scregseg(object):
         self._segments = regions_
         cleanup()
 
-    def to_bedtool(self):
-        return BedTool.from_dataframe(self._segments[['chrom', 'start', 'end',
-                                                      'name','score', 'strand',
-                                                      'thickStart', 'thickEnd', 'itemRbg']])
     def annotate(self, annotations):
         """Annotate the bins with BED, BAM or BIGWIG files.
 
@@ -1284,3 +1279,9 @@ class Scregseg(object):
             submats.append(submat.tocsc())
 
         return submats, subset_merged
+
+def to_bedtool(segments):
+    " convert segment table to a BedTool obj "
+    return BedTool.from_dataframe(segments[['chrom', 'start', 'end',
+                                            'name','score', 'strand',
+                                            'thickStart', 'thickEnd', 'itemRbg']])
