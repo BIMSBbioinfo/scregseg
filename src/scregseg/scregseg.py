@@ -417,9 +417,15 @@ class Scregseg(object):
         if os.path.exists(path):
             self._segments = pd.read_csv(path, sep='\t')
 
-    def get_statenames(self):
+    def get_statenames(self, ordered=True):
         """ Returns a list of statenames ordered by state frequency """
-        return list(self.get_state_frequency().index)
+        if ordered:
+            return list(self.get_state_frequency().index)
+        return self.to_statenames(range(self.nstates))
+
+    @property
+    def nstates(self):
+        return len(self.get_statenames())
 
     def to_statenames(self, states):
         """ converts list of state ids (integer) to list of state names (str) """
@@ -691,7 +697,7 @@ class Scregseg(object):
        else:
            l = [str(i) for i in range(lodds.shape[1])]
 
-       df = pd.DataFrame(lodds, columns=l, index=self.get_statenames())
+       df = pd.DataFrame(lodds, columns=l, index=self.get_statenames(ordered=False))
 
        if selected_states is not None:
            df = df.loc[selected_states,:]
@@ -715,6 +721,7 @@ class Scregseg(object):
             sns.clustermap figure object
         """
         df = self.log_fold_emission(selected_states)
+        df = df.loc[self.get_statenames(),:]
         g = sns.clustermap(df, center=center, robust=robust,
                            cmap=cmap,
                            row_cluster=row_cluster, **kwargs)
@@ -1097,11 +1104,11 @@ class Scregseg(object):
 
                 null_dist, _ = self._get_broadregion_null_distribution(int(scnt))
 
-                for istate, _ in enumerate(self.get_statenames()):
+                for istate, _ in enumerate(self.get_statenames(ordered=False)):
                     n_obs = int(state_counts[ireg, istate])
                     enr[ireg, istate] = -min(np.log10(max(0.0, null_dist[n_obs:, istate].sum())), 15)
 
-        enrdf = pd.DataFrame(enr, columns=self.get_statenames(),
+        enrdf = pd.DataFrame(enr, columns=self.get_statenames(ordered=False),
                              index=featurenames)
 
         return enrdf
