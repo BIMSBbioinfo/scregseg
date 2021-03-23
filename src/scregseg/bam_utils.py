@@ -323,7 +323,7 @@ def profile_counts_bam(file, genomicregion,
     afile.close()
 
     smat = coo_matrix((np.ones(len(positions)), (positions, cells)),
-                      shape=(end-start, len(barcodemap)),
+                      shape=(end-start+1, len(barcodemap)),
                       dtype='int32')
     data = np.ones((binsize,smat.shape[0]))
     offsets = np.arange(binsize)
@@ -331,9 +331,9 @@ def profile_counts_bam(file, genomicregion,
     smat = di.dot(smat).tocsr()
     smat = smat[::binsize]
 
-    var = pd.DataFrame({'chrom':[chrom] *int(np.ceil((end-start)/binsize)),
-                        'start':np.arange(start,end, binsize),
-                        'end':np.arange(start+binsize,end+binsize, binsize)})
+    var = pd.DataFrame({'chrom':[chrom] *int(np.ceil((end-start+1)/binsize)),
+                        'start':np.arange(start,end+1, binsize),
+                        'end':np.arange(start+binsize,end+binsize+1, binsize)})
                         
     obs = pd.DataFrame(index=[bc for bc in barcodemap])
     adata = AnnData(smat.T.tocsr(), obs=obs, var=var)
@@ -398,8 +398,9 @@ def profile_counts_fragments(file, genomicregion,
         if region.end < end:
             positions.append(region.end - start)
             cells.append(barcodemap[bar])
+
     smat = coo_matrix((np.ones(len(positions)), (positions, cells)),
-                      shape=(end-start, len(barcodemap)),
+                      shape=(end-start+1, len(barcodemap)),
                       dtype='int32')
 
     # smoothing with binsize resolution
@@ -409,9 +410,9 @@ def profile_counts_fragments(file, genomicregion,
     smat = di.dot(smat).tocsr()
     smat = smat[::binsize]
 
-    var = pd.DataFrame({'chrom':[chrom] *int(np.ceil((end-start)/binsize)),
-                        'start':np.arange(start,end, binsize),
-                        'end':np.arange(start+binsize,end+binsize, binsize)})
+    var = pd.DataFrame({'chrom':[chrom] *int(np.ceil((end-start+1)/binsize)),
+                        'start':np.arange(start,end+1, binsize),
+                        'end':np.arange(start+binsize,end+binsize+1, binsize)})
                         
     obs = pd.DataFrame(index=[bc for bc in barcodemap])
     adata = AnnData(smat.T.tocsr(), obs=obs, var=var)
