@@ -42,6 +42,24 @@ Usage
 Help on usage of the command-line interface can be optained by `scregseg -h`.
 Various subprograms allow to 1) load, filtered and manipulate count matrices (e.g. bam_to_counts), 2) fit a segmentation model (fig_segment)
 and 3) explore the relationship of the states with additional annotation (e.g. enrichment, annotate, extract_motifs).
-An in depth tutorial is in preparation.
 
+
+Tutorials
+=========
+
+The main functionality of the package is covered in several tutorials:
+
++----------------------------------------------------+
+| Example notebooks                                  |
++====================================================+
+| `Data preparation`_                                |
++----------------------------------------------------+
+| `Using Scregseg on single-cell ATAC-seq tracks`_   |
++----------------------------------------------------+
+| `Using Scregseg on cluster-collapsed tracks`_      |
++----------------------------------------------------+
+
+.. _`Data preparation`: https://nbviewer.jupyter.org/github/BIMSBbioinfo/scregseg/blob/master/tutorials/01-preprocessing.ipynb
+.. _`Using Scregseg on single-cell ATAC-seq tracks`: https://nbviewer.jupyter.org/github/BIMSBbioinfo/scregseg/blob/master/tutorials/02-scregseg-on-single-cell-ATAC-seq-profiles.ipynb
+.. _`Using Scregseg on cluster-collapsed tracks`: https://nbviewer.jupyter.org/github/BIMSBbioinfo/scregseg/blob/master/tutorials/03-scregseg-on-pseudo-bulk-ATAC-seq-profiles.ipynb
 
