@@ -16,11 +16,21 @@ This enable to
  2. characterze regulatory programs.
 
 Furthermore, the states and state calls can be annotatated and characterized based on
-1) gene set enrichment, 2) marker gene extraction and 3) motif extraction.
+1) gene set enrichment, 2) marker gene extraction.
 
-Regarding **feature identification**: The segmentation results can be used to assemble a set of regions of interest reflecting diverse cross-cell accessibility patterns for the downstream clustering analysis (e.g. using cisTopic). This may improve cell type clustering. By contrast, peak calling may not reveal the most informative regions, because it is biased to reveal regions by peak height. That is, peak calling most confidently extracts consitutive accessible regions which are usually the highest peaks but less informative for cell-type identification and it might miss peaks from small cell populations due to their limited peak height.
+Regarding **feature identification**: 
 
-Regarding **regulatory program identification**: Instead of employing a differential accessibility analysis (e.g. one-vs-all cluster accessibility) Scregseg reveals distinct cross cell-type accessibility profiles which
+.. image:: tutorials/scregseg_fi_scheme_v2.svg
+   :width: 600
+  
+The segmentation results can be used to assemble a set of regions of interest reflecting diverse cross-cell accessibility patterns for the downstream clustering analysis (e.g. using cisTopic). This may improve cell type clustering. By contrast, peak calling may not reveal the most informative regions, because it is biased to reveal regions by peak height. That is, peak calling most confidently extracts consitutive accessible regions which are usually the highest peaks but less informative for cell-type identification and it might miss peaks from small cell populations due to their limited peak height.
+
+Regarding **regulatory program identification**: 
+
+.. image:: tutorials/scregseg_pi_scheme_v2.svg
+   :width: 600
+   
+Instead of employing a differential accessibility analysis (e.g. one-vs-all cluster accessibility) Scregseg reveals distinct cross cell-type accessibility profiles which
 allows to not only capture regions specific for single cell type, but also regions shared across cell types.
 
 * Free software: GPL-v3 license
