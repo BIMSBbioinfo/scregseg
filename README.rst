@@ -49,7 +49,12 @@ type:
 Usage
 =====
 
-Help on usage of the command-line interface can be optained by `scregseg -h`.
+Help on usage of the command-line interface can be optained by 
+
+::
+
+    scregseg -h
+    
 Various subprograms allow to 1) load, filtered and manipulate count matrices (e.g. bam_to_counts), 2) fit a segmentation model (fig_segment)
 and 3) explore the relationship of the states with additional annotation (e.g. enrichment, annotate, extract_motifs).
 
