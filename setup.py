@@ -107,6 +107,7 @@ setup(
                 'pysam',
                 'matplotlib',
                 'seaborn',
+                'coolbox',
     ],
     extras_require={
         'janggu' : ['janggu', 'tensorflow==2.2', 'keras==2.4.3'],
