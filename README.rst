@@ -38,13 +38,29 @@ allows to not only capture regions specific for single cell type, but also regio
 Installation
 ============
 
-The package is developmental stage and the interface may change slightly in the future.
-Prior to installing scregseg, numpy and tensorflow must be installed. Afterwards,
-type:
+Prior to installing scregseg, numpy and tensorflow must be installed.
+Afterwards, type:
 
 ::
 
     pip install git+https://github.com/BIMSBbioinfo/scregseg
+
+scregseg depends on pybedtools which requires bedtools to be installed.
+Details instructions on the installation of pybedtools can be found here_.
+
+.. _here: https://daler.github.io/pybedtools/
+
+Troubleshooting
+===============
+
+Sometimes bedtools fails when processing downloaded fragment files (*.tsv.gz) as produced by the CellRanger pipeline.
+A solution to this issue is to decompress and compress the files again locally.
+For instance
+
+::
+
+  gunzip fragments.tsv.gz
+  gzip fragments.tsv
 
 Usage
 =====
@@ -55,7 +71,7 @@ Help on usage of the command-line interface can be optained by
 
     scregseg -h
     
-Various subprograms allow to 1) load, filtered and manipulate count matrices (e.g. bam_to_counts), 2) fit a segmentation model (fig_segment)
+Various subprograms allow to 1) load, filtered and manipulate count matrices (e.g. bam_to_counts), 2) fit an HMM and segment the genome (fig_segment)
 and 3) explore the relationship of the states with additional annotation (e.g. enrichment, annotate, extract_motifs).
 
 
