@@ -2,7 +2,7 @@
 Overview
 ========
 
-**Scregseg** (**S**ingle-**C**ell **REG**ulatory landscape **SEG**mentation) is a tool
+Scregseg (Single-Cell REGulatory landscape SEGmentation) is a tool
 that facilitates the analysis of single cell ATAC-seq data by an HMM-based
 segmentation algorithm. To this end, Scregseg integrates and extends the hmmlearn package.
 In more detail, Scregseg uses an HMM with Dirichlet-Multinomial emission probabilities
@@ -39,7 +39,13 @@ Installation
 ============
 
 Prior to installing scregseg, numpy and tensorflow must be installed.
-Afterwards, type:
+Afterwards you can install the latest release verion of scregseg via
+
+::
+
+    pip install scregseg
+
+Alternatively, you can install the latest development version via
 
 ::
 
@@ -53,7 +59,7 @@ Details instructions on the installation of pybedtools can be found here_.
 Troubleshooting
 ===============
 
-Sometimes bedtools fails when processing downloaded fragment files (*.tsv.gz) as produced by the CellRanger pipeline.
+Sometimes bedtools fails when processing downloaded fragment files (\*.tsv.gz) as produced by the CellRanger pipeline.
 A solution to this issue is to decompress and compress the files again locally.
 For instance
 
