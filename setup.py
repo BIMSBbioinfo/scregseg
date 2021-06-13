@@ -14,8 +14,7 @@ from os.path import relpath
 from os.path import splitext
 
 from setuptools import find_packages
-from distutils.extension import Extension
-from distutils.core import setup
+from setuptools import setup, Extension
 
 try:
     # Allow installing package without any Cython available. This
