@@ -137,7 +137,7 @@ def get_genome_size(file):
     return gs
 
 
-def make_counting_bins(file, binsize, storage=None, remove_chroms=[]):
+def make_counting_bins(file, binsize, storage=None, remove_chroms=[], keep_chroms=None):
     """ Genome intervals for binsize.
 
     For a given bam-file and binsize,
@@ -163,21 +163,38 @@ def make_counting_bins(file, binsize, storage=None, remove_chroms=[]):
     genomesize = get_genome_size(file)
     bed_content = [] #pd.DataFrame(columns=['chr', 'start', 'end'])
 
-    for chrom in genomesize:
-        ignore_chr=False
-        for rmchr in remove_chroms:
-            if rmchr in chrom:
-                ignore_chr=True
-        if ignore_chr:
-            continue
+    if keep_chroms is not None:
+        for chrom in genomesize:
+            print("chrom", chrom)
+            print("keep_chroms", keep_chroms)
+            if chrom in keep_chroms:
+                print(chrom)
+                nbins = genomesize[chrom] // binsize + (1 if (genomesize[chrom] % binsize > 0) else 0)
+                starts = [int(i * binsize) for i in range(nbins)]
+                ends = [min(int((i + 1) * binsize), genomesize[chrom]) for i in range(nbins)]
+                chr_ = [chrom] * nbins
 
-        nbins = genomesize[chrom]//binsize + (1 if (genomesize[chrom] % binsize > 0) else 0)
-        starts = [int(i*binsize) for i in range(nbins)]
-        ends = [min(int((i+1)*binsize), genomesize[chrom]) for i in range(nbins)]
-        chr_ = [chrom] * nbins
+                bed_content += [Interval(c, s, e) for c, s, e in zip(chr_, starts, ends)]
+            else:
+                continue
+        regions = BedTool(bed_content)
 
-        bed_content += [Interval(c, s, e) for c, s, e in zip(chr_, starts, ends)]
-    regions = BedTool(bed_content)
+    else:
+        for chrom in genomesize:
+            ignore_chr=False
+            for rmchr in remove_chroms:
+                if rmchr in chrom:
+                    ignore_chr=True
+            if ignore_chr:
+                continue
+
+            nbins = genomesize[chrom]//binsize + (1 if (genomesize[chrom] % binsize > 0) else 0)
+            starts = [int(i*binsize) for i in range(nbins)]
+            ends = [min(int((i+1)*binsize), genomesize[chrom]) for i in range(nbins)]
+            chr_ = [chrom] * nbins
+
+            bed_content += [Interval(c, s, e) for c, s, e in zip(chr_, starts, ends)]
+        regions = BedTool(bed_content)
 
     if storage is not None:
         regions.moveto(storage)
@@ -490,7 +507,7 @@ def sparse_count_reads_in_regions2(bamfile, regions,
     df.loc[:,'name'] = barcodes
 
     reads=BedTool.from_dataframe(df)
-    
+
     nfreg = len(regfile[0].fields)
     counts = regfile.intersect(reads, wo=True)
 
@@ -1007,7 +1024,7 @@ class CountMatrix:
 
         if not issparse(countmatrix):
             countmatrix = csr_matrix(countmatrix)
-        
+
         self.adata = AnnData(countmatrix.tocsr().astype('int64'), regionannotation, cellannotation, uns, obsm, varm)
 
     @property

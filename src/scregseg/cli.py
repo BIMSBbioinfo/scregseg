@@ -60,8 +60,11 @@ counts.add_argument('--bamfile', '--fragmentfile', dest='bamfile', type=str, hel
 counts.add_argument('--regions', dest='regions', type=str, help="Output location of regions in BED format. ", required=True)
 counts.add_argument('--binsize', dest='binsize', type=int, help="Binsize in bp. ", required=True)
 counts.add_argument('--remove_chroms', dest='remove_chroms', nargs='*',
-                    default=['chrM', 'chrY', 'chrX'], 
+                    default=['chrM', 'chrY', 'chrX'],
                     help='List of chromosome names (or patterns) to remove from the tile. Default: chrM chrY chrX')
+counts.add_argument('--keep_chroms', dest='keep_chroms', nargs='*',
+                    default=None,
+                    help='List of chromosome names to keep for the tile.')
 
 
 counts = subparsers.add_parser('fragments_to_counts', description='Make countmatrix')
@@ -82,7 +85,7 @@ counts.add_argument('--cellgroup', dest='cellgroup', type=str,
                          " and the second specifying the group label.")
 counts.add_argument('--with-fraglen', dest='with_fraglen',
                     action='store_true', default=False,
-                    help='Load fragment lengths in addition.') 
+                    help='Load fragment lengths in addition.')
 
 
 counts = subparsers.add_parser('bam_to_counts', description='Make countmatrix')
@@ -111,7 +114,7 @@ counts.add_argument('--mode', dest='mode', type=str, default='midpoint',
                     ' Default: mode=midpoint', choices=['eitherend', 'midpoint', 'countboth'])
 counts.add_argument('--with-fraglen', dest='with_fraglen',
                     action='store_true', default=False,
-                    help='Load fragment lengths in addition.') 
+                    help='Load fragment lengths in addition.')
 
 
 
@@ -135,7 +138,7 @@ bampseudobulk.add_argument('--cellgroup', dest='cellgroup', type=str,
 filtering = subparsers.add_parser('filter', description='Filter countmatrix to remove poor quality cells and low-coverage regions.')
 filtering.add_argument('--incounts', dest='incounts', type=str, help="Location of input count matrix", required=True)
 filtering.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format")
-filtering.add_argument('--outcounts', dest='outcounts', type=str, 
+filtering.add_argument('--outcounts', dest='outcounts', type=str,
                     help="Location of output count matrix. "
                     "Depending on the file ending, the matrix is stored in .h5ad or .mtx format. "
                     "For .mtx files, an additional .bct file will be generated that holds the barcode names.",
@@ -190,7 +193,7 @@ groupcells.add_argument('--cellgroup', dest='cellgroup', type=str,
 subset = subparsers.add_parser('subset', description='Subset cells by cell name.')
 subset.add_argument('--incounts', dest='incounts', type=str, help="Location of an input count matrix", required=True)
 subset.add_argument('--regions', dest='regions', type=str, help="Location of regions in bed format")
-subset.add_argument('--outcounts', dest='outcounts', type=str, 
+subset.add_argument('--outcounts', dest='outcounts', type=str,
                     help="Location of output count matrix. "
                     "Depending on the file ending, the matrix is stored in .h5ad or .mtx format. "
                     "For .mtx files, an additional .bct file will be generated that holds the barcode names.",
@@ -200,7 +203,7 @@ subset.add_argument('--subset', dest='subset', type=str,
                     "cell names which to retain for the output count matrix.",
                     required=True)
 subset.add_argument('--barcodecolumn', dest='barcodecolumn', type=int,
-                    help='Column index of barcode column (Zero-based) in the subset table. Default=0', default=0) 
+                    help='Column index of barcode column (Zero-based) in the subset table. Default=0', default=0)
 
 
 
@@ -487,7 +490,7 @@ def plot_fragmentsize(scmodel, output, labels, cmats):
             continue
         fig, ax =  plt.subplots(figsize=(7,7))
         scmodel.plot_fragmentsize(cmat.adata, ax, cmap='Blues')
-        fig.savefig(os.path.join(resultspath, 
+        fig.savefig(os.path.join(resultspath,
                     'fragmentsize_per_state_{}.svg'.format(label)))
 
 def plot_normalized_emissions(model, output, labels):
@@ -591,10 +594,12 @@ def local_main(args):
         make_pseudobulk_bam(args.bamfile, args.outdir,
                             cells, groups,
                             tag=args.barcodetag)
-                           
+
     elif args.program == "make_tile":
+        if args.keep_chroms is not None:
+            logging.info("Only option keep_chroms is respected, remove_chroms is ignored.")
         make_counting_bins(args.bamfile, args.binsize, args.regions,
-                           args.remove_chroms)
+                           args.remove_chroms, args.keep_chroms)
 
     elif args.program == 'filter':
         logging.debug('Filter counts ...')
@@ -660,7 +665,7 @@ def local_main(args):
         scmodel.save(outputpath)
         for s, m in zip(args.randomseed, models):
            scmodel.save(outputpath + f'_rseed{s}')
-            
+
         logging.debug('summarize results ...')
         make_state_summary(scmodel, outputpath, args.labels)
         plot_normalized_emissions(scmodel, outputpath, args.labels)
@@ -703,7 +708,7 @@ def local_main(args):
         elif args.method == "abundancethreshold":
             query_states = ['state_{}'.format(i) for i, p in enumerate(scmodel.model.get_stationary_distribution()) \
                             if p<=args.max_state_abundance]
-            
+
         logging.debug("method={}: {}".format(args.method,query_states))
 
         if args.exclude_states is not None:
@@ -738,7 +743,7 @@ def local_main(args):
                     dat.export_counts(output[:-4] + f'_{mat}.h5ad')
                 else:
                     dat.export_counts(output[:-4] + f'_{mat}.mtx')
-             
+
 
     elif args.program == 'annotate':
         outputpath = os.path.join(args.storage, modelname)
