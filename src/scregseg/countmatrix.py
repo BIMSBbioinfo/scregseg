@@ -153,8 +153,9 @@ def make_counting_bins(file, binsize, storage=None, remove_chroms=[], keep_chrom
     storage : path or None
        Output path of the BED file.
     remove_chroms : list
-       List of chromosomes to remove. Default=[]
+       List of chromosomes to remove. Default=['chrM', 'chrY', 'chrX']
     keep_chroms: None or list(str)
+       List of chromosomes to keep. Default=None
 
     Returns
     -------
