@@ -137,7 +137,7 @@ def get_genome_size(file):
     return gs
 
 
-def make_counting_bins(file, binsize, storage=None, remove_chroms=[]):
+def make_counting_bins(file, binsize, storage=None, remove_chroms=[], keep_chroms=None):
     """ Genome intervals for binsize.
 
     For a given bam-file and binsize,
@@ -154,6 +154,8 @@ def make_counting_bins(file, binsize, storage=None, remove_chroms=[]):
        Output path of the BED file.
     remove_chroms : list
        List of chromosomes to remove. Default=[]
+    keep_chroms: None or list(str)
+       List of chromosomes to keep. Default=None
 
     Returns
     -------
@@ -162,18 +164,20 @@ def make_counting_bins(file, binsize, storage=None, remove_chroms=[]):
     """
     genomesize = get_genome_size(file)
     bed_content = [] #pd.DataFrame(columns=['chr', 'start', 'end'])
+    if keep_chroms is not None:
+        genomesize = {chrom: genomesize[chrom] for chrom in keep_chroms}
 
     for chrom in genomesize:
-        ignore_chr=False
+        ignore_chr = False
         for rmchr in remove_chroms:
             if rmchr in chrom:
-                ignore_chr=True
+                ignore_chr = True
         if ignore_chr:
             continue
 
-        nbins = genomesize[chrom]//binsize + (1 if (genomesize[chrom] % binsize > 0) else 0)
-        starts = [int(i*binsize) for i in range(nbins)]
-        ends = [min(int((i+1)*binsize), genomesize[chrom]) for i in range(nbins)]
+        nbins = genomesize[chrom] // binsize + (1 if (genomesize[chrom] % binsize > 0) else 0)
+        starts = [int(i * binsize) for i in range(nbins)]
+        ends = [min(int((i + 1) * binsize), genomesize[chrom]) for i in range(nbins)]
         chr_ = [chrom] * nbins
 
         bed_content += [Interval(c, s, e) for c, s, e in zip(chr_, starts, ends)]
@@ -490,7 +494,7 @@ def sparse_count_reads_in_regions2(bamfile, regions,
     df.loc[:,'name'] = barcodes
 
     reads=BedTool.from_dataframe(df)
-    
+
     nfreg = len(regfile[0].fields)
     counts = regfile.intersect(reads, wo=True)
 
@@ -1007,7 +1011,7 @@ class CountMatrix:
 
         if not issparse(countmatrix):
             countmatrix = csr_matrix(countmatrix)
-        
+
         self.adata = AnnData(countmatrix.tocsr().astype('int64'), regionannotation, cellannotation, uns, obsm, varm)
 
     @property
