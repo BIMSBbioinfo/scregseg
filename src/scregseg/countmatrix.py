@@ -1018,6 +1018,10 @@ class CountMatrix:
     def cmat(self):
         return self.adata.X
 
+    @cmat.setter
+    def cmat(self, value):
+        self._cmat = value
+
     @property
     def cannot(self):
         return self.adata.var
@@ -1025,6 +1029,10 @@ class CountMatrix:
     @property
     def regions(self):
         return self.adata.obs
+
+    @regions.setter
+    def regions(self, value):
+        self._regions = value
 
     def remove_chroms(self, chroms):
         """Remove chromsomes."""
