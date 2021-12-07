@@ -65,8 +65,7 @@ def load_count_matrices(countfiles, bedfile, mincounts,
         for i, _ in enumerate(data):
             keepregions = np.where((regioncounts >= minregioncounts) & (regioncounts <= maxregioncounts))[0]
 
-            data[i].cmat = data[i].cmat[keepregions, :]
-            data[i].regions = data[i].regions.iloc[keepregions]
+            data[i].adata = data[i].adata[keepregions, :].copy()
     return data
 
 
@@ -1018,10 +1017,6 @@ class CountMatrix:
     def cmat(self):
         return self.adata.X
 
-    @cmat.setter
-    def cmat(self, value):
-        self._cmat = value
-
     @property
     def cannot(self):
         return self.adata.var
@@ -1029,10 +1024,6 @@ class CountMatrix:
     @property
     def regions(self):
         return self.adata.obs
-
-    @regions.setter
-    def regions(self, value):
-        self._regions = value
 
     def remove_chroms(self, chroms):
         """Remove chromsomes."""
