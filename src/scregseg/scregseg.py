@@ -527,10 +527,10 @@ class Scregseg(object):
                 df = self.broadregion_enrichment(obs_seqfreq, obs_seqfreq.sum(1), mode=mode)
             else:
                 raise ValueError('{} not supported for cell2state association'.format(mode))
-            
+
             #df = pd.DataFrame(mat, columns=self.to_statenames(np.arange(self.n_components)),
             #                  index=featurenames).T
-                         
+
             enrs.append(df.T)
         enrs = pd.concat(enrs, axis=0)
 
@@ -556,7 +556,7 @@ class Scregseg(object):
         Parameters
         ----------
         ax : None or matplotlib.axes.Axes
-        
+
         Returns
         -------
         matplotlib.axes.Axes
@@ -583,7 +583,7 @@ class Scregseg(object):
         Parameters
         ----------
         ax : None or matplotlib.axes.Axes
-        
+
         Returns
         -------
         matplotlib.axes.Axes
@@ -603,8 +603,8 @@ class Scregseg(object):
             Fragment lengths can be obtained using the --with-fraglens option
             when using scregseg bam_to_counts or scregseg fragment_to_counts.
         ax : matplotlib.axes.Axes or None
-            matplotlib.axes.Axes object 
-        **kwargs : 
+            matplotlib.axes.Axes object
+        **kwargs :
            additional arguments passed on to seaborn.heatmap
 
         Returns
@@ -616,7 +616,7 @@ class Scregseg(object):
             raise ValueError(f'{basis} not in adata')
         if ax is None:
             fig, ax =  plt.subplots()
-        
+
         states = self.get_statenames()
         fragsizes = np.zeros((len(states), adata.obsm[basis].shape[1]))
         for i, state in enumerate(states):
@@ -639,7 +639,7 @@ class Scregseg(object):
         log_count : bool
             Whether to plot log10(count + 1). Default: True
         ax : matplotlib.axes.Axes or None
-            matplotlib.axes.Axes object 
+            matplotlib.axes.Axes object
 
         Returns
         -------
@@ -671,7 +671,7 @@ class Scregseg(object):
     def log_fold_emission(self, selected_states):
        """ Compute normalized and log transformed state emissions.
 
-       This function computes the log-transformed 
+       This function computes the log-transformed
        state emission probabilities normalized by sequencing depths across cells.
 
        Parameters
@@ -731,7 +731,7 @@ class Scregseg(object):
     def plot_cell_state_association(self, adata,
                                     mode='logfold', prob_max_threshold=0.0,
                                     center=0., robust=True,
-                                    cmap='vlag', row_cluster=False, **kwargs):
+                                    cmap='vlag', row_cluster=False, use_cell_ids=False, **kwargs):
         """ Plot cell-to-state association.
 
         Parameters
@@ -753,13 +753,18 @@ class Scregseg(object):
         X = adata.X
         df = self.cell2state(X,mode,prob_max_threshold)
         df = df.loc[self.get_statenames(),:]
+        if hasattr(self, "labels_") and use_cell_ids:
+            l = self.labels_.label
+        else:
+            l = [str(i) for i in range(df.shape[1])]
+        df.set_axis(l, axis=1, inplace=True)
         g = sns.clustermap(df, center=center, robust=robust,
                            cmap=cmap,
-                           row_cluster=row_cluster, *kwargs)
+                           row_cluster=row_cluster, **kwargs)
         g.ax_heatmap.set_ylabel('States')
         g.ax_heatmap.set_xlabel('Cells')
         return g
-        
+
     @property
     def color(self):
         return self._color
