@@ -65,8 +65,7 @@ def load_count_matrices(countfiles, bedfile, mincounts,
         for i, _ in enumerate(data):
             keepregions = np.where((regioncounts >= minregioncounts) & (regioncounts <= maxregioncounts))[0]
 
-            data[i].cmat = data[i].cmat[keepregions, :]
-            data[i].regions = data[i].regions.iloc[keepregions]
+            data[i].adata = data[i].adata[keepregions, :].copy()
     return data
 
 
