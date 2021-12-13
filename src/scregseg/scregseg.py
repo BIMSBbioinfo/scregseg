@@ -731,7 +731,7 @@ class Scregseg(object):
     def plot_cell_state_association(self, adata,
                                     mode='logfold', prob_max_threshold=0.0,
                                     center=0., robust=True,
-                                    cmap='vlag', row_cluster=False, use_cell_ids=False, **kwargs):
+                                    cmap='vlag', row_cluster=False, **kwargs):
         """ Plot cell-to-state association.
 
         Parameters
@@ -753,7 +753,7 @@ class Scregseg(object):
         X = adata.X
         df = self.cell2state(X,mode,prob_max_threshold)
         df = df.loc[self.get_statenames(),:]
-        if hasattr(self, "labels_") and use_cell_ids:
+        if hasattr(self, "labels_"):
             l = self.labels_.label
         else:
             l = [str(i) for i in range(df.shape[1])]
