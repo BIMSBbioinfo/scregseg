@@ -753,6 +753,13 @@ class Scregseg(object):
         X = adata.X
         df = self.cell2state(X,mode,prob_max_threshold)
         df = df.loc[self.get_statenames(),:]
+
+        if hasattr(self, "labels_"):
+            l = self.labels_.label
+        else:
+            l = [str(i) for i in range(df.shape[1])]
+        df.set_axis(l, axis=1, inplace=True)
+
         g = sns.clustermap(df, center=center, robust=robust,
                            cmap=cmap,
                            row_cluster=row_cluster, **kwargs)
