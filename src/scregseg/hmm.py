@@ -47,7 +47,7 @@ __all__ = ["DirMulHMM"]
 def dirmul_loglikeli_naive(x, alpha):
     """ Dirichlet-Multinomial loglikelihood
 
-    Slow implementation. Only for testing. 
+    Slow implementation. Only for testing.
     """
     alpha0 = alpha.sum(1)[None,:] # state x cell
     n = np.asarray(x.sum(1)) # region x cell
@@ -129,10 +129,17 @@ def dirmul_loglikeli_sp_mincov(x, alpha, maxcounts=3, mincov = 100):
 
 def fast_dirmul_loglikeli_sp(x, alpha):
     result = np.zeros((x.shape[0], alpha.shape[0]))
+    if type(x) != csr_matrix:
+        try:
+            x = csr_matrix(x)
+        except TypeError:
+            print('x cannot be converted to a scipy.sparse.csr.csr_matrix which is the required input of '
+                  '_fast_dirmul_loglikeli_sp.')
+            raise
     _fast_dirmul_loglikeli_sp(x.indices, x.indptr, x.data.astype('int'),
                              alpha, x.shape[0], result)
     return result
-    
+
 def get_region_cnts(dat):
     return pd.Series(np.asarray(dat.sum(1)).flatten())
 
@@ -152,7 +159,7 @@ def init_cnt_probs(components, nbins):
 
 def cntbin_loglikelihood(cntbins, probs):
     #x 14 is out of bounds fo
-    #Z = csc_matrix((np.ones(len(cntbins)), 
+    #Z = csc_matrix((np.ones(len(cntbins)),
     #               (np.arange(len(cntbins), dtype='int'),
     #                cntbins.astype('int')
     #               )))
@@ -160,7 +167,7 @@ def cntbin_loglikelihood(cntbins, probs):
     return np.log(probs[:,cntbins]).T
 
 def cntbin_suffstats(cntbins, posterior):
-    Z = csc_matrix((np.ones(len(cntbins)), 
+    Z = csc_matrix((np.ones(len(cntbins)),
                    (
                     cntbins.astype('int'),
                     np.arange(len(cntbins), dtype='int'),
@@ -232,7 +239,7 @@ class DirMulHMM(_BaseHMM):
                  params="ste", init_params="ste",
                  n_jobs=1,
                  ):
-        
+
         _BaseHMM.__init__(self, n_components,
                           startprob_prior=startprob_prior,
                           transmat_prior=transmat_prior,
@@ -271,7 +278,7 @@ class DirMulHMM(_BaseHMM):
                 self.emission_prior_.append(x)
 
                 r = z.T.dot(X[modi]).toarray()
-                
+
                 self.emission_suffstats_.append(r)
         self.n_features = [x.shape[1] for x in X]
 
@@ -329,7 +336,7 @@ class DirMulHMM(_BaseHMM):
         """
         saves current model parameters
         """
-        
+
         os.makedirs(path, exist_ok=True)
         #path = os.path.join(path, 'dirmulhmm.npz')
 
@@ -339,10 +346,10 @@ class DirMulHMM(_BaseHMM):
         # save hyper parameters
         with open(os.path.join(path, 'dirmulhmm.json'), 'w') as f:
             json.dump(self.get_params(), f)
-        
+
 
     def _compute_log_likelihood_one(self, X, i):
-        
+
         # loop over datasets each represented via a multinomial
         #for i, (ep, es, x) in enumerate(zip(self.emission_prior_, self.emission_suffstats_, X)):
             # compute the marginal likelihood with the current posterior parameters
