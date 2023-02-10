@@ -43,7 +43,7 @@ if 'TOXENV' in os.environ and 'SETUPPY_CFLAGS' in os.environ:
 
 setup(
     name='scregseg',
-    version='0.1.1',
+    version='0.1.2',
     license='GPL-3.0',
     description='Single cell chromatin segmentation',
     long_description='%s\n%s' % (
@@ -94,10 +94,10 @@ setup(
     install_requires=[
         # eg: 'aspectlib==1.1.1', 'six>=1.7',
                 'cython',
-                'sklearn',
+                'scikit-learn',
                 'scipy',
                 'numpy',
-                'hmmlearn',
+                'hmmlearn>=0.2.7',
                 #'janggu',
                 'pandas',
                 'numba',
@@ -117,12 +117,12 @@ setup(
     },
     setup_requires=[
         'cython',
-        'sklearn',
+        'scikit-learn',
         'scipy',
         'numpy',
         'pandas'
     ] if Cython else [
-        'sklearn',
+        'scikit-learn',
         'scipy',
         'numpy',
         'pandas'
