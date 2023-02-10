@@ -225,10 +225,10 @@ class DirMulHMM(_BaseHMM):
         Probability of emitting a given symbol when in each state.
     Examples
     --------
-    >>> from hmmlearn.hmm import MultinomialHMM
+    >>> from hmmlearn.hmm import DirMulHMM
     >>> DirMulHMM(n_components=2)
     ...                             #doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
-    DirMulHMM(algorithm='viterbi',...
+    DirMulHMM(n_components=2)
     """
     # TODO: accept the prior on emissionprob_ for consistency.
     def __init__(self, n_components=1,
