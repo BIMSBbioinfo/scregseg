@@ -43,7 +43,7 @@ if 'TOXENV' in os.environ and 'SETUPPY_CFLAGS' in os.environ:
 
 setup(
     name='scregseg',
-    version='0.1.2',
+    version='0.1.3',
     license='GPL-3.0',
     description='Single cell chromatin segmentation',
     long_description='%s\n%s' % (
