@@ -17,7 +17,7 @@ from sklearn.utils.validation import check_is_fitted
 
 from hmmlearn import _hmmc
 from hmmlearn.base import ConvergenceMonitor
-from hmmlearn.utils import normalize, log_normalize, log_mask_zero
+from hmmlearn.utils import normalize, log_normalize
 from .utils import iter_from_X_lengths
 from .utils import _check_array, get_nsamples, get_batch
 from sklearn.utils._joblib import Parallel, delayed, effective_n_jobs
@@ -410,7 +410,7 @@ class _BaseHMM(BaseEstimator):
         posteriors : array, shape (n_samples, n_components)
             State-membership probabilities for each sample from ``X``.
         """
-        
+
         algorithm = algorithm or self.algorithm
 
         if algorithm == 'robust_map':
@@ -525,7 +525,7 @@ class _BaseHMM(BaseEstimator):
 
                 self.print_progress()
                 delta = curr_logprob - self.monitor_.history[-1] if self.monitor_.history else np.nan
-                logging.debug(self.monitor_._template.format(iter=iter_+1, logprob=curr_logprob, delta=delta))
+                logging.debug(self.monitor_._template.format(iter=iter_+1, log_prob=curr_logprob, delta=delta))
                 self.monitor_.report(curr_logprob)
                 if self.monitor_.converged:
                     break
@@ -534,28 +534,21 @@ class _BaseHMM(BaseEstimator):
 
     def _do_viterbi_pass(self, framelogprob):
         n_samples, n_components = framelogprob.shape
-        state_sequence, logprob = _hmmc._viterbi(
-            n_samples, n_components, log_mask_zero(self.startprob_),
-            log_mask_zero(self.transmat_), framelogprob)
+        state_sequence, logprob = _hmmc.viterbi(self.startprob_,
+                                                 self.transmat_,
+                                                 framelogprob)
         return logprob, state_sequence
 
     def _do_forward_pass(self, framelogprob):
-        n_samples, n_components = framelogprob.shape
-        fwdlattice = np.zeros((n_samples, n_components))
-        _hmmc._forward(n_samples, n_components,
-                       log_mask_zero(self.startprob_),
-                       log_mask_zero(self.transmat_),
-                       framelogprob, fwdlattice)
-        with np.errstate(under="ignore"):
-            return logsumexp(fwdlattice[-1]), fwdlattice
+        log_prob, fwdlattice = _hmmc.forward_log(self.startprob_,
+                                                 self.transmat_,
+                                                 framelogprob)
+        return log_prob, fwdlattice
 
     def _do_backward_pass(self, framelogprob):
-        n_samples, n_components = framelogprob.shape
-        bwdlattice = np.zeros((n_samples, n_components))
-        _hmmc._backward(n_samples, n_components,
-                        log_mask_zero(self.startprob_),
-                        log_mask_zero(self.transmat_),
-                        framelogprob, bwdlattice)
+        bwdlattice = _hmmc.backward_log(self.startprob_,
+                           self.transmat_,
+                           framelogprob)
         return bwdlattice
 
     def _compute_posteriors(self, fwdlattice, bwdlattice):
@@ -710,11 +703,9 @@ class _BaseHMM(BaseEstimator):
             if n_samples <= 1:
                 return
 
-            log_xi_sum = np.full((n_components, n_components), -np.inf)
-            _hmmc._compute_log_xi_sum(n_samples, n_components, fwdlattice,
-                                      log_mask_zero(self.transmat_),
-                                      bwdlattice, framelogprob,
-                                      log_xi_sum)
+            log_xi_sum = _hmmc.compute_log_xi_sum(fwdlattice,
+                                                  self.transmat_,
+                                                  bwdlattice, framelogprob)
             with np.errstate(under="ignore"):
                 stats['trans'] += np.exp(log_xi_sum)
 
