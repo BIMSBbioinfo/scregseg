@@ -225,7 +225,7 @@ class DirMulHMM(_BaseHMM):
         Probability of emitting a given symbol when in each state.
     Examples
     --------
-    >>> from hmmlearn.hmm import DirMulHMM
+    >>> from scregseg.hmm import DirMulHMM
     >>> DirMulHMM(n_components=2)
     ...                             #doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
     DirMulHMM(n_components=2)
