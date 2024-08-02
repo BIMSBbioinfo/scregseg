@@ -106,7 +106,7 @@ def get_genome_size_from_tsv(file):
     dict
         Dict with keys and values corresponding to chromosome names and lengths, respectively.
     """
-    df = BedTool(file).to_dataframe()
+    df = BedTool(file).to_dataframe(dtype={'chrom': str, 'start': 'int', 'end': 'int', 'name': str, 'score': int}, comment='#')
     chroms = df.chrom.unique()
     genomesize = {}
     for chrom in chroms:
@@ -744,7 +744,8 @@ def get_regions_from_bed_(filename):
     """
     regions = pd.read_csv(filename, sep='\t',
                           names=['chrom', 'start', 'end'],
-                          usecols=[0,1,2])
+                          usecols=[0,1,2], dtype={'chrom': str, 'start': 'int', 'end': 'int'})
+
     regions.loc[:, 'name'] = regions.apply(lambda row: f'{row.chrom}_{row.start}_{row.end}', axis=1)
     regions.set_index('name', inplace=True)
     return regions
